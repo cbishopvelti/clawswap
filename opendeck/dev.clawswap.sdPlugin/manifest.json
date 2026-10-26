@@ -1,0 +1,36 @@
+{
+  "Name": "clawswap",
+  "Description": "Switches a dev checkout's branch and restarts its servers, through a clawswap watcher.",
+  "Author": "clawswap",
+  "Version": "1.0.0",
+  "SDKVersion": 2,
+  "CodePath": "bin/plugin.mjs",
+  "Nodejs": { "Version": "22" },
+  "Icon": "icons/branch",
+  "Category": "clawswap",
+  "CategoryIcon": "icons/branch",
+  "OS": [{ "Platform": "linux" }, { "Platform": "mac", "MinimumVersion": "10.15" }, { "Platform": "windows", "MinimumVersion": "10" }],
+  "Software": { "MinimumVersion": "6.4" },
+  "Actions": [
+    {
+      "UUID": "dev.clawswap.branch",
+      "Name": "clawswap branch",
+      "Tooltip": "Switches the dev checkout to a branch and restarts its servers (needs clawswap up)",
+      "Icon": "icons/branch",
+      "States": [{ "Image": "icons/branch" }],
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "pi/branch.html"
+    },
+    {
+      "UUID": "dev.clawswap.pull",
+      "Name": "clawswap pull",
+      "Tooltip": "Pulls the branch the dev checkout is on and restarts its servers if anything came in (needs clawswap up)",
+      "Icon": "icons/pull",
+      "States": [{ "Image": "icons/pull" }],
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "pi/pull.html"
+    }
+  ]
+}

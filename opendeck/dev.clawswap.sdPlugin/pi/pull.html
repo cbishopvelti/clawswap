@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>clawswap pull</title>
+<style>
+  body { font: 13px system-ui, sans-serif; color: #d8dce3; background: transparent; margin: 0; padding: 8px 10px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #8b93a3; margin: 14px 0 6px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  label > span { width: 86px; flex-shrink: 0; color: #a3abb8; }
+  input, select { flex: 1; min-width: 0; background: #2a2f38; color: #eef1f5; border: 1px solid #3a404c; border-radius: 4px; padding: 4px 6px; font: inherit; }
+  p { color: #8b93a3; margin: 4px 0; line-height: 1.4; }
+  code { color: #eef1f5; }
+</style>
+</head>
+<body>
+  <h2>This key</h2>
+  <label><span>Watcher</span><input id="url" type="text" placeholder="http://127.0.0.1:8790"></label>
+  <p>Pulls the branch the checkout is on and restarts the servers if GitHub had anything new. Watcher is the
+    project's <code>port</code> from its <code>clawswap.config.mjs</code>; leave it empty for the default.</p>
+
+<script>
+  let socket;
+  let context;
+  let settings = {};
+  const $ = (id) => document.getElementById(id);
+
+  const show = () => ($("url").value = settings.url ?? "");
+
+  $("url").addEventListener("change", () => {
+    settings = $("url").value.trim() ? { url: $("url").value.trim() } : {};
+    socket?.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
+  });
+
+  // Called by OpenDeck (and the Stream Deck app) once the page has loaded.
+  window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
+    context = uuid;
+    settings = JSON.parse(actionInfo || "{}").payload?.settings ?? {};
+    show();
+    socket = new WebSocket(`ws://127.0.0.1:${port}`);
+    socket.onopen = () => socket.send(JSON.stringify({ event: registerEvent, uuid }));
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.event === "didReceiveSettings") {
+        settings = message.payload?.settings ?? {};
+        show();
+      }
+    };
+  };
+</script>
+</body>
+</html>

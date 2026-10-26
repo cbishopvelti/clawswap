@@ -1,0 +1,21 @@
+#!/bin/sh
+# Runs a command in a zellij pane and leaves a shell there when it stops, so a stray Ctrl+C can't close
+# the pane (zellij closes a pane whose command has exited on Ctrl+C). Up arrow in that shell brings the
+# command back. One argument is a shell command line (`keep "npm run dev"`); more are the command and its
+# arguments. Used by the layout and the watcher's restarts.
+# A handler (not an ignore, which the command would inherit) so Ctrl+C stops the command but not this script.
+trap : INT
+if [ "$#" -eq 1 ]; then
+  sh -c "$1"
+else
+  "$@"
+fi
+code=$?
+printf '\n\033[33m%s stopped (exit %s). Up arrow and Enter starts it again.\033[0m\n' "$*" "$code"
+if command -v bash >/dev/null 2>&1; then
+  export CLAWSWAP_KEEP_CMD="$*"
+  rc=$(mktemp)
+  { [ -f "$HOME/.bashrc" ] && echo ". \"$HOME/.bashrc\""; echo 'history -s "$CLAWSWAP_KEEP_CMD"'; echo "rm -f '$rc'"; } > "$rc"
+  exec bash --rcfile "$rc" -i
+fi
+exec "${SHELL:-sh}" -i

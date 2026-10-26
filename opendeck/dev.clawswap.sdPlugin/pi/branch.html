@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>clawswap branch</title>
+<style>
+  body { font: 13px system-ui, sans-serif; color: #d8dce3; background: transparent; margin: 0; padding: 8px 10px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #8b93a3; margin: 14px 0 6px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  label > span { width: 86px; flex-shrink: 0; color: #a3abb8; }
+  input, select { flex: 1; min-width: 0; background: #2a2f38; color: #eef1f5; border: 1px solid #3a404c; border-radius: 4px; padding: 4px 6px; font: inherit; }
+  p { color: #8b93a3; margin: 4px 0; line-height: 1.4; }
+  code { color: #eef1f5; }
+</style>
+</head>
+<body>
+  <h2>This key</h2>
+  <label><span>Shows</span>
+    <select id="mode">
+      <option value="next">The next branch (deck order)</option>
+      <option value="pinned">A branch I name</option>
+    </select>
+  </label>
+  <label id="pinned" hidden><span>Branch</span><input id="branch" type="text" placeholder="main"></label>
+  <label><span>Watcher</span><input id="url" type="text" placeholder="http://127.0.0.1:8790"></label>
+  <p>Keys on "next branch" share their watcher's list in deck order, row by row: the first shows the base
+    branch, the rest the newest open pull requests. Pressing one stops the servers, checks the branch out,
+    runs the steps it needs and starts them again.</p>
+  <p>Watcher is the project's <code>port</code> from its <code>clawswap.config.mjs</code>; leave it empty for
+    the default. Needs <code>clawswap up</code> running in that project.</p>
+
+<script>
+  let socket;
+  let context;
+  let settings = {};
+  const $ = (id) => document.getElementById(id);
+
+  const show = () => {
+    $("mode").value = settings.branch ? "pinned" : "next";
+    $("pinned").hidden = !settings.branch && $("mode").value !== "pinned";
+    $("branch").value = settings.branch ?? "";
+    $("url").value = settings.url ?? "";
+  };
+
+  const save = () => {
+    const pinned = $("mode").value === "pinned";
+    $("pinned").hidden = !pinned;
+    settings = {};
+    if (pinned && $("branch").value.trim()) settings.branch = $("branch").value.trim();
+    if ($("url").value.trim()) settings.url = $("url").value.trim();
+    socket?.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
+  };
+
+  $("mode").addEventListener("change", save);
+  $("branch").addEventListener("change", save);
+  $("url").addEventListener("change", save);
+
+  // Called by OpenDeck (and the Stream Deck app) once the page has loaded.
+  window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
+    context = uuid;
+    settings = JSON.parse(actionInfo || "{}").payload?.settings ?? {};
+    show();
+    socket = new WebSocket(`ws://127.0.0.1:${port}`);
+    socket.onopen = () => socket.send(JSON.stringify({ event: registerEvent, uuid }));
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.event === "didReceiveSettings") {
+        settings = message.payload?.settings ?? {};
+        show();
+      }
+    };
+  };
+</script>
+</body>
+</html>

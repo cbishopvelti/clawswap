@@ -1,0 +1,13 @@
+{
+  "name": "clawswap",
+  "version": "0.1.0",
+  "description": "Switch a dev checkout to another branch from a Stream Deck key: stop the servers, check out, run what changed, start them again.",
+  "type": "module",
+  "bin": { "clawswap": "bin/clawswap.mjs" },
+  "files": ["bin", "lib", "opendeck", "examples"],
+  "scripts": {
+    "test": "node --test test/*.test.mjs opendeck/test/*.test.mjs"
+  },
+  "engines": { "node": ">=22" },
+  "repository": "github:cbishopvelti/clawswap"
+}
