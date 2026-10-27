@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuration · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html" aria-current="page">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Configuration</h1>
+<p class="lede">A <code>clawswap.exs</code> (Elixir) or <code>clawswap.yml</code> (YAML) in your repo: the servers a switch
+restarts, the steps it runs, and a few settings.</p>
+
+<h2 id="files">The config file</h2>
+<p><code>clawswap.exs</code> is evaluated as Elixir and returns a keyword list. You can write the same config as
+YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <a href="#yaml">YAML</a>.</p>
+<ul>
+  <li><strong>Which file.</strong> clawswap uses the closest config, looking from the folder you run it in up to the
+    repo root, so a project in a subfolder can have its own (<code>examples/react-embed</code> does).</li>
+  <li><strong>One per folder.</strong> A folder with more than one of <code>clawswap.exs</code>, <code>clawswap.yml</code>
+    and <code>clawswap.yaml</code> is an error rather than a silent pick: keep one.</li>
+  <li><strong>Only <code>servers</code> matters</strong> to get going; everything else has a default.</li>
+  <li><strong>Commands.</strong> A <code>command</code> or <code>run</code> is a string, run with <code>sh -c</code>, or a
+    list of the program and its arguments.</li>
+  <li><strong>Folders.</strong> A <code>cwd</code> is relative to the repo root.</li>
+  <li><strong>Committed.</strong> Commit the config. If a switch changes it, the watcher restarts itself to load the new one.</li>
+</ul>
+
+<h2 id="example">An example</h2>
+<pre><code>[
+  servers: [
+    api: [command: "iex -S mix phx.server", cwd: "api", port: 4000],
+    web: [command: "npm run dev", cwd: "web", port: 5173]
+  ],
+  panes: [db: [command: "docker compose up postgres"]],
+  prepare: [[label: "Starting Postgres", run: "docker compose up -d postgres", wait_for_port: 5432]],
+  steps: [
+    [label: "mix deps.get", when: ["api/mix.exs", "api/mix.lock"], run: "mix deps.get", cwd: "api"],
+    [label: "Migrating", when: "api/priv/repo/migrations/", run: "mix ecto.migrate", cwd: "api"],
+    [label: "npm install", when: ["web/package.json", "web/package-lock.json"], run: "npm install", cwd: "web"]
+  ]
+]</code></pre>
+<p>A fuller one: <a href="https://github.com/cbishopvelti/clawswap/blob/main/examples/bmx.exs"><code>examples/bmx.exs</code></a>
+(Phoenix, Vite, SurrealDB and a beat tracker in docker), and the same as YAML in
+<a href="https://github.com/cbishopvelti/clawswap/blob/main/examples/bmx.yml"><code>examples/bmx.yml</code></a>.</p>
+
+<h2 id="keys">Keys</h2>
+<table>
+  <tr><th>Key</th><th>Default</th><th>What it is</th></tr>
+  <tr><td><code>name</code></td><td>the repo folder's name</td><td>The page's heading, and the zellij tab's (or tmux window's) name.</td></tr>
+  <tr><td><code>session</code></td><td><code>name</code></td><td>The zellij or tmux session's name.</td></tr>
+  <tr><td><code>multiplexer</code></td><td>detected</td><td><code>:zellij</code> or <code>:tmux</code> (<code>zellij</code> or <code>tmux</code> in YAML). See <a href="usage.html#multiplexer">zellij or tmux</a>.</td></tr>
+  <tr><td><code>base</code></td><td>origin's default branch</td><td>The branch pinned first in the list. Merged branches are marked against it. See <a href="page.html#base">base branch</a>.</td></tr>
+  <tr><td><code>port</code></td><td><code>8790</code></td><td>The watcher's page and API. Give each project its own to run several at once.</td></tr>
+  <tr><td><code>servers</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:, port:, match:]]</code>: what a switch stops and starts again, each in a pane of that name, in this order. See <a href="#servers">servers</a>.</td></tr>
+  <tr><td><code>panes</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:]]</code>: other panes, left running across switches (logs, a database). A pane can't be called <code>clawswap</code> or share a server's name.</td></tr>
+  <tr><td><code>prepare</code></td><td><code>[]</code></td><td>Steps <code>up</code> runs before it starts a new session. A step with <code>wait_for_port:</code> waits (up to 30 s) for that port to open.</td></tr>
+  <tr><td><code>steps</code></td><td><code>[]</code></td><td><code>[[name:, label:, when:, run:, cwd:]]</code>: what a switch (or <code>up</code>, or <code>update</code>) runs when files matching <code>when</code> changed, in this order. See <a href="#steps">steps</a>.</td></tr>
+  <tr><td><code>notes</code></td><td><code>[]</code></td><td><code>[[when:, message:]]</code>: said after a switch that changed matching files ("restart OpenDeck").</td></tr>
+  <tr><td><code>origins</code></td><td>the servers' <code>localhost</code> ports</td><td>More browser origins allowed to call the <a href="api.html">API</a> (your app's dev page, say).</td></tr>
+  <tr><td><code>layout</code></td><td>generated</td><td>A zellij layout file of your own (zellij only). Name the server panes as in <code>servers</code>, and run <code>clawswap watch</code> in one.</td></tr>
+  <tr><td><code>restart_when</code></td><td></td><td>More paths that restart the watcher after a switch (it always restarts when the config changes). Takes what <code>when</code> takes.</td></tr>
+  <tr><td><code>short_name</code></td><td>drops <code>claude/</code></td><td><code>fn branch -&gt; name end</code>: the name shown for a branch without a PR.</td></tr>
+</table>
+
+<h3 id="servers">servers</h3>
+<table>
+  <tr><th>Field</th><th>What it is</th></tr>
+  <tr><td><code>command</code></td><td>Required. What the pane runs.</td></tr>
+  <tr><td><code>cwd</code></td><td>Where, relative to the repo root. Default <code>"."</code>.</td></tr>
+  <tr><td><code>port</code></td><td>The port it listens on. A switch makes sure it's free before checking out (a server left running outside the session is sent TERM, then KILL), and its <code>localhost</code> origin may call the API.</td></tr>
+  <tr><td><code>match</code></td><td>A Regex that finds the pane by its command, if the pane has been renamed.</td></tr>
+</table>
+
+<h3 id="steps">steps and prepare</h3>
+<table>
+  <tr><th>Field</th><th>What it is</th></tr>
+  <tr><td><code>run</code></td><td>Required. The command.</td></tr>
+  <tr><td><code>label</code></td><td>What the page and keys show while it runs. Default: the command.</td></tr>
+  <tr><td><code>name</code></td><td>A short name. Default: the command's first word.</td></tr>
+  <tr><td><code>when</code></td><td>Which changed files make it run (see below). A step without <code>when</code> runs only on a first run or <code>update --all</code>.</td></tr>
+  <tr><td><code>cwd</code></td><td>Where, relative to the repo root.</td></tr>
+  <tr><td><code>wait_for_port</code></td><td>After it runs, wait up to 30 s for this port to open (a database container, say).</td></tr>
+</table>
+<p>Steps run in the order written, so put the ones others depend on first.</p>
+
+<h3 id="when">when</h3>
+<p><code>when</code> (and a note's <code>when</code>, and <code>restart_when</code>) matches the paths that changed, relative to the repo root. It is one of these, or a list of them:</p>
+<table>
+  <tr><th>Form</th><th>Matches</th></tr>
+  <tr><td><code>"mix.lock"</code></td><td>That file, exactly.</td></tr>
+  <tr><td><code>"priv/repo/migrations/"</code></td><td>Anything under that folder (ends in <code>/</code>).</td></tr>
+  <tr><td><code>~r/^docker-compose\.ya?ml$/</code></td><td>Paths the Regex matches.</td></tr>
+  <tr><td><code>&amp;String.ends_with?(&amp;1, ".lock")</code></td><td>Paths the function returns true for.</td></tr>
+</table>
+
+<h2 id="yaml">YAML</h2>
+<p><code>clawswap.yml</code> has the same keys, with mappings for keyword lists. Order is kept, so servers and steps
+run as written.</p>
+<pre><code>servers:
+  api: {command: iex -S mix phx.server, cwd: api, port: 4000, match: '/phx\.server/'}
+  web: {command: npm run dev, cwd: web, port: 5173}
+panes:
+  db: {command: docker compose up postgres}
+steps:
+  - {label: mix deps.get, when: [api/mix.exs, api/mix.lock], run: mix deps.get, cwd: api}
+  - {label: Migrating, when: api/priv/repo/migrations/, run: mix ecto.migrate, cwd: api}</code></pre>
+
+<h3 id="yaml-regex">Regexes</h3>
+<p>Where <code>.exs</code> takes a Regex (<code>when</code>, <code>restart_when</code>, a server's <code>match</code>),
+write the string between slashes, quoted so YAML leaves the backslashes alone: <code>'/^docker-compose\.ya?ml$/'</code>.
+Any other string is a path, as in <code>.exs</code>.</p>
+
+<h3 id="yaml-code">Functions as Elixir strings</h3>
+<p>Where <code>.exs</code> takes a function, write it as Elixir in a string:</p>
+<ul>
+  <li><code>short_name</code> is always Elixir.</li>
+  <li>A <code>when</code> or <code>restart_when</code> string starting with <code>fn </code> or <code>&amp;</code> is Elixir.</li>
+</ul>
+<pre><code>short_name: 'fn branch -&gt; String.replace_prefix(branch, "feature/", "") end'
+steps:
+  - {label: mix deps.get, when: ['&amp;String.ends_with?(&amp;1, ".lock")', mix.exs], run: mix deps.get}</code></pre>
+<p>Each must be a function of one argument. It's evaluated when the config loads.</p>
+<div class="note"><p>A YAML config runs code just as a <code>clawswap.exs</code> does. Treat either as you would any
+script in the repo: switching to a branch runs that branch's config and steps.</p></div>
+
+<h2 id="env">Environment variables</h2>
+<p>These override a few keys for one run:</p>
+<table>
+  <tr><th>Variable</th><th>Overrides</th></tr>
+  <tr><td><code>CLAWSWAP_PORT</code></td><td><code>port</code></td></tr>
+  <tr><td><code>CLAWSWAP_BASE</code></td><td><code>base</code></td></tr>
+  <tr><td><code>CLAWSWAP_SESSION</code></td><td><code>session</code></td></tr>
+  <tr><td><code>CLAWSWAP_MULTIPLEXER</code></td><td><code>multiplexer</code> (<code>zellij</code> or <code>tmux</code>)</td></tr>
+  <tr><td><code>CLAWSWAP_SMEE</code></td><td>The smee.io channel saved by <code>clawswap smee</code>.</td></tr>
+  <tr><td><code>CLAWSWAP_CONFIG</code></td><td>Another config file, relative to the repo root; read as YAML when it ends in <code>.yml</code> or <code>.yaml</code>.</td></tr>
+  <tr><td><code>GITHUB_TOKEN</code></td><td>The token for pull requests (else the <code>gh</code> CLI's, if it's logged in).</td></tr>
+</table>
+<div class="pager"><span><a href="usage.html">← Use</a></span><span><a href="switching.html">Switching →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

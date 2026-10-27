@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stream Deck · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html" aria-current="page">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Stream Deck keys (OpenDeck)</h1>
+<p class="lede">Branch and pull keys on a Stream Deck, through the <a href="https://github.com/nekename/OpenDeck">OpenDeck</a> plugin.</p>
+
+<h2 id="install">Install the plugin</h2>
+<pre><code>&lt;path-to-clawswap&gt;/opendeck/install.sh</code></pre>
+<p>It can be run from anywhere. It copies the plugin into OpenDeck's plugins folder
+(<code>~/.config/opendeck/plugins</code>, or the Flatpak's under <code>~/.var/app/me.amankhanna.opendeck</code>). It's a
+copy, since OpenDeck doesn't reliably follow a symlink there, so run it again after updating clawswap.</p>
+<ol class="steps">
+  <li>Make sure Elixir 1.18 or newer is on the <code>PATH</code> OpenDeck sees. OpenDeck starts the plugin as
+    <code>bin/plugin</code>, which runs <code>plugin.exs</code> with <code>elixir</code>. A version manager that only sets
+    Elixir up in your shell won't do.</li>
+  <li>Quit OpenDeck fully (tray &gt; Quit) and start it again; it only starts plugins when it launches.</li>
+  <li>Drag <strong>clawswap branch</strong> (category clawswap) onto keys, and <strong>clawswap pull</strong> onto one.</li>
+</ol>
+<p>The keys need the project's watcher running (<code>clawswap up</code>).</p>
+
+<h2 id="branch">clawswap branch</h2>
+<p>Each key either shows <strong>the next branch</strong> or <strong>a branch you name</strong> (set in the key's settings).</p>
+<ul>
+  <li>Keys on "next branch" share the list in deck order, row by row. The first shows the base branch, the rest the
+    newest open pull requests.</li>
+  <li>A key shows its branch's PR number and title.</li>
+  <li>Pressing it switches to that branch: the servers stop, the branch is checked out, the steps it needs run and
+    the servers start again.</li>
+</ul>
+<p>A bar on the key shows its state:</p>
+<ul class="marks">
+  <li><span class="bar current"></span>Green: the checkout's branch.</li>
+  <li><span class="bar behind"></span>Blue: the checkout's branch has new commits on GitHub; press it to pull them.</li>
+  <li><span class="bar running"></span>Amber: a switch in progress, with its step.</li>
+  <li><span class="bar failed"></span>Red: a failed switch.</li>
+</ul>
+
+<h2 id="pull">clawswap pull</h2>
+<p>Pulls the branch the checkout is on and restarts the servers if anything came in, like
+<code>clawswap pull</code>.</p>
+
+<h2 id="watcher">Several projects</h2>
+<p>Each key has a <strong>Watcher</strong> setting, empty for <code>http://127.0.0.1:8790</code>. Point keys at another
+project's <code>port</code> to drive several projects from one deck; keys on the same watcher share its list.</p>
+
+<h2 id="elgato">The Elgato app</h2>
+<p>The plugin speaks the Stream Deck SDK 2 protocol and its manifest also lists macOS, so it may run in Elgato's
+Stream Deck app too. OpenDeck on Linux is what it's built for; the Elgato app hasn't been tried.</p>
+<div class="pager"><span><a href="api.html">← API</a></span><span><a href="roadmap.html">Coming next →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

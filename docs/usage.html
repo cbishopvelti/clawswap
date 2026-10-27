@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Use · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html" aria-current="page">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Use</h1>
+<p class="lede"><code>clawswap up</code>, the session it opens, and the other commands.</p>
+
+<p>Run every command from inside your project's repo, not clawswap's clone. <code>bin/clawswap</code> runs
+<code>mix clawswap</code> in clawswap's own folder, with your repo passed along.</p>
+
+<h2 id="commands">Commands</h2>
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
+  <tr><td><code>clawswap up</code></td><td>Opens the zellij or tmux session, or re-attaches to it.</td></tr>
+  <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
+  <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane.</td></tr>
+  <tr><td><code>clawswap pull</code></td><td>Pulls the current branch the same way. Does nothing if it's up to date.</td></tr>
+  <tr><td><code>clawswap update</code></td><td>Runs the steps for what changed since they last ran (after a <code>git pull</code> by hand, say).</td></tr>
+  <tr><td><code>clawswap update &lt;rev&gt;</code></td><td>The steps for what changed since <code>rev</code>.</td></tr>
+  <tr><td><code>clawswap update --all</code></td><td>Every step.</td></tr>
+  <tr><td><code>clawswap smee [url]</code></td><td>Sets up the smee.io channel for the GitHub webhook (see <a href="install.html#project">Install</a>).</td></tr>
+  <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
+  <tr><td><code>clawswap watch</code></td><td>The watcher, with its page and API. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
+</table>
+<p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the running watcher, so they need
+<code>clawswap up</code> first.</p>
+
+<h2 id="up">clawswap up</h2>
+<p>When no session is running, <code>up</code>:</p>
+<ol class="steps">
+  <li>Runs the config's <code>prepare</code> steps (starting containers, say), waiting for any <code>wait_for_port</code>.</li>
+  <li>Runs the steps for whatever changed since they last ran, all of them the first time, so the servers don't
+    start on stale deps. It remembers the commit in <code>.git/clawswap.json</code>. If a step fails it says so and
+    starts the servers anyway; fix it and run <code>clawswap update</code>.</li>
+  <li>Starts the session: zellij with the generated layout (or the config's own <code>layout</code>), or tmux with the same panes.</li>
+</ol>
+<p>When the session is already running, <code>up</code> attaches to it (from inside tmux, it switches to it). A
+session zellij lists as exited is deleted and started fresh, rather than coming back with its panes waiting for Enter.</p>
+
+<h2 id="multiplexer">zellij or tmux</h2>
+<p>clawswap runs the session in either. To choose, set <code>multiplexer: :tmux</code> (or <code>:zellij</code>) in
+<code>clawswap.exs</code>, <code>multiplexer: tmux</code> in <code>clawswap.yml</code>, or
+<code>CLAWSWAP_MULTIPLEXER=tmux</code> for one run. Without any of those it picks, in order:</p>
+<ol>
+  <li>the one you run it inside, so <code>clawswap up</code> from a tmux window opens the session in tmux and switches to it;</li>
+  <li>zellij, for a config with its own <code>layout</code> (a zellij layout file);</li>
+  <li>zellij, if it's installed and 0.44 or newer;</li>
+  <li>tmux, if it's installed and 3.1 or newer.</li>
+</ol>
+<p>In tmux the panes are laid out as in zellij, with each one's name on its border. A switch restarts a server's pane
+with <code>respawn-pane</code>, so it keeps its place and size.</p>
+
+<h2 id="session">The session</h2>
+<p>The default layout stacks the servers on the left and puts the watcher and your other panes on the right:</p>
+<ul>
+  <li>a pane for each server, named as in <code>servers</code>;</li>
+  <li>one called <code>clawswap</code>, the watcher, where switch output shows;</li>
+  <li>one for each of the config's other <code>panes</code>.</li>
+</ul>
+<p>Ctrl+Q leaves zellij (in tmux, Ctrl+B then D); <code>clawswap up</code> again comes back.</p>
+<p>Each pane runs its command through <code>bin/keep</code>. When the command stops (Ctrl+C, or Ctrl+C twice for
+the watcher and other BEAM programs), the pane keeps a shell instead of closing, and the up arrow brings the
+command back. Without it, zellij closes a pane whose command has exited when you press Ctrl+C there, and tmux closes it as
+soon as the command exits.</p>
+
+<h3 id="own-layout">Your own layout (zellij)</h3>
+<p>Start from <code>clawswap layout &gt; my-layout.kdl</code>, edit it, and set <code>layout: "my-layout.kdl"</code>
+in the config. Keep the server panes named as in <code>servers</code> (the watcher finds them by name), and run
+<code>clawswap watch</code> in one pane.</p>
+
+<h2 id="several">Several projects at once</h2>
+<p>Give each project its own <code>port</code> (and, if two share a folder name, its own <code>session</code>).
+Each project then has its own session, watcher and page, and Stream Deck keys can point at either.</p>
+
+<h2 id="state">What clawswap keeps per checkout</h2>
+<p><code>.git/clawswap.json</code> holds the smee.io channel and the commit the steps last ran for. It lives
+inside <code>.git</code>, so it's never committed and needs no <code>.gitignore</code> entry; worktrees get their own.
+The generated layout sits next to it as <code>.git/clawswap.kdl</code> (zellij only).</p>
+<div class="pager"><span><a href="install.html">← Install</a></span><span><a href="configuration.html">Configuration →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Switching · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html" aria-current="page">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Switching branches</h1>
+<p class="lede">What happens when you press a key, pick a branch on the page, or run <code>clawswap switch</code>.</p>
+
+<h2 id="switch">What a switch does</h2>
+<ol class="steps">
+  <li>Refuses if tracked files have uncommitted changes. Commit or stash them first. (Untracked files only stop it
+    if the checkout would overwrite them, and git says so then.)</li>
+  <li>Replaces each server's pane with a "Switching..." note, which ends the server, and makes sure its
+    <code>port</code> is free.</li>
+  <li>Checks the branch out: a new local branch tracking origin's, or a fast-forward of an existing one. A branch
+    that has diverged from origin's fails here.</li>
+  <li>Runs the <a href="configuration.html#steps">steps</a> whose <code>when</code> matches a file that changed, in the
+    config's order.</li>
+  <li>Starts the servers again, even after a failed step, so you're never left without them.</li>
+  <li>Says the config's <code>notes</code> for what changed.</li>
+</ol>
+<p>The <code>clawswap</code> pane shows the output; the page and keys show the step it's on. If the switch changed the
+config (or a <code>restart_when</code> path), the watcher restarts itself to load the new one.</p>
+
+<h2 id="pull">Pull</h2>
+<p>A pull is a switch to the same branch: fast-forward, the steps it needs, servers restarted. When there's nothing
+new it does nothing and leaves the servers running. The page's Pull button, a <strong>clawswap pull</strong> key and
+<code>clawswap pull</code> all do it, and each shows how many commits the checkout is behind.</p>
+
+<h2 id="manual">After a manual checkout or pull</h2>
+<p>If you move the checkout yourself with git, run <code>clawswap update</code>: it runs the steps for what changed
+since they last ran. <code>clawswap up</code> does the same before it starts a new session.</p>
+
+<h2 id="list">Which branches are listed</h2>
+<ul>
+  <li>The <a href="page.html#base">base branch</a> always comes first.</li>
+  <li>With a GitHub token, the branches with an open pull request follow, newest commit first, labelled by PR title.</li>
+  <li>Without one, every branch on origin follows, newest commit first, by its short name.</li>
+  <li>The branch you're on is always listed.</li>
+</ul>
+<p>The watcher fetches from origin when the webhook says something changed, every 15 minutes, and when you press a
+key. Webhook deliveries are only a hint to look again; the watcher never acts on their contents, since anyone with the
+channel URL could post to it.</p>
+<div class="pager"><span><a href="configuration.html">← Configuration</a></span><span><a href="page.html">Branch page →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>
