@@ -61,6 +61,8 @@ defmodule Clawswap.Config do
       notes: for(n <- config[:notes] || [], do: %{message: Map.new(n).message, test: Plan.matcher(Map.new(n)[:when])}),
       # A switch that changes these restarts the watcher, so it runs the new config.
       restart: Plan.matcher([file | List.wrap(config[:restart_when])]),
+      # Walkthrough scripts, relative to the config's folder (see Clawswap.Walkthrough).
+      walkthroughs: config[:walkthroughs] || "walkthroughs",
       short_name: config[:short_name] || (&String.replace_prefix(&1, "claude/", ""))
     }
   end

@@ -70,6 +70,7 @@ pages in `docs/` directly.
    token it shows every branch by newest commit.
 7. Optional: the Stream Deck keys, through [OpenDeck](#opendeck) or straight from the watcher's page in
    Chrome ([WebHID](#stream-deck-from-the-page-webhid)).
+8. Optional: [walkthroughs](#walkthroughs) need Chrome and a chromedriver of the same major version.
 
 ## Use
 
@@ -83,6 +84,8 @@ clawswap switch <branch>   # what a key press does
 clawswap pull              # pull the current branch the same way
 clawswap update            # the steps for what changed since they last ran (after a manual git pull)
 clawswap update --all      # every step
+clawswap walk [name...]    # play walkthroughs in Chrome (default: the ones this branch added)
+clawswap browser           # open a dev Chrome at your app, that walkthroughs play in
 clawswap layout            # the zellij layout up opens, to start your own from (tmux: its commands)
 ```
 
@@ -135,6 +138,7 @@ or a list of the program and its arguments. A `cwd` is relative to the repo root
 | `layout` | generated | A zellij layout file of your own (zellij only). Name the server panes as in `servers`, and run `clawswap watch` in one. |
 | `restart_when` | | More paths that restart the watcher after a switch (it always restarts when the config changes). |
 | `short_name` | drops `claude/` | `fn branch -> name end`: the name shown for a branch without a PR. |
+| `walkthroughs` | `walkthroughs` | The folder of [walkthroughs](#walkthroughs), relative to the config's folder. |
 
 `when` is a Regex, a path (`"mix.lock"` is that file at the root, `"migrations/"` anything under that
 folder), a function of the path, or a list of those.
@@ -232,6 +236,7 @@ GET  /state                    { project, base, current, dirty, upstream: { sha,
 POST /switch  { branch }       202, then follow /state's switch
 POST /pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
 POST /refresh                  look at GitHub now
+POST /walk    { name }         run a walkthrough here; 202, then follow /state's walk
 ```
 
 Webhook deliveries are only taken as a hint to look again; the watcher never acts on their contents, since
@@ -274,8 +279,77 @@ narrow embed menu leaves the button out).
 It's Elixir too: `app/components/stream_deck.ex` calls `navigator.hid` and a canvas through Hologram's JS
 interop.
 
+## Walkthroughs
+
+A walkthrough is a short Elixir script on a branch that drives a browser through the branch's change, so you
+watch the feature instead of clicking through it yourself. Claude writes one with the branch, in the project's
+`walkthroughs/` folder; once you've switched to the branch, press its ▶ on the watcher's page (the ones the
+branch added come first, outlined) and Chrome opens on your machine and plays it, slowed down, with a
+caption for each part and what it's about to click outlined. The page says whether it ran to the end, or
+the line and caption where it stopped.
+
+```elixir
+# walkthroughs/badge-pull.exs
+say "The badge now shows how far behind the branch is"
+visit url(:web)                      # the config's web server: http://localhost:5173
+see css(".badge button", text: "Pull")
+
+say "Open the Branches menu: clawswap's page, in an iframe"
+click "Branches"
+in_frame "iframe[title=clawswap]", fn -> see "Current" end
+```
+
+```bash
+clawswap walk                  # the walkthroughs this branch added or changed
+clawswap walk badge-pull       # one by name (or several)
+clawswap walk --headless       # without a window, to check one passes; exits 1 if it fails
+```
+
+The commands: `say`, `visit`, `url`, `click`, `fill_in`, `choose`, `press`, `see`, `refute_see`,
+`in_frame`, `js`, `before_load`, `wait_until`, `pause`, `screenshot`, and Wallaby's queries (`css`,
+`button`, `link`...). Each waits for what it looks for (10 s, or `timeout:`). See
+[the docs](https://cbishopvelti.github.io/clawswap/walkthroughs.html) for each one, and
+[examples/react-embed/walkthroughs](examples/react-embed/walkthroughs) for a whole one.
+
+It drives Chrome through chromedriver ([Wallaby](https://hexdocs.pm/wallaby)), so both have to be installed,
+at the same major version (chromedriver from your package manager, or both from
+[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/):
+`npx @puppeteer/browsers install chrome@stable chromedriver@stable`). `CLAWSWAP_CHROME` and
+`CLAWSWAP_CHROMEDRIVER` name them when they aren't on the `PATH`. Without a display (Linux with no `DISPLAY`
+or `WAYLAND_DISPLAY`: CI, Claude's cloud sessions) it runs headless. `CLAWSWAP_HEADLESS=1` or `0` forces it,
+`CLAWSWAP_SLOW` sets the pause before each action (600 ms with a window, 0 without).
+
+Each walkthrough opens a Chrome window of its own, unless a dev Chrome is open: `clawswap browser` starts
+one at your app, with a profile of its own (kept in `~/.cache/clawswap/chrome`, so logins stay) and a
+debugging port (9333). While it's open, walkthroughs play in a tab of it, the same tab each time, and leave
+your other tabs alone. Chrome won't open that port on your everyday profile, which is why it's a separate
+window. `CLAWSWAP_CHROME_DEBUGGER` points at another Chrome's debugging address, or `off` ignores the dev
+Chrome.
+
+To have Claude write them, put this in your repo's `CLAUDE.md`:
+
+```
+With each branch that changes what the app does, add walkthroughs/<short-name>.exs: a clawswap
+walkthrough (https://cbishopvelti.github.io/clawswap/walkthroughs.html) that shows the change, with a
+`say` caption before each part. Check it passes with `clawswap walk --headless` before pushing.
+```
+
+A walkthrough is code run on your machine, as a branch's config and steps are.
+
 ## Tests
 
 ```bash
 mix test
+```
+
+The browser tests in `test/integration` are left out of that. They copy
+[examples/react-embed](examples/react-embed) into a repo of its own with a few branches, run `clawswap up` for
+it in zellij and in tmux, and drive Chrome, with the walkthrough commands, through the merge marks, the
+Branches menu, a switch, the config editor, the ▶ buttons and a stand-in Stream Deck. They need Chrome,
+chromedriver, Node.js, tmux and zellij, and ports 8790 and 5173 free:
+
+```bash
+mix test.integration                                        # headless
+CLAWSWAP_HEADLESS=0 CLAWSWAP_SLOW=800 mix test.integration  # watch them in Chrome
+tmux -L clawswap-tests attach                               # and the session's panes, from another terminal
 ```

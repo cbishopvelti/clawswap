@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Walkthroughs · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+        <li><a href="walkthroughs.html" aria-current="page">Walkthroughs</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Walkthroughs</h1>
+<p class="lede">Short scripts on a branch that drive a browser through its change, so you watch the feature instead of clicking through it yourself.</p>
+
+<p>When Claude pushes a branch, it can push a walkthrough with it: an Elixir script in the project's
+<code>walkthroughs/</code> folder that opens your app, says what it's about to show, and clicks, types and checks
+its way through the change. Switch to the branch, press its <strong>▶</strong> on the <a href="page.html">branch page</a>,
+and Chrome opens on your machine and plays it: slowed down, with a caption for each part and the element it's about
+to click outlined. The page follows along and says whether it ran to the end, or where it stopped.</p>
+
+<pre><code># walkthroughs/badge-pull.exs
+say "The badge now shows how far behind the branch is"
+visit url(:web)
+see css(".badge button", text: "Pull")
+
+say "Open the Branches menu: clawswap's page, in an iframe"
+click "Branches"
+in_frame "iframe[title=clawswap]", fn -&gt;
+  see "Current"
+end
+
+say "Rename the project in the settings"
+visit url(:clawswap, "/settings")
+fill_in "the repo folder's name", with: "demo"
+click button("Save")
+see "Saved."</code></pre>
+
+<h2 id="running">Running one</h2>
+<ul>
+  <li><strong>From the page.</strong> The branch page lists the checkout's walkthroughs under the header. Those the
+    branch added or changed since it left the base branch come first, outlined in blue. <strong>▶</strong> runs one in
+    the watcher, so the browser opens on the machine running clawswap. The line below the buttons shows the caption it's on,
+    then <em>ran to the end</em> or what failed.</li>
+  <li><strong>From the terminal.</strong> In your project's repo, with the session up:
+<pre><code>clawswap walk                  # the walkthroughs this branch added or changed
+clawswap walk badge-pull       # one by name (or several)
+clawswap walk --headless       # without a window, to check one passes</code></pre>
+    It exits 1 when one fails, saying where.</li>
+  <li><strong>API.</strong> <code>POST /walk {"name": "badge-pull"}</code>, then follow <code>walk</code> in
+    <code>/state</code>; see <a href="api.html">API</a>.</li>
+</ul>
+<h3 id="dev-chrome">In a Chrome you keep open</h3>
+<p>Each walkthrough opens a Chrome window of its own, unless a dev Chrome is open. Start one with</p>
+<pre><code>clawswap browser</code></pre>
+<p>It opens Chrome at your app, with a profile of its own (kept in <code>~/.cache/clawswap/chrome</code>, so logins
+stay between runs) and a debugging port (9333). While it's open, walkthroughs, from the page or
+<code>clawswap walk</code>, play in a tab of it: the same tab each time, leaving your other tabs alone. Chrome won't
+open a debugging port on your everyday profile, so it can't be your usual window.
+<code>CLAWSWAP_CHROME_DEBUGGER</code> points at another Chrome started with <code>--remote-debugging-port</code>
+(<code>localhost:9222</code>, say), or <code>off</code> ignores the dev Chrome.</p>
+<p>A failure names the line, the caption it was showing and what it couldn't find, and saves a screenshot of that
+moment in the temp folder (its path is in the message).</p>
+
+<h2 id="setup">What it needs</h2>
+<ul>
+  <li><strong>Chrome and chromedriver of the same major version.</strong> chromedriver is a small program from Google
+    that lets other programs drive Chrome; clawswap uses it through <a href="https://hexdocs.pm/wallaby">Wallaby</a>.
+    Install it from your package manager (<code>brew install --cask chromedriver</code>,
+    <code>sudo apt install chromium-driver</code>), or get Chrome and chromedriver together from
+    <a href="https://googlechromelabs.github.io/chrome-for-testing/">Chrome for Testing</a>
+    (<code>npx @puppeteer/browsers install chrome@stable chromedriver@stable</code>), so an update to your everyday
+    Chrome can't put them out of step. If
+    they aren't on your <code>PATH</code> as <code>chromedriver</code> and <code>google-chrome</code> (or <code>chromium</code>),
+    set <code>CLAWSWAP_CHROMEDRIVER</code> and <code>CLAWSWAP_CHROME</code> to their paths, in the shell you run
+    <code>clawswap up</code> from.</li>
+  <li><strong>The servers running.</strong> A walkthrough drives your app as the session runs it.</li>
+  <li><strong>A display.</strong> On Linux without <code>DISPLAY</code> or <code>WAYLAND_DISPLAY</code> (a CI runner, Claude's
+    cloud session) it runs headless by itself.</li>
+</ul>
+<table>
+  <tr><th>Variable</th><th>What it does</th></tr>
+  <tr><td><code>CLAWSWAP_HEADLESS</code></td><td><code>1</code> runs without a window, <code>0</code> with one, whatever else says.</td></tr>
+  <tr><td><code>CLAWSWAP_SLOW</code></td><td>Milliseconds to wait before each action (twice that on a caption). 600 with a window, 0 without.</td></tr>
+  <tr><td><code>CLAWSWAP_WAIT</code></td><td>How long a command waits for what it looks for, in ms. 10000.</td></tr>
+  <tr><td><code>CLAWSWAP_CHROME</code>, <code>CLAWSWAP_CHROMEDRIVER</code></td><td>The binaries' paths.</td></tr>
+  <tr><td><code>CLAWSWAP_CHROME_DEBUGGER</code></td><td>The <a href="#dev-chrome">Chrome to play in</a> (host:port), or <code>off</code>. The dev Chrome on 9333 when it's open.</td></tr>
+</table>
+<p>The folder is <code>walkthroughs</code> next to the config; set <code>walkthroughs:</code> in the
+<a href="configuration.html">config</a> for another.</p>
+
+<h2 id="writing">Writing one</h2>
+<p>A walkthrough is Elixir, evaluated with these commands imported. Each waits for what it looks for (10 s, or
+<code>timeout:</code> ms) and fails the walkthrough when it doesn't turn up. A string finds a button, link, label or
+similar by its visible text; where that isn't precise enough, pass a query.</p>
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>say "text"</code></td><td>Shows a caption at the bottom of the page, and pauses on it. Each caption is a step: the page and the terminal follow them, and a failure says which one it was in.</td></tr>
+  <tr><td><code>visit url</code></td><td>Opens a page: a full URL, or a path on your first server with a port.</td></tr>
+  <tr><td><code>url(:web, "/path")</code></td><td>A server's address by its name in the config (<code>url()</code>: the first with a port; <code>url(:clawswap)</code>: the branch page).</td></tr>
+  <tr><td><code>click "text"</code> / <code>click query</code></td><td>Clicks it, after outlining it.</td></tr>
+  <tr><td><code>fill_in "field", with: "text"</code></td><td>Types into a field found by label, id, name or placeholder, then leaves it (so change events fire).</td></tr>
+  <tr><td><code>choose "select", "option"</code></td><td>Picks an option in a select found by label, id or name (or a query).</td></tr>
+  <tr><td><code>press [:escape]</code></td><td>Sends keys: strings and Wallaby key atoms.</td></tr>
+  <tr><td><code>see "text"</code> / <code>see query</code></td><td>Waits until the page shows it. <code>refute_see</code> waits until it's gone.</td></tr>
+  <tr><td><code>in_frame "iframe css", fn -&gt; … end</code></td><td>Runs the commands inside an iframe.</td></tr>
+  <tr><td><code>js("return …", args)</code></td><td>Runs JavaScript in the page and returns its value.</td></tr>
+  <tr><td><code>before_load("js")</code></td><td>Runs JavaScript in every page from the next load on, before the page's own: stand-ins for browser APIs (clawswap's tests fake <code>navigator.hid</code> this way).</td></tr>
+  <tr><td><code>wait_until(fn -&gt; … end)</code></td><td>Waits until the function returns something truthy.</td></tr>
+  <tr><td><code>pause(ms)</code>, <code>screenshot("name")</code></td><td>Waits; saves a screenshot and returns its path.</td></tr>
+  <tr><td><code>css/2</code>, <code>xpath/2</code>, <code>button/2</code>, <code>link/2</code>, <code>text_field/2</code>, <code>select/2</code>, <code>option/2</code></td><td>Queries, as Wallaby's: <code>css(".badge select")</code>, <code>css("li", text: "main")</code>, <code>button("Save")</code>.</td></tr>
+  <tr><td><code>session()</code></td><td>The Wallaby session, for anything else.</td></tr>
+</table>
+<p><a href="https://github.com/cbishopvelti/clawswap/blob/main/examples/react-embed/walkthroughs/branches-menu.exs">examples/react-embed/walkthroughs/branches-menu.exs</a>
+is a whole one.</p>
+<div class="note"><p>A walkthrough is code that runs on your machine, as a branch's config and steps are. Press ▶ on
+branches you'd switch to.</p></div>
+
+<h2 id="claude">Asking Claude for them</h2>
+<p>Tell Claude in your repo's <code>CLAUDE.md</code>, so every branch comes with one:</p>
+<pre><code>With each branch that changes what the app does, add walkthroughs/&lt;short-name&gt;.exs: a clawswap
+walkthrough (https://cbishopvelti.github.io/clawswap/walkthroughs.html) that shows the change, with a
+`say` caption before each part. Check it passes with `clawswap walk --headless` before pushing.</code></pre>
+<p>Claude's cloud sessions have no display, so <code>clawswap walk</code> runs headless there, and a failure's screenshot
+shows Claude what the page looked like.</p>
+
+<h2 id="tests">clawswap's own browser tests</h2>
+<p>clawswap tests its page the same way: <code>test/integration</code> copies
+<a href="page.html#embed">examples/react-embed</a> into a repo of its own with a few branches, runs
+<code>clawswap up</code> for it in zellij and in tmux, and drives Chrome through the merge marks, the Branches menu, a
+switch, the config editor, the ▶ buttons and a stand-in Stream Deck. They need Chrome, chromedriver, Node.js, tmux and
+zellij, and are left out of <code>mix test</code>:</p>
+<pre><code>mix test.integration                                      # headless
+CLAWSWAP_HEADLESS=0 CLAWSWAP_SLOW=800 mix test.integration  # watch them
+tmux -L clawswap-tests attach                             # and the panes, in another terminal</code></pre>
+<p>They use ports 8790 and 5173, so stop your own session first.</p>
+<div class="pager"><span><a href="opendeck.html">← Stream Deck</a></span><span></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>
