@@ -36,10 +36,11 @@
     </ul>
   </nav>
   <main>
-<h1>Stream Deck keys (OpenDeck)</h1>
-<p class="lede">Branch and pull keys on a Stream Deck, through the <a href="https://github.com/nekename/OpenDeck">OpenDeck</a> plugin.</p>
+<h1>Stream Deck keys</h1>
+<p class="lede">Branch and pull keys on a Stream Deck, through the <a href="https://github.com/nekename/OpenDeck">OpenDeck</a>
+plugin or <a href="#webhid">straight from the watcher's page</a> in Chrome.</p>
 
-<h2 id="install">Install the plugin</h2>
+<h2 id="install">OpenDeck: install the plugin</h2>
 <pre><code>&lt;path-to-clawswap&gt;/opendeck/install.sh</code></pre>
 <p>It can be run from anywhere. It copies the plugin into OpenDeck's plugins folder
 (<code>~/.config/opendeck/plugins</code>, or the Flatpak's under <code>~/.var/app/me.amankhanna.opendeck</code>). It's a
@@ -81,6 +82,28 @@ project's <code>port</code> to drive several projects from one deck; keys on the
 <h2 id="elgato">The Elgato app</h2>
 <p>The plugin speaks the Stream Deck SDK 2 protocol and its manifest also lists macOS, so it may run in Elgato's
 Stream Deck app too. OpenDeck on Linux is what it's built for; the Elgato app hasn't been tried.</p>
+
+<h2 id="webhid">From the page, without OpenDeck (WebHID)</h2>
+<p>The watcher's page can drive the deck itself.</p>
+<ol class="steps">
+  <li>Quit OpenDeck first (tray &gt; Quit), since both would draw on the same keys.</li>
+  <li>Open the watcher's page (<code>http://localhost:8790</code>) in Chrome or Edge. WebHID is Chromium only.</li>
+  <li>Press <strong>Connect Stream Deck</strong> and pick the deck.</li>
+</ol>
+<p>The keys show the base branch and then the newest PRs, in deck order, row by row, with Pull on the last key. They
+look like the OpenDeck keys, with the same coloured bars, and pressing one switches. Chrome remembers the deck, so the
+page opens it again when it loads and when the deck is plugged back in.</p>
+<ul>
+  <li><strong>Keep the tab open.</strong> It works while that tab is open; close it and the keys stop.</li>
+  <li><strong>Decks.</strong> It knows the Stream Deck (v2), MK.2 and XL. The Mini, Neo and + aren't supported yet.</li>
+  <li><strong>Linux permissions.</strong> Your user needs access to the deck's hidraw device. The udev rule OpenDeck
+    installs should cover that; otherwise add one for vendor <code>0fd9</code>.</li>
+  <li><strong>Not in the embed.</strong> An iframe needs <code>allow="hid"</code> for WebHID, so press Connect on the page
+    itself; the narrow <a href="page.html#embed">embed menu</a> leaves the button out.</li>
+</ul>
+<div class="note"><p>This is new and hasn't been tried on a real deck yet. If it misbehaves, OpenDeck still works.</p></div>
+<p>It's Elixir too: <code>app/components/stream_deck.ex</code> calls <code>navigator.hid</code> and a canvas through
+Hologram's JavaScript interop.</p>
 <div class="pager"><span><a href="api.html">← API</a></span><span><a href="roadmap.html">Coming next →</a></span></div>
 <footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
   </main>
