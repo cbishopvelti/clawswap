@@ -24,10 +24,23 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
    from [the releases](https://github.com/zellij-org/zellij/releases) or `cargo install --locked zellij`.
 3. clawswap itself:
    ```bash
-   git clone https://github.com/cbishopvelti/clawswap ~/clawswap
-   cd ~/clawswap && mix deps.get && mix compile
-   ln -s ~/clawswap/bin/clawswap ~/.local/bin/clawswap
+   git clone https://github.com/cbishopvelti/clawswap
+   cd clawswap && mix deps.get && mix compile
    ```
+   Clone it anywhere. The command is `bin/clawswap` in the clone, and you run it from inside *your
+   project's* repo, since that's the repo it acts on (it finds its own folder by itself):
+   ```bash
+   cd ~/code/myproject
+   ~/playground/clawswap/bin/clawswap status   # wherever you cloned it
+   ```
+   To type just `clawswap`, link it into a folder on your `PATH`. Run this from the clone's root so the
+   link gets the full path:
+   ```bash
+   mkdir -p ~/.local/bin && ln -sf "$PWD/bin/clawswap" ~/.local/bin/clawswap
+   ```
+   If `clawswap` is then "command not found", `~/.local/bin` isn't on your `PATH` (check with
+   `echo $PATH`): add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc` and open a new
+   terminal. The rest of this README writes `clawswap`; without the link, use the full path instead.
    Hologram's compiler bundles the page's JavaScript with esbuild, which it installs with npm the first
    time, so Node.js has to be there for `mix compile`. Nothing of clawswap's own is JavaScript. On Linux
    the page also needs inotify-tools (`sudo apt install inotify-tools`), which Hologram's dev server uses
@@ -49,8 +62,8 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
 
 ## Use
 
-Run these from inside your project's repo. `bin/clawswap` runs `mix clawswap` in clawswap's own folder,
-with your repo passed along.
+Run these from inside your project's repo (not clawswap's clone). `bin/clawswap` runs `mix clawswap` in
+clawswap's own folder, with your repo passed along.
 
 ```bash
 clawswap up                # open (or re-attach to) the session
