@@ -1,7 +1,7 @@
 defmodule Clawswap.CLI do
   @moduledoc "clawswap's commands. See README.md."
 
-  alias Clawswap.{Config, Git, Plan, Run, Smee, Watcher, Zellij}
+  alias Clawswap.{Config, Git, Plan, Run, Smee, Starter, Watcher, Zellij}
 
   @usage """
   Usage: clawswap <command>
@@ -14,34 +14,6 @@ defmodule Clawswap.CLI do
     smee [url]       Set up the smee.io channel for the GitHub webhook
     layout           Print the zellij layout up opens
     watch            The watcher, with its page and API (runs in the session's clawswap pane)
-  """
-
-  @starter """
-  # clawswap's settings for this repo. See https://github.com/cbishopvelti/clawswap#configuration
-  [
-    # base: "main",            # the branch listed first (default: origin's default branch)
-    # port: 8790,              # the watcher's page and API; give each project its own to run several
-
-    # The servers a switch stops and starts again, each in its own zellij pane.
-    servers: [
-      web: [command: "mix phx.server", cwd: ".", port: 4000]
-    ],
-
-    # Other panes in the session, left running across switches.
-    # panes: [logs: [command: "docker compose logs -f"]],
-
-    # Runs before `clawswap up` starts a new session.
-    # prepare: [[label: "Starting Postgres", run: "docker compose up -d postgres", wait_for_port: 5432]],
-
-    # What a switch runs when these files changed, in this order. "dir/" matches anything under it.
-    steps: [
-      [label: "mix deps.get", when: ["mix.exs", "mix.lock"], run: "mix deps.get"],
-      [label: "mix ecto.migrate", when: "priv/repo/migrations/", run: "mix ecto.migrate"]
-    ]
-
-    # Said after a switch that changed these files.
-    # notes: [[when: "plugin/", message: "The plugin changed: reload it"]]
-  ]
   """
 
   def main(args) do
@@ -277,7 +249,16 @@ defmodule Clawswap.CLI do
 
     path = Path.join(root, Config.file_name())
     if File.exists?(path), do: fail("#{path} already exists")
-    File.write!(path, @starter)
-    IO.puts("Wrote #{path}. Fill in your servers and steps, then run clawswap up.")
+    File.write!(path, Starter.config(root))
+
+    found =
+      case Starter.detect(root) do
+        :phoenix -> "a Phoenix app, so it runs mix phx.server"
+        :mix -> "a Mix project; add the server it runs"
+        {:node, manager, _} -> "a Node project, so it runs #{manager} run dev"
+        :unknown -> "no project it knows; add your servers"
+      end
+
+    IO.puts("Wrote #{path} (found #{found}). Check the servers and steps, then run clawswap up.")
   end
 end
