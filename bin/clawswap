@@ -1,5 +1,5 @@
 #!/bin/sh
-# clawswap: runs a project's dev servers in a zellij session and switches its checkout to another branch
+# clawswap: runs a project's dev servers in a zellij or tmux session and switches its checkout to another branch
 # from a Stream Deck key, the watcher's page or the command line. Run it from inside the project's repo.
 # See README.md.
 set -u
@@ -10,14 +10,14 @@ cd "$tool" || exit 1
 
 case "${1:-}" in
   up)
-    # mix gets the session ready; zellij then needs this terminal, so it runs from here.
+    # mix gets the session ready; zellij or tmux then needs this terminal, so it runs from here.
     CLAWSWAP_EXEC=$(mktemp)
     export CLAWSWAP_EXEC
     mix clawswap up || { rm -f "$CLAWSWAP_EXEC"; exit 1; }
     set --
     while IFS= read -r line; do set -- "$@" "$line"; done < "$CLAWSWAP_EXEC"
     rm -f "$CLAWSWAP_EXEC"
-    cd "$1" && shift && exec zellij "$@"
+    cd "$1" && shift && exec "$@"
     ;;
   watch)
     # Hologram serves its pages only with this set in dev.

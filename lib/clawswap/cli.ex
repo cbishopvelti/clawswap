@@ -1,18 +1,18 @@
 defmodule Clawswap.CLI do
   @moduledoc "clawswap's commands. See README.md."
 
-  alias Clawswap.{Config, Git, Plan, Run, Smee, Starter, Watcher, Zellij}
+  alias Clawswap.{Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Watcher}
 
   @usage """
   Usage: clawswap <command>
     init             Write a starter clawswap.exs in this repo
-    up               Start (or attach to) the zellij session with every server
+    up               Start (or attach to) the zellij or tmux session with every server
     status           The branches the keys show, and the last switch
     switch <branch>  Switch branch: stop the servers, check out, update, start them again
     pull             Pull the current branch the same way (nothing happens if it's up to date)
     update [rev]     Run the steps for what changed since they last ran (or since rev), or --all
     smee [url]       Set up the smee.io channel for the GitHub webhook
-    layout           Print the zellij layout up opens
+    layout           Print the layout up opens (zellij's layout, or tmux's commands)
     watch            The watcher, with its page and API (runs in the session's clawswap pane)
   """
 
@@ -26,7 +26,7 @@ defmodule Clawswap.CLI do
       ["pull"] -> pull()
       ["update" | rest] -> update(List.first(rest))
       ["smee" | rest] -> smee(List.first(rest))
-      ["layout"] -> IO.write(Zellij.layout(project!()))
+      ["layout"] -> layout()
       [help] when help in ["help", "--help", "-h"] -> IO.write(@usage)
       [] -> IO.write(@usage)
       _ -> fail(@usage)
@@ -56,7 +56,7 @@ defmodule Clawswap.CLI do
 
       case run.(step) do
         :ok ->
-          if step.wait_for_port, do: Zellij.wait_for_port(step.wait_for_port)
+          if step.wait_for_port, do: Ports.wait_for_port(step.wait_for_port)
           {:cont, true}
 
         {:error, message} ->
@@ -85,51 +85,28 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Gets the session ready and leaves the zellij command for bin/clawswap to run, since zellij needs the
-  # terminal (CLAWSWAP_EXEC is the file it reads it from).
+  # Gets the session ready and leaves the multiplexer's command for bin/clawswap to run, since zellij and
+  # tmux need the terminal (CLAWSWAP_EXEC is the file it reads it from).
   defp up do
     project = project!()
-    version = Zellij.version()
+    mux = Multiplexer.pick(project)
 
-    unless Zellij.version_ok?(version) do
-      found = if version, do: Enum.join(version, "."), else: "none"
-      fail("clawswap needs zellij 0.44 or newer (found #{found}): https://github.com/zellij-org/zellij/releases")
+    case mux.check() do
+      :ok -> :ok
+      {:error, message} -> fail(message)
     end
 
-    sessions =
-      case Run.capture("zellij", ["list-sessions", "--no-formatting"]),
-        do: (
-          {:ok, out} -> out
-          _ -> ""
-        )
-
-    line = sessions |> String.split("\n") |> Enum.find(&(hd(String.split(&1, " ")) == project.session))
-    # An exited session would come back with its panes waiting for Enter; start it fresh instead.
-    if line && line =~ "EXITED", do: Run.capture("zellij", ["delete-session", project.session])
-    running = line != nil and not (line =~ "EXITED")
-
-    args =
-      if running do
-        ["attach", project.session]
-      else
-        catch_up(project)
-
-        layout =
-          if project.layout do
-            Path.expand(project.layout, project.root)
-          else
-            path = String.replace_suffix(project.local_file, ".json", ".kdl")
-            File.write!(path, Zellij.layout(project))
-            path
-          end
-
-        ["--session", project.session, "--new-session-with-layout", layout]
-      end
+    command = mux.up(project, fn -> catch_up(project) end)
 
     case System.get_env("CLAWSWAP_EXEC") do
-      nil -> fail("Run this through bin/clawswap, which starts zellij: zellij " <> Enum.join(args, " "))
-      file -> File.write!(file, Enum.join([project.root | args], "\n") <> "\n")
+      nil -> fail("Run this through bin/clawswap, which starts the session: " <> Enum.join(command, " "))
+      file -> File.write!(file, Enum.join([project.root | command], "\n") <> "\n")
     end
+  end
+
+  defp layout do
+    project = project!()
+    IO.write(Multiplexer.pick(project).layout(project))
   end
 
   defp watch do

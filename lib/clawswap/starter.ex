@@ -27,8 +27,9 @@ defmodule Clawswap.Starter do
     [
       # base: "main",            # the branch listed first (default: origin's default branch)
       # port: 8790,              # the watcher's page and API; give each project its own to run several
+      # multiplexer: :tmux,      # or :zellij (default: the one you're in, else zellij if installed, else tmux)
 
-      # The servers a switch stops and starts again, each in its own zellij pane.
+      # The servers a switch stops and starts again, each in its own pane.
     #{servers},
 
       # Other panes in the session, left running across switches.

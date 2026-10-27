@@ -1,6 +1,6 @@
 defmodule Clawswap.Run do
   @moduledoc """
-  Running commands: quietly for answers (git, zellij), or with their output shown in the watcher's pane
+  Running commands: quietly for answers (git, zellij, tmux), or with their output shown in the watcher's pane
   (the update steps).
   """
 
