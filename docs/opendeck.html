@@ -56,8 +56,9 @@ copy, since OpenDeck doesn't reliably follow a symlink there, so run it again af
   <li>Keys on "next branch" share the list in deck order, row by row. The first shows the base branch, the rest the
     newest open pull requests.</li>
   <li>A key shows its branch's PR number and title.</li>
-  <li>Pressing it switches to that branch: the servers stop, the branch is checked out, the steps it needs run and
-    the servers start again.</li>
+  <li>Tapping it switches to that branch when you let go: the servers stop, the branch is checked out, the steps it
+    needs run and the servers start again.</li>
+  <li>Holding it for half a second opens <a href="#claude">the Claude Code thread</a> that made the branch instead.</li>
 </ul>
 <p>A bar on the key shows its state:</p>
 <ul class="marks">
@@ -66,6 +67,17 @@ copy, since OpenDeck doesn't reliably follow a symlink there, so run it again af
   <li><span class="bar running"></span>Amber: a switch in progress, with its step.</li>
   <li><span class="bar failed"></span>Red: a failed switch.</li>
 </ul>
+<p>The checkout's key also has a green outline. The top right corner marks the merge status, as the
+<a href="page.html">page's list</a> does, in GitHub's colours: ⎇ the base branch, ● an open PR (green, and the key is
+tinted green), ◌ a draft PR (grey), ✓ merged into the base (purple, tinted purple), ○ neither.</p>
+
+<h2 id="claude">Open the branch's Claude Code thread</h2>
+<p>Hold a branch key for half a second and the watcher opens, in your browser, the Claude Code thread that made that
+branch: the project thread its PR's description links to, or else the session named in the
+<code>Claude-Session:</code> trailer of its newest commit. On a pull key it's the checkout's branch. The key shows a tick,
+or an alert when the branch has neither (the base branch, say). It's the same on a <a href="#webhid">deck the page
+drives</a>.</p>
+<p>The watcher opens it with <code>xdg-open</code> (<code>open</code> on a Mac), on the machine it runs on.</p>
 
 <h2 id="pull">clawswap pull</h2>
 <p>Pulls the branch the checkout is on and restarts the servers if anything came in, like
@@ -87,7 +99,8 @@ Stream Deck app too. OpenDeck on Linux is what it's built for; the Elgato app ha
   <li>Press <strong>Connect Stream Deck</strong> and pick the deck.</li>
 </ol>
 <p>The keys show the base branch and then the newest PRs, in deck order, row by row, with Pull on the last key. They
-look like the OpenDeck keys, with the same coloured bars, and pressing one switches. Chrome remembers the deck, so the
+look like the OpenDeck keys, with the same coloured bars and marks; tapping one switches, and holding one opens its
+<a href="#claude">Claude Code thread</a>. Chrome remembers the deck, so the
 page opens it again when it loads and when the deck is plugged back in.</p>
 <ul>
   <li><strong>Keep the tab open.</strong> It works while that tab is open; close it and the keys stop.</li>

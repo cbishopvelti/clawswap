@@ -232,6 +232,7 @@ GET  /state                    { project, base, current, dirty, upstream: { sha,
 POST /switch  { branch }       202, then follow /state's switch
 POST /pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
 POST /refresh                  look at GitHub now
+POST /claude  { branch }       open the Claude Code thread that made the branch (the checkout's without one)
 ```
 
 Webhook deliveries are only taken as a hint to look again; the watcher never acts on their contents, since
@@ -245,7 +246,12 @@ folder (run it again after updating clawswap). OpenDeck starts it as `bin/plugin
 manager that only sets it up in your shell won't do). Quit OpenDeck fully (tray > Quit) and start it
 again, then drag **clawswap branch** (category clawswap) onto keys. Keys on "next branch" share the list
 in deck order, row by row; the first shows the base branch. A key can name a branch instead. A
-**clawswap pull** key pulls the branch the checkout is on.
+**clawswap pull** key pulls the branch the checkout is on. A tap switches (or pulls) when you let go.
+
+Holding a key for half a second opens the Claude Code thread that made its branch in your browser instead
+(the checkout's branch, on a pull key): the project thread its PR's description links to, or else the
+session in the `Claude-Session:` trailer of its newest commit. The watcher opens it with `xdg-open` (`open`
+on a Mac).
 
 Keys show the branch's PR number and title, with a bar for its state: green is the checkout, blue means
 the checkout's branch has new commits on GitHub (press it to pull them), amber is a switch in progress
@@ -262,7 +268,7 @@ drive several projects from one deck; keys on the same watcher share its list.
 Instead of OpenDeck, the watcher's page can drive the deck itself: open it in Chrome or Edge (WebHID is
 Chromium only) and press **Connect Stream Deck**, then pick the deck. Its keys show the base branch and
 then the newest PRs, in deck order, row by row, with Pull on the last key. They look like the OpenDeck
-keys, and pressing one switches. Chrome remembers the deck, so the page opens it again when it loads and
+keys; tapping one switches, and holding one opens its Claude Code thread. Chrome remembers the deck, so the page opens it again when it loads and
 when the deck is plugged back in.
 
 It works while that tab is open; close it and the keys stop. Quit OpenDeck first, since both would draw on

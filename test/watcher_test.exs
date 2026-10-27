@@ -119,4 +119,22 @@ defmodule Clawswap.WatcherTest do
     assert calls() == ["stop phx", "stop vite", "deps", "start phx", "start vite"]
     TestRepo.until(fn -> Watcher.refresh(w).upstream.behind == 0 end)
   end
+
+  test "opens the Claude Code session in a branch's commits", %{work: work, start: start} do
+    TestRepo.git(work, ["checkout", "-qb", "claude/by-claude"])
+    TestRepo.write("#{work}/x", "x\n")
+    TestRepo.git(work, ["add", "."])
+    TestRepo.git(work, ["commit", "-qm", "By Claude\n\nClaude-Session: https://claude.ai/code/session_42"])
+    TestRepo.git(work, ["push", "-q", "origin", "claude/by-claude"])
+    TestRepo.git(work, ["checkout", "-q", "claude-main"])
+
+    me = self()
+    w = start.(open_url: &(send(me, {:opened, &1}) && :ok))
+    Watcher.refresh(w)
+    assert Watcher.open_claude(w, "claude/by-claude") == {:ok, "https://claude.ai/code/session_42"}
+    assert_received {:opened, "https://claude.ai/code/session_42"}
+    # The base branch's commits name no session of their own, and nor does a branch without one.
+    assert {:error, 404, _} = Watcher.open_claude(w, nil)
+    assert {:error, 404, _} = Watcher.open_claude(w, "claude/new-thing")
+  end
 end

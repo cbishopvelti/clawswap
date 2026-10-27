@@ -6,7 +6,11 @@ defmodule Clawswap.Deck do
 
   Options: `send` (posts one event to OpenDeck), `fetch` (`fn method, url, body -> {:ok, status, map} |
   {:error, reason}`, :httpc by default), `url` (the watcher for keys that don't name one), `schedule`
-  (`fn ms -> ... end`, sends `:poll` after ms; tests pass a no-op), `log`.
+  (`fn ms -> ... end`, sends `:poll` after ms; tests pass a no-op), `later` (`fn ms, message -> ... end`,
+  sends the deck `message` after ms: the long press timer), `log`.
+
+  A tap switches (or pulls) when the key is let go; holding it for half a second opens the Claude Code
+  thread that made the key's branch instead (the checkout's branch, on a pull key).
   """
 
   use GenServer
@@ -16,6 +20,8 @@ defmodule Clawswap.Deck do
   @default_url "http://127.0.0.1:8790"
   @poll_ms 1000
   @retry_ms 3000
+  # Holding a key this long opens its branch's Claude Code thread instead of switching.
+  @hold_ms 500
   # A failed switch stays on its key this long.
   @failed_ms 60_000
   @colours %{current: "#3fb950", switching: "#e3b341", failed: "#e0503f", behind: "#58a6ff"}
@@ -211,6 +217,7 @@ defmodule Clawswap.Deck do
        fetch: opts[:fetch] || (&fetch/3),
        url: opts[:url] || @default_url,
        schedule: opts[:schedule] || fn ms -> Process.send_after(me, :poll, ms) end,
+       later: opts[:later] || fn ms, message -> Process.send_after(me, message, ms) end,
        log: opts[:log] || fn _ -> :ok end,
        # context -> %{settings, coordinates, pull, image}
        instances: %{},
@@ -218,6 +225,8 @@ defmodule Clawswap.Deck do
        watchers: %{},
        # context -> branch entry
        shown: %{},
+       # context -> the long press timer's ref while the key is down, :held once it has fired
+       down: %{},
        timer: nil
      }}
   end
@@ -228,6 +237,10 @@ defmodule Clawswap.Deck do
 
   @impl true
   def handle_info(:poll, s), do: {:noreply, do_poll(%{s | timer: nil})}
+
+  def handle_info({:held, context, ref}, s) do
+    if s.down[context] == ref, do: {:noreply, open_claude(context, put_in(s.down[context], :held))}, else: {:noreply, s}
+  end
 
   defp on_message(%{"event" => "willAppear", "context" => context} = m, s) do
     payload = m["payload"] || %{}
@@ -253,7 +266,18 @@ defmodule Clawswap.Deck do
     s |> draw() |> schedule(0)
   end
 
-  defp on_message(%{"event" => "keyDown", "context" => context}, s), do: press(context, s)
+  defp on_message(%{"event" => "keyDown", "context" => context}, s) do
+    ref = make_ref()
+    s.later.(@hold_ms, {:held, context, ref})
+    put_in(s.down[context], ref)
+  end
+
+  defp on_message(%{"event" => "keyUp", "context" => context}, s) do
+    {was, down} = Map.pop(s.down, context)
+    s = %{s | down: down}
+    if is_reference(was), do: press(context, s), else: s
+  end
+
   defp on_message(_, s), do: s
 
   defp groups(s), do: Enum.group_by(s.instances, fn {_, i} -> url_of(i, s.url) end)
@@ -342,6 +366,28 @@ defmodule Clawswap.Deck do
 
       schedule(s, 0)
     end
+  end
+
+  defp open_claude(context, s) do
+    instance = s.instances[context]
+    entry = s.shown[context]
+
+    if instance == nil or (not instance.pull and (entry == nil or entry["missing"])) do
+      s.send.(%{event: "showAlert", context: context})
+    else
+      branch = if instance.pull, do: nil, else: entry["branch"]
+
+      case s.fetch.(:post, "#{url_of(instance, s.url)}/claude", %{branch: branch}) do
+        {:ok, 200, _} ->
+          s.send.(%{event: "showOk", context: context})
+
+        other ->
+          with {:ok, _, body} <- other, do: s.log.("clawswap: #{body["error"]}")
+          s.send.(%{event: "showAlert", context: context})
+      end
+    end
+
+    s
   end
 
   @doc "The watcher's API over :httpc."

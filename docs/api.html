@@ -44,6 +44,7 @@ the React example all use this API.</p>
   <tr><td><code>GET /state</code></td><td></td><td>200 and the <a href="#state">state</a>.</td></tr>
   <tr><td><code>POST /switch</code></td><td><code>{"branch": "..."}</code></td><td>202 and the state once the switch has started; follow <code>/state</code>'s <code>switch</code>. It looks at origin first, so a branch pushed a moment ago is found. Otherwise <code>{"error": "..."}</code>: 409 for uncommitted changes or a switch already running, 404 for a branch that isn't listed.</td></tr>
   <tr><td><code>POST /pull</code></td><td><code>{}</code></td><td>The checkout's branch: 202 with <code>switch.pull</code> true, or 202 with <code>"Already up to date"</code> in <code>switch.notes</code>. 409 when not on a branch, 404 when the branch isn't on GitHub.</td></tr>
+  <tr><td><code>POST /claude</code></td><td><code>{"branch": "..."}</code></td><td>Opens the Claude Code thread that made the branch (the checkout's branch without one) in the browser, on the watcher's machine: the project thread its PR's description links to, else the <code>Claude-Session:</code> in its commits. 200 and <code>{"url": "..."}</code>, or 404 when it has neither.</td></tr>
   <tr><td><code>POST /refresh</code></td><td><code>{}</code></td><td>Looks at git and GitHub now; 200 and the state when done.</td></tr>
 </table>
 <p>POSTs need <code>Content-Type: application/json</code>.</p>

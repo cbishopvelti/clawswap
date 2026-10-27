@@ -17,8 +17,14 @@ defmodule Clawswap.DeckTest do
 
   defp start(fetch, url \\ "http://dev") do
     me = self()
-    deck = start_supervised!({Deck, send: &send(me, {:sent, &1}), fetch: fetch, url: url, schedule: fn _ -> nil end})
-    deck
+    later = fn ms, message -> send(me, {:later, ms, message}) end
+    start_supervised!({Deck, send: &send(me, {:sent, &1}), fetch: fetch, url: url, schedule: fn _ -> nil end, later: later})
+  end
+
+  # A press and a release before the long press timer.
+  defp tap_key(deck, context) do
+    Deck.handle(deck, %{"event" => "keyDown", "context" => context, "payload" => %{}})
+    Deck.handle(deck, %{"event" => "keyUp", "context" => context, "payload" => %{}})
   end
 
   defp appear(deck, context, settings, row, column, action \\ "dev.clawswap.branch") do
@@ -93,7 +99,47 @@ defmodule Clawswap.DeckTest do
     Deck.poll(deck)
     assert image("a") =~ "claude-main"
     Deck.handle(deck, %{"event" => "keyDown", "context" => "a", "payload" => %{}})
+    # It switches when the key is let go, not before.
+    refute_received {:request, :post, _, _}
+    Deck.handle(deck, %{"event" => "keyUp", "context" => "a", "payload" => %{}})
     assert_received {:request, :post, "http://dev/switch", %{branch: "claude-main"}}
+  end
+
+  test "holding a key opens its branch's Claude Code thread instead of switching" do
+    me = self()
+
+    deck =
+      start(fn
+        :post, "http://dev/claude", body -> send(me, {:request, :post, "claude", body}) && {:ok, 200, %{"url" => "https://claude.ai/code/x"}}
+        method, url, body -> send(me, {:request, method, url, body}) && {:ok, 200, @state}
+      end)
+
+    appear(deck, "a", %{}, 0, 0)
+    appear(deck, "b", %{}, 0, 1)
+    appear(deck, "p", %{}, 0, 2, "dev.clawswap.pull")
+    Deck.poll(deck)
+
+    hold = fn context ->
+      Deck.handle(deck, %{"event" => "keyDown", "context" => context, "payload" => %{}})
+      assert_received {:later, 500, {:held, ^context, _} = held}
+      send(deck, held)
+      Deck.handle(deck, %{"event" => "keyUp", "context" => context, "payload" => %{}})
+    end
+
+    hold.("b")
+    assert_receive {:request, :post, "claude", %{branch: "claude/undo-sliders-abc123"}}
+    assert_receive {:sent, %{event: "showOk", context: "b"}}
+    refute_received {:request, :post, "http://dev/switch", _}
+    # On a pull key, the checkout's branch.
+    hold.("p")
+    assert_receive {:request, :post, "claude", %{branch: nil}}
+    # A timer from an earlier press that was let go does nothing.
+    Deck.handle(deck, %{"event" => "keyDown", "context" => "a", "payload" => %{}})
+    assert_received {:later, 500, stale}
+    Deck.handle(deck, %{"event" => "keyUp", "context" => "a", "payload" => %{}})
+    send(deck, stale)
+    Deck.poll(deck)
+    refute_received {:request, :post, "claude", _}
   end
 
   test "keys on different watchers get their own lists" do
@@ -116,7 +162,7 @@ defmodule Clawswap.DeckTest do
     assert image("a") =~ "claude-main"
     assert image("s1") =~ ">main<"
     assert image("s2") =~ ">fix<"
-    Deck.handle(deck, %{"event" => "keyDown", "context" => "s2", "payload" => %{}})
+    tap_key(deck, "s2")
     assert_received {:request, :post, "http://shop/switch", %{branch: "fix"}}
   end
 
@@ -150,7 +196,7 @@ defmodule Clawswap.DeckTest do
     appear(deck, "b", %{}, 0, 1)
     Deck.poll(deck)
     assert image("b") =~ "claude-main"
-    Deck.handle(deck, %{"event" => "keyDown", "context" => "p", "payload" => %{}})
+    tap_key(deck, "p")
     assert_received {:request, :post, "http://dev/pull", %{}}
     assert_received {:sent, %{event: "showOk", context: "p"}}
   end
