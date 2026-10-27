@@ -1,0 +1,3 @@
+#!/bin/sh
+# OpenDeck starts this; the plugin itself is plugin.exs (Elixir 1.18 or newer on the PATH, for JSON).
+exec elixir "$(dirname "$0")/plugin.exs" "$@"
