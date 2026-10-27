@@ -1,0 +1,42 @@
+# bmx's devtools/bmx-dev setup as a clawswap config: what clawswap.exs at bmx's root would hold.
+# Phoenix and vite are the servers; SurrealDB and the beat tracker run in docker, in a pane of their own.
+[
+  name: "bmx",
+  base: "claude-main",
+  port: 8790,
+  servers: [
+    phx: [command: "iex -S mix phx.server", cwd: "backend", port: 4000, match: ~r/phx\.server/],
+    vite: [command: "npm run dev", cwd: "frontend", port: 5173, match: ~r/npm run dev|vite/]
+  ],
+  panes: [
+    docker: [command: "docker compose up -d && docker compose logs -f --tail 20"]
+  ],
+  prepare: [
+    [label: "Starting SurrealDB and the beat tracker", run: "docker compose up -d", wait_for_port: 8000]
+  ],
+  # In this order: the schema needs SurrealDB up, the access needs the schema and the deps.
+  steps: [
+    [
+      name: "docker",
+      label: "Rebuilding containers",
+      when: [~r/^docker-compose\.ya?ml$/, "beat-tracker/"],
+      run: "docker compose up -d --build surrealdb beat-tracker"
+    ],
+    [name: "npm", label: "npm install", when: ["frontend/package.json", "frontend/package-lock.json"], run: "npm install", cwd: "frontend"],
+    [name: "deps", label: "mix deps.get", when: ["backend/mix.exs", "backend/mix.lock"], run: "mix deps.get", cwd: "backend"],
+    [name: "migrate", label: "mix ecto.migrate", when: "backend/priv/repo/migrations/", run: "mix ecto.migrate", cwd: "backend"],
+    [name: "schema", label: "Applying the schema", when: ["surrealdb/schema.surql", "surrealdb/apply-schema.sh"], run: "sh surrealdb/apply-schema.sh"],
+    # Defines the access that lets Phoenix's JWTs in. Re-run with the schema, and when its task or the
+    # token code changes.
+    [
+      name: "access",
+      label: "mix bmx.surreal.access",
+      when: ["surrealdb/schema.surql", "backend/lib/mix/tasks/bmx.surreal.access.ex", "backend/lib/bmx/auth/"],
+      run: "mix bmx.surreal.access",
+      cwd: "backend"
+    ]
+  ],
+  notes: [
+    [when: "opendeck-plugin/dev.bmx.deck.sdPlugin/", message: "The OpenDeck plugin changed: restart OpenDeck to load it"]
+  ]
+]
