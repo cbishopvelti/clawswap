@@ -1,7 +1,7 @@
 defmodule Clawswap.ConfigTest do
   use ExUnit.Case
 
-  alias Clawswap.{Config, TestRepo}
+  alias Clawswap.{Config, Plan, TestRepo}
 
   test "fills in the defaults" do
     p = Config.normalise([servers: [web: [command: "npm run dev", port: 3000]]], root: "/home/me/shop", base: "trunk")
@@ -53,6 +53,50 @@ defmodule Clawswap.ConfigTest do
     end
   end
 
+  test "reads a clawswap.yml as the same config as its clawswap.exs" do
+    {exs, _} = Code.eval_file(Path.expand("../examples/bmx.exs", __DIR__))
+    assert {:ok, yml} = Config.read(Path.expand("../examples/bmx.yml", __DIR__))
+    # Two compiled Regexes with the same source aren't ==, so compare their sources.
+    assert regex_sources(yml) == regex_sources(exs)
+    assert %Regex{} = yml[:servers][:phx][:match]
+  end
+
+  test "evaluates Elixir where a YAML config takes a function" do
+    path = Path.join(System.tmp_dir!(), "clawswap-#{System.unique_integer([:positive])}.yml")
+
+    File.write!(path, """
+    short_name: 'fn b -> String.replace_prefix(b, "feature/", "") end'
+    steps:
+      - {run: mix deps.get, when: ['&String.ends_with?(&1, ".lock")', mix.exs]}
+    """)
+
+    try do
+      assert {:ok, config} = Config.read(path)
+      p = Config.normalise(config, root: "/r")
+      assert p.short_name.("feature/x") == "x"
+      assert Enum.map(Plan.steps(p.steps, ["mix.lock"]), & &1.name) == ["mix"]
+      assert Plan.steps(p.steps, ["README.md"]) == []
+    after
+      File.rm!(path)
+    end
+  end
+
+  test "loads a clawswap.yml or .yaml the same way, and refuses two configs in one folder" do
+    %{dir: dir, work: work} = TestRepo.setup()
+
+    try do
+      File.write!("#{work}/clawswap.yaml", "name: root\n")
+      File.write!("#{work}/frontend/clawswap.yml", "name: frontend\nservers:\n  b: {command: x}\n  a: {command: y}\n")
+      assert {:ok, %{name: "frontend", file: "frontend/clawswap.yml", server_names: ["b", "a"]} = p} = Config.load("#{work}/frontend")
+      assert p.restart.("frontend/clawswap.yml")
+      assert {:ok, %{name: "root", file: "clawswap.yaml"}} = Config.load(work)
+      File.write!("#{work}/frontend/clawswap.exs", ~s([name: "exs"]))
+      assert {:error, "frontend/clawswap.exs and frontend/clawswap.yml are in the same folder" <> _} = Config.load("#{work}/frontend")
+    after
+      File.rm_rf!(dir)
+    end
+  end
+
   test "catches up from the last updated commit, or runs everything the first time" do
     %{dir: dir, work: work} = TestRepo.setup()
     project = Config.normalise(TestRepo.bmx_config(), root: work)
@@ -71,4 +115,9 @@ defmodule Clawswap.ConfigTest do
       File.rm_rf!(dir)
     end
   end
+
+  defp regex_sources(%Regex{source: source}), do: {:regex, source}
+  defp regex_sources(list) when is_list(list), do: Enum.map(list, &regex_sources/1)
+  defp regex_sources({k, v}), do: {k, regex_sources(v)}
+  defp regex_sources(other), do: other
 end

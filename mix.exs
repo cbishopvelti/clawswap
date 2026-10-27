@@ -26,7 +26,8 @@ defmodule Clawswap.MixProject do
       {:bandit, "~> 1.5"},
       {:hologram, "~> 0.12"},
       {:jason, "~> 1.4"},
-      {:phoenix, "~> 1.7"}
+      {:phoenix, "~> 1.7"},
+      {:yaml_elixir, "~> 2.11"}
     ]
   end
 end

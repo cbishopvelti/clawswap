@@ -100,8 +100,10 @@ nothing new it does nothing and leaves the servers running.
 
 ## Configuration
 
-`clawswap.exs` is evaluated as Elixir and returns a keyword list. clawswap uses the closest one, looking from
-the folder you run it in up to the repo root, so a project in a subfolder can have its own. Only `servers` matters
+`clawswap.exs` is evaluated as Elixir and returns a keyword list. You can write the same config as YAML in
+`clawswap.yml` (or `clawswap.yaml`) instead; see [YAML](#yaml). clawswap uses the closest one, looking from
+the folder you run it in up to the repo root, so a project in a subfolder can have its own. A folder with
+more than one of them is an error rather than a silent pick: keep one. Only `servers` matters
 to get going; everything else has a default. A command (`command`, `run`) is a string, run with `sh -c`,
 or a list of the program and its arguments. A `cwd` is relative to the repo root.
 
@@ -140,8 +142,35 @@ folder), a function of the path, or a list of those.
 ]
 ```
 
+### YAML
+
+`clawswap.yml` has the same keys, with mappings for keyword lists. Order is kept, so servers and steps run
+as written. Where `.exs` takes a Regex (`when`, `restart_when`, a server's `match`), write the string
+between slashes, quoted so YAML leaves the backslashes alone: `'/^docker-compose\.ya?ml$/'`. Any other string
+is a path as before. Where `.exs` takes a function, write it as Elixir in a string: `short_name` is always
+Elixir, and a `when` or `restart_when` string starting with `fn ` or `&` is. It's evaluated when the config
+loads, so a YAML config runs code just as a `clawswap.exs` does.
+
+```yaml
+short_name: 'fn branch -> String.replace_prefix(branch, "feature/", "") end'
+steps:
+  - {label: mix deps.get, when: ['&String.ends_with?(&1, ".lock")', mix.exs], run: mix deps.get}
+```
+[examples/bmx.yml](examples/bmx.yml) is [examples/bmx.exs](examples/bmx.exs) in YAML.
+
+```yaml
+servers:
+  api: {command: iex -S mix phx.server, cwd: api, port: 4000, match: '/phx\.server/'}
+  web: {command: npm run dev, cwd: web, port: 5173}
+panes:
+  db: {command: docker compose up postgres}
+steps:
+  - {label: mix deps.get, when: [api/mix.exs, api/mix.lock], run: mix deps.get, cwd: api}
+  - {label: Migrating, when: api/priv/repo/migrations/, run: mix ecto.migrate, cwd: api}
+```
+
 Environment variables override a few keys for one run: `CLAWSWAP_PORT`, `CLAWSWAP_BASE`,
-`CLAWSWAP_SESSION`, `CLAWSWAP_SMEE` (the channel) and `CLAWSWAP_CONFIG` (another config file).
+`CLAWSWAP_SESSION`, `CLAWSWAP_SMEE` (the channel) and `CLAWSWAP_CONFIG` (another config file, read as YAML when it ends in `.yml` or `.yaml`).
 
 ## What a switch does
 

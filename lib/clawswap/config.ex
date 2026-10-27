@@ -1,6 +1,6 @@
 defmodule Clawswap.Config do
   @moduledoc """
-  The project clawswap runs: its clawswap.exs (committed, at the repo root or in a project's subfolder), and the per-checkout state in
+  The project clawswap runs: its clawswap.exs or clawswap.yml (committed, at the repo root or in a project's subfolder), and the per-checkout state in
   .git/clawswap.json (the smee.io channel, and the commit the steps last ran for, so `up` can catch up a
   checkout that moved while clawswap wasn't watching).
   """
@@ -9,6 +9,10 @@ defmodule Clawswap.Config do
 
   @file_name "clawswap.exs"
   def file_name, do: @file_name
+
+  # The names a config can have. One folder may hold only one of them.
+  @file_names [@file_name, "clawswap.yml", "clawswap.yaml"]
+  def file_names, do: @file_names
 
   @doc "The config as the rest of clawswap uses it, with the defaults filled in. See README.md for each field."
   def normalise(config, opts) do
@@ -67,25 +71,36 @@ defmodule Clawswap.Config do
   end
 
   @doc """
-  Finds the repo from `cwd` and loads its config: the nearest clawswap.exs from `cwd` up to the repo's
-  root, so a project in a subfolder (examples/react-embed, say) has its own. CLAWSWAP_CONFIG names another
-  file, relative to the root.
+  Finds the repo from `cwd` and loads its config: the nearest clawswap.exs or clawswap.yml (or .yaml) from
+  `cwd` up to the repo's root, so a project in a subfolder (examples/react-embed, say) has its own. A
+  folder with more than one is an error. CLAWSWAP_CONFIG names another file, relative to the root.
   """
   def load(cwd) do
-    with {:ok, root} <- Git.repo_root(cwd) do
-      file = env("CLAWSWAP_CONFIG") || nearest(cwd, root)
-      path = Path.expand(file, root)
-
-      if File.exists?(path) do
-        {config, _} = Code.eval_file(path)
-        {:ok, normalise(config || [], root: root, file: file, base: Git.default_base(root), local_file: Git.git_path(root, "clawswap.json"))}
-      else
-        {:error, "No #{@file_name} in #{Path.expand(cwd)} or the folders above it in #{root} (clawswap init writes one)"}
-      end
+    with {:ok, root} <- Git.repo_root(cwd),
+         {:ok, file} <- find(cwd, root),
+         {:ok, config} <- read(Path.expand(file, root)) do
+      {:ok, normalise(config || [], root: root, file: file, base: Git.default_base(root), local_file: Git.git_path(root, "clawswap.json"))}
     end
   end
 
-  # The config's path from the root: in `cwd`'s folder or the closest above it, else the root's.
+  defp find(cwd, root) do
+    case env("CLAWSWAP_CONFIG") do
+      nil -> nearest(cwd, root)
+      file -> if File.exists?(Path.expand(file, root)), do: {:ok, file}, else: {:error, "No #{file} in #{root}"}
+    end
+  end
+
+  @doc "A config file's keyword list: a .yml or .yaml is read as YAML, anything else evaluated as Elixir."
+  def read(path) do
+    if Path.extname(path) in [".yml", ".yaml"] do
+      Clawswap.Config.Yaml.read(path)
+    else
+      {config, _} = Code.eval_file(path)
+      {:ok, config}
+    end
+  end
+
+  # The config's path from the root: in `cwd`'s folder or the closest above it.
   defp nearest(cwd, root) do
     prefix =
       case Git.git(cwd, ["rev-parse", "--show-prefix"]) do
@@ -93,12 +108,19 @@ defmodule Clawswap.Config do
         _ -> ""
       end
 
-    prefix
-    |> Path.split()
-    |> Enum.scan(&Path.join(&2, &1))
-    |> Enum.reverse()
-    |> Enum.map(&Path.join(&1, @file_name))
-    |> Enum.find(@file_name, &File.exists?(Path.join(root, &1)))
+    dirs = prefix |> Path.split() |> Enum.scan(&Path.join(&2, &1)) |> Enum.reverse() |> Kernel.++([""])
+
+    Enum.find_value(
+      dirs,
+      {:error, "No #{Enum.join(@file_names, ", ")} in #{Path.expand(cwd)} or the folders above it in #{root} (clawswap init writes one)"},
+      fn dir ->
+        case for(name <- @file_names, File.exists?(Path.join([root, dir, name])), do: Path.join(dir, name)) do
+          [] -> nil
+          [file] -> {:ok, file}
+          files -> {:error, "#{Enum.join(files, " and ")} are in the same folder: keep one"}
+        end
+      end
+    )
   end
 
   def read_local(project) do
