@@ -85,6 +85,15 @@ defmodule Clawswap.WatcherTest do
     assert_receive {:exit, 75}, 5000
   end
 
+  test "restarts itself after the settings page saved the config, and not when nothing changed", %{start: start} do
+    w = start.([])
+    assert {:ok, :unchanged} = Watcher.save_config(w, fn -> {:ok, :unchanged} end)
+    assert {:error, "bad"} = Watcher.save_config(w, fn -> {:error, "bad"} end)
+    refute_receive {:exit, _}, 700
+    assert {:ok, :saved} = Watcher.save_config(w, fn -> {:ok, :saved} end)
+    assert_receive {:exit, 75}, 2000
+  end
+
   test "tells on_change about every change", %{start: start} do
     me = self()
     w = start.(on_change: &send(me, {:view, &1}))

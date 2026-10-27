@@ -40,8 +40,9 @@ li.behind .status { color: var(--behind); }
   main { padding: 6px; }
   header { gap: 8px; margin: 0 4px 4px; }
   h1 { font-size: 12px; font-weight: normal; color: var(--muted); }
-  .webhook { font-size: 11px; }
-  .pull { padding: 1px 8px; font-size: 13px; }
+  header { flex-wrap: nowrap; }
+  .webhook { font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pull { padding: 1px 8px; font-size: 13px; white-space: nowrap; }
   .message { font-size: 12px; margin: 4px; }
   ul { gap: 0; }
   li button { flex-wrap: wrap; gap: 0 8px; border: 0; border-radius: 4px; padding: 5px 8px; background: none; }
@@ -54,6 +55,33 @@ li.behind .status { color: var(--behind); }
   .status:empty { display: none; }
 }
 
+.settings-link { color: var(--muted); text-decoration: none; font-size: 18px; line-height: 1; }
+.settings-link:hover { color: var(--fg); }
+
+/* The settings page. */
+.settings h2 { font-size: 16px; margin: 0; }
+.settings .file { color: var(--muted); font-family: ui-monospace, monospace; font-size: 13px; }
+.settings section { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+  margin-bottom: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 12px; }
+.settings section > h2, .settings section > .about, .settings section > textarea, .settings .row, .settings .add { grid-column: 1 / -1; }
+.settings .about { color: var(--muted); font-size: 13px; margin: 0; }
+.settings .field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.settings .field.wide { grid-column: 1 / -1; }
+.settings .field.long { grid-column: span 2; }
+.settings .field .name { font-size: 12px; color: var(--muted); }
+.settings input, .settings textarea, .settings select { font: inherit; color: inherit; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
+.settings textarea { resize: vertical; field-sizing: content; min-height: 1.6em; }
+.settings .code { font-family: ui-monospace, monospace; font-size: 13px; }
+.settings .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 10px;
+  border-top: 1px solid var(--line); padding-top: 8px; }
+.settings .row-buttons { display: flex; gap: 4px; align-items: end; justify-content: end; }
+.settings .row-buttons button, .settings .add { background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; }
+.settings .add { justify-self: start; }
+.settings footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
+.settings .save { background: var(--behind); color: #fff; border: 0; border-radius: 6px; padding: 6px 18px; }
+.settings .save[disabled] { opacity: 0.6; }
+.settings .saved { color: var(--current); }
 /* The Stream Deck the page drives over WebHID (ClawswapWeb.StreamDeck). */
 .deck { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .deck-on { color: var(--current); }

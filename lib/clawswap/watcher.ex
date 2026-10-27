@@ -35,6 +35,13 @@ defmodule Clawswap.Watcher do
   """
   def pull(server \\ __MODULE__), do: GenServer.call(server, {:after_refresh, :pull}, :infinity)
 
+  @doc """
+  Runs `save` (the settings page writing the config) unless a switch is running, then restarts the
+  watcher so it runs the new config, as after a switch that changed it. `save` returns `{:ok, :saved}`,
+  `{:ok, :unchanged}` or `{:error, message}`; so does this.
+  """
+  def save_config(server \\ __MODULE__, save), do: GenServer.call(server, {:save_config, save}, 30_000)
+
   def log(text), do: IO.puts("\e[36m[clawswap]\e[0m #{text}")
 
   @impl true
@@ -88,6 +95,22 @@ defmodule Clawswap.Watcher do
   @impl true
   def handle_call(:state, _from, state), do: {:reply, state.view, state}
 
+  def handle_call({:save_config, _}, _from, %{view: %{switch: %{phase: "running"}}} = state) do
+    {:reply, {:error, "A switch is running: save once it's done"}, state}
+  end
+
+  def handle_call({:save_config, save}, _from, state) do
+    result = save.()
+
+    if result == {:ok, :saved} do
+      log("#{state.project.file} saved from the settings page; restarting the watcher")
+      # Once the page has its answer.
+      Process.send_after(self(), :restart, 500)
+    end
+
+    {:reply, result, state}
+  end
+
   def handle_call({:after_refresh, what}, from, state) do
     {:noreply, start_refresh(%{state | waiters: state.waiters ++ [{from, what}]})}
   end
@@ -111,6 +134,11 @@ defmodule Clawswap.Watcher do
   end
 
   @impl true
+  def handle_info(:restart, state) do
+    state.exit.(75)
+    {:noreply, state}
+  end
+
   def handle_info(:refresh_now, state), do: {:noreply, start_refresh(%{state | debounce: nil})}
 
   def handle_info({:smee, :open}, state) do
