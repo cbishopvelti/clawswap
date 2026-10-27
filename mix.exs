@@ -18,8 +18,12 @@ defmodule Clawswap.MixProject do
     [mod: {Clawswap.Application, []}, extra_applications: [:logger, :inets, :ssl, :public_key]]
   end
 
-  defp elixirc_paths(:test), do: ["app", "lib", "test/support"]
-  defp elixirc_paths(_), do: ["app", "lib"]
+  # The OpenDeck plugin's keys are compiled in too: the page draws the same images on a deck it drives
+  # over WebHID.
+  @deck "opendeck/dev.clawswap.sdPlugin/bin"
+
+  defp elixirc_paths(:test), do: ["app", "lib", @deck, "test/support"]
+  defp elixirc_paths(_), do: ["app", "lib", @deck]
 
   defp deps do
     [

@@ -53,3 +53,9 @@ li.behind .status { color: var(--behind); }
   .status { font-size: 11px; flex-basis: 100%; padding-left: 20px; }
   .status:empty { display: none; }
 }
+
+/* The Stream Deck the page drives over WebHID (ClawswapWeb.StreamDeck). */
+.deck { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.deck-on { color: var(--current); }
+.deck-message { color: var(--failed); }
+@media (max-width: 480px) { .deck { display: none; } }
