@@ -39,6 +39,9 @@ out the whole repo, and the branch has to have this folder):
 cd examples/react-embed && clawswap up
 ```
 
+`walkthroughs/branches-menu.exs` is a [walkthrough](../../README.md#walkthroughs): press ▶ branches-menu on
+the watcher's page, or run `clawswap walk branches-menu`, to watch Chrome open the menu.
+
 ## Things this tests
 
 - **Framing.** Neither clawswap's endpoint nor Hologram sets `X-Frame-Options` or `frame-ancestors`, so

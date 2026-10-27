@@ -36,6 +36,8 @@ defmodule ClawswapWeb.View do
         end,
       error: (match?(%{phase: "failed"}, run) && "#{run.target}: #{run.error}") || state.error,
       branches: Enum.map(state.branches, &branch(&1, state, run, current)),
+      walkthroughs: Enum.map(Map.get(state, :walkthroughs, []), &walkthrough(&1, Map.get(state, :walk))),
+      walk: walk_status(Map.get(state, :walk)),
       keys: keys(state)
     }
   end
@@ -53,6 +55,23 @@ defmodule ClawswapWeb.View do
       pull: Clawswap.Deck.branch_image(Clawswap.Deck.pull_look(json))
     }
   end
+
+  # A walkthrough's button: new ones (the branch added or changed them) are marked, and the one running or
+  # last run shows how it went.
+  defp walkthrough(w, walk) do
+    last = walk && walk.name == w.name && walk.phase
+
+    %{
+      name: w.name,
+      class: Enum.join(Enum.reject([w.new && "new", last], &(&1 in [nil, false])), " "),
+      title: if(w.new, do: "#{w.path}, new on this branch", else: w.path)
+    }
+  end
+
+  defp walk_status(nil), do: %{text: nil, class: ""}
+  defp walk_status(%{phase: "running"} = w), do: %{text: "▶ #{w.name}: #{w.step || "opening Chrome"}", class: "running"}
+  defp walk_status(%{phase: "passed"} = w), do: %{text: "✓ #{w.name} ran to the end", class: "passed"}
+  defp walk_status(%{phase: "failed"} = w), do: %{text: "✕ #{w.name}: #{w.error}", class: "failed"}
 
   defp webhook(%{webhook: "connected"}), do: "webhook on"
   defp webhook(%{webhook: "off"}), do: "webhook off: run clawswap smee"
