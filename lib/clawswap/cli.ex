@@ -1,7 +1,7 @@
 defmodule Clawswap.CLI do
   @moduledoc "clawswap's commands. See README.md."
 
-  alias Clawswap.{Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Watcher}
+  alias Clawswap.{Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
 
   @usage """
   Usage: clawswap <command>
@@ -12,6 +12,8 @@ defmodule Clawswap.CLI do
     pull             Pull the current branch the same way (nothing happens if it's up to date)
     update [rev]     Run the steps for what changed since they last ran (or since rev), or --all
     smee [url]       Set up the smee.io channel for the GitHub webhook
+    walk [name...]   Run walkthroughs in Chrome (default: the ones this branch added); --headless
+    browser          Open a dev Chrome that walkthroughs play in, at your app
     layout           Print the layout up opens (zellij's layout, or tmux's commands)
     watch            The watcher, with its page and API (runs in the session's clawswap pane)
   """
@@ -26,6 +28,8 @@ defmodule Clawswap.CLI do
       ["pull"] -> pull()
       ["update" | rest] -> update(List.first(rest))
       ["smee" | rest] -> smee(List.first(rest))
+      ["walk" | rest] -> walk(rest)
+      ["browser"] -> browser()
       ["layout"] -> layout()
       [help] when help in ["help", "--help", "-h"] -> IO.write(@usage)
       [] -> IO.write(@usage)
@@ -189,6 +193,57 @@ defmodule Clawswap.CLI do
     if steps != [] and not run_steps(project, steps), do: System.halt(1)
     Config.mark_updated(project, head)
     if steps == [], do: IO.puts("Nothing to do")
+  end
+
+  # Runs walkthroughs here, one after another: those named, or the ones the branch added or changed. They
+  # drive the servers the session runs, so it needs to be up.
+  defp walk(args) do
+    {flags, names} = Enum.split_with(args, &String.starts_with?(&1, "--"))
+    project = project!()
+    list = Walkthrough.list(project)
+    folder = Path.relative_to(Walkthrough.dir(project), project.root) <> "/"
+
+    names =
+      cond do
+        names != [] -> names
+        list == [] -> fail("No walkthroughs in #{folder} yet. See README.md's Walkthroughs.")
+        Enum.any?(list, & &1.new) -> for w <- list, w.new, do: w.name
+        true -> fail("None of the walkthroughs is new on this branch; name one: #{Enum.map_join(list, ", ", & &1.name)}")
+      end
+
+    opts = if "--headless" in flags, do: [headless: true], else: []
+
+    failed =
+      Enum.reject(names, fn name ->
+        IO.puts("Walkthrough #{name}")
+
+        case Walkthrough.run(project, name, opts) do
+          :ok ->
+            IO.puts("#{name} ran to the end")
+            true
+
+          {:error, message} ->
+            IO.puts(:stderr, "#{name} failed: #{message}")
+            false
+        end
+      end)
+
+    if failed != [], do: System.halt(1)
+  end
+
+  # Opens the dev Chrome (its own profile, kept between runs, with a debugging port) at the first server, so
+  # walkthroughs play in a tab of it rather than a window of their own.
+  defp browser do
+    project = project!()
+    cache = System.get_env("XDG_CACHE_HOME") || Path.expand("~/.cache")
+
+    url =
+      Enum.find_value(project.server_names, "http://localhost:#{project.port}", &(project.servers[&1].port && "http://localhost:#{project.servers[&1].port}"))
+
+    case Walkthrough.Browser.open_dev_chrome(Path.join(cache, "clawswap/chrome"), url) do
+      {:ok, address} -> IO.puts("Dev Chrome on #{address}: walkthroughs play in a tab of it while it's open")
+      {:error, message} -> fail(message)
+    end
   end
 
   # Makes a smee.io channel for the GitHub webhook and saves it for this checkout.

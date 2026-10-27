@@ -1,7 +1,7 @@
 defmodule ClawswapWeb.BranchesPage do
   @moduledoc """
-  The watcher's page: the branches the keys show, a button for each that switches to it, Pull, and a link
-  to the settings page (in a new window, as this page is often in an app's iframe). The watcher
+  The watcher's page: the branches the keys show, a button for each that switches to it, Pull, the
+  checkout's walkthroughs (▶ runs one in a browser on this machine), and a link to the settings page (in a new window, as this page is often in an app's iframe). The watcher
   broadcasts each change, so the page follows a switch step by step.
   """
 
@@ -31,6 +31,15 @@ defmodule ClawswapWeb.BranchesPage do
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
       {%if @view.error}<p class="message">{@view.error}</p>{/if}
+      {%if @view.walkthroughs != []}
+        <section class="walks">
+          <span class="walks-label" title="Scripts that drive a browser through the branch's changes">Walkthroughs</span>
+          {%for w <- @view.walkthroughs}
+            <button class="walk {w.class}" title={w.title} $click={command: :walk, params: %{name: w.name}}>▶ {w.name}</button>
+          {/for}
+          {%if @view.walk.text}<span class="walk-status {@view.walk.class}">{@view.walk.text}</span>{/if}
+        </section>
+      {/if}
       <ul>
         {%for b <- @view.branches}
           <li class={b.row_class}>
@@ -57,6 +66,7 @@ defmodule ClawswapWeb.BranchesPage do
 
   def command(:switch, params, server), do: answer(server, Watcher.switch_to(params.branch))
   def command(:pull, _params, server), do: answer(server, Watcher.pull())
+  def command(:walk, params, server), do: answer(server, Watcher.walk(params.name))
 
   defp answer(server, {:ok, _state}), do: put_action(server, :show_message, message: nil)
   defp answer(server, {:error, _status, message}), do: put_action(server, :show_message, message: message)

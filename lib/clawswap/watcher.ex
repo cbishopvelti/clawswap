@@ -8,11 +8,12 @@ defmodule Clawswap.Watcher do
   `smee_url`, `on_change` (called with the public state after every change; the web layer broadcasts it),
   `exit` (restarts the watcher after a switch changed its config), `refresh_git` (false skips git fetch),
   `open_url` (opens a link in the browser; `open_url/1` by default).
+  `run_walk` (runs a walkthrough: `Clawswap.Walkthrough.run/3`, or a stand-in in tests).
   """
 
   use GenServer
 
-  alias Clawswap.{Config, Git, GitHub, Plan, Smee}
+  alias Clawswap.{Config, Git, GitHub, Plan, Smee, Walkthrough}
 
   # Without webhooks (or if smee drops a delivery), look anyway this often.
   @fallback_ms 15 * 60_000
@@ -59,6 +60,12 @@ defmodule Clawswap.Watcher do
     end
   end
 
+  @doc """
+  Runs the walkthrough called `name` in a browser on this machine: `{:ok, state}` once it has started
+  (follow the state's walk), or `{:error, http_status, message}`.
+  """
+  def walk(server \\ __MODULE__, name), do: GenServer.call(server, {:walk, name})
+
   def log(text), do: IO.puts("\e[36m[clawswap]\e[0m #{text}")
 
   @impl true
@@ -74,6 +81,7 @@ defmodule Clawswap.Watcher do
       exit: opts[:exit] || fn code -> System.halt(code) end,
       refresh_git: Keyword.get(opts, :refresh_git, true),
       open_url: opts[:open_url] || (&open_url/1),
+      run_walk: opts[:run_walk] || (&Walkthrough.run/3),
       pr_cache: nil,
       refreshing: nil,
       again: false,
@@ -96,7 +104,11 @@ defmodule Clawswap.Watcher do
         # branch isn't on origin).
         upstream: nil,
         # %{target, pull, phase: "running" | "done" | "failed", step, error, notes, at}
-        switch: nil
+        switch: nil,
+        # The checkout's walkthroughs, %{name, path, new} (Clawswap.Walkthrough.list/1), and the last one run:
+        # %{name, phase: "running" | "passed" | "failed", step, error, at}.
+        walkthroughs: [],
+        walk: nil
       }
     }
 
@@ -147,11 +159,52 @@ defmodule Clawswap.Watcher do
     {:reply, result, state}
   end
 
+  def handle_call({:walk, name}, _from, state) do
+    view = state.view
+
+    cond do
+      match?(%{phase: "running"}, view.walk) ->
+        {:reply, {:error, 409, "Already running the #{view.walk.name} walkthrough"}, state}
+
+      running?(view) ->
+        {:reply, {:error, 409, "A switch is running: watch once it's done"}, state}
+
+      not Enum.any?(Walkthrough.list(state.project), &(&1.name == name)) ->
+        {:reply, {:error, 404, "No walkthrough called #{name}"}, state}
+
+      true ->
+        state = changed(put_in(state.view.walk, %{name: name, phase: "running", step: nil, error: nil, at: now()}))
+        watcher = self()
+        %{project: project, run_walk: run_walk} = state
+        update = fn changes -> GenServer.cast(watcher, {:walk, changes}) end
+
+        Task.Supervisor.start_child(Clawswap.TaskSupervisor, fn ->
+          log("Walkthrough #{name}")
+
+          case run_walk.(project, name, on_step: &update.(%{step: &1})) do
+            :ok ->
+              log("Walkthrough #{name} passed")
+              update.(%{phase: "passed", step: nil, at: now()})
+
+            {:error, message} ->
+              log("Walkthrough #{name} failed: #{message}")
+              update.(%{phase: "failed", error: message, at: now()})
+          end
+        end)
+
+        {:reply, {:ok, state.view}, state}
+    end
+  end
+
   def handle_call({:after_refresh, what}, from, state) do
     {:noreply, start_refresh(%{state | waiters: state.waiters ++ [{from, what}]})}
   end
 
   @impl true
+  def handle_cast({:walk, changes}, state) do
+    {:noreply, changed(put_in(state.view.walk, Map.merge(state.view.walk, changes)))}
+  end
+
   def handle_cast({:run, changes}, state) do
     {:noreply, changed(put_in(state.view.switch, Map.merge(state.view.switch, changes)))}
   end
@@ -289,6 +342,7 @@ defmodule Clawswap.Watcher do
       dirty: Git.dirty?(root),
       upstream: Git.upstream(root, current.branch),
       branches: branches,
+      walkthroughs: Walkthrough.list(project),
       prs: pulls != nil,
       refreshedAt: DateTime.utc_now() |> DateTime.to_iso8601(),
       error: nil

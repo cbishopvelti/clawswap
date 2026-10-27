@@ -10,9 +10,15 @@ defmodule Clawswap.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: Mix.compilers() ++ [:hologram],
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: [
+        # The browser tests, in test/integration. See README.md's Tests.
+        "test.integration": ["test --only integration"]
+      ]
     ]
   end
+
+  def cli, do: [preferred_envs: ["test.integration": :test]]
 
   def application do
     [mod: {Clawswap.Application, []}, extra_applications: [:logger, :inets, :ssl, :public_key]]
@@ -31,6 +37,8 @@ defmodule Clawswap.MixProject do
       {:hologram, "~> 0.12"},
       {:jason, "~> 1.4"},
       {:phoenix, "~> 1.7"},
+      # Drives Chrome through chromedriver, for walkthroughs (Clawswap.Walkthrough) and the browser tests.
+      {:wallaby, "~> 0.30", runtime: false},
       {:yaml_elixir, "~> 2.11"}
     ]
   end

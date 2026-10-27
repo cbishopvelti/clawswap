@@ -8,6 +8,7 @@ defmodule ClawswapWeb.Api do
       POST /refresh                  look at GitHub now
       POST /claude  {"branch": ...}  open the Claude Code thread that made the branch (the checkout's
                                      without one) in the browser; 200 {"url": ...} or 404
+      POST /walk    {"name": ...}    202, then follow /state's walk
 
   It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
   the browser send a JSON POST here without a preflight, which only those origins pass. The Host check
@@ -20,7 +21,7 @@ defmodule ClawswapWeb.Api do
 
   alias Clawswap.Watcher
 
-  @paths ["/state", "/switch", "/pull", "/refresh", "/claude"]
+  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk"]
 
   @impl true
   def init(opts), do: opts
@@ -71,6 +72,16 @@ defmodule ClawswapWeb.Api do
       {:ok, url} -> json(conn, 200, %{url: url})
       {:error, status, message} -> json(conn, status, %{error: message})
     end
+  end
+
+  defp post(conn, "/walk", body) do
+    name =
+      case JSON.decode(if(body == "", do: "{}", else: body)) do
+        {:ok, %{"name" => name}} -> to_string(name)
+        _ -> ""
+      end
+
+    answer(conn, Watcher.walk(name))
   end
 
   defp branch_of(body) do
