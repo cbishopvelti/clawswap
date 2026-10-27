@@ -62,20 +62,32 @@ defmodule ClawswapWeb.View do
         true -> {"", ""}
       end
 
+    {mark, mark_class, mark_title} = merge_status(b, pr, state)
+
     %{
       branch: b.branch,
       title: (pr && pr.title) || b.short,
       number: pr && "##{pr.number}",
-      # ✓ merged into the base, ● open PR, ◌ draft PR, ○ neither.
-      mark:
-        cond do
-          Map.get(b, :merged) -> "✓"
-          pr && pr.draft -> "◌"
-          pr -> "●"
-          true -> "○"
-        end,
+      mark: mark,
+      mark_class: mark_class,
+      mark_title: mark_title,
       class: class,
       status: status
     }
+  end
+
+  # A row's merge status, as bmx's branch menu shows it: the symbol, its class (its colour) and what it
+  # means. ⎇ the base, ✓ merged into it, ● open PR, ◌ draft PR, ○ neither.
+  defp merge_status(b, pr, state) do
+    base = Map.get(state, :base)
+
+    cond do
+      b.branch == base -> {"⎇", "base", "#{base}, the branch the others merge into"}
+      Map.get(b, :merged) -> {"✓", "merged", "Merged into #{base}"}
+      pr && pr.draft -> {"◌", "draft", "Draft PR ##{pr.number}, not merged yet"}
+      pr -> {"●", "open", "Open PR ##{pr.number}, not merged yet"}
+      Map.get(state, :prs) -> {"○", "", "Not merged into #{base}, and no open PR"}
+      true -> {"○", "", "Not merged into #{base}"}
+    end
   end
 end

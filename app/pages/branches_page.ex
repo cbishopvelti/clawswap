@@ -31,7 +31,7 @@ defmodule ClawswapWeb.BranchesPage do
         {%for b <- @view.branches}
           <li class={b.class}>
             <button $click={command: :switch, params: %{branch: b.branch}}>
-              <span class="mark">{b.mark}</span>
+              <span class="mark {b.mark_class}" title={b.mark_title}>{b.mark}</span>
               {%if b.number}<span class="number">{b.number}</span>{/if}
               <span class="title">{b.title}</span>
               <span class="status">{b.status}</span>

@@ -4,7 +4,8 @@ Runs a project's dev servers in one [zellij](https://zellij.dev) session, and sw
 another branch from a Stream Deck key, the watcher's web page or the command line. A switch stops the
 servers, checks the branch out, runs only what the change needs (`mix deps.get`, migrations...) and
 starts them again. It's made for reviewing the branches Claude pushes: the list shows the open pull
-requests, newest first, and lights up when the branch you're on has new commits.
+requests, newest commit first, with each one's merge status, and lights up when the branch you're on has
+new commits.
 
 It's written in Elixir. The watcher is an OTP app, its page is a [Hologram](https://hologram.page) page
 served by Phoenix, and the OpenDeck plugin is an Elixir script. It started as bmx's `devtools/bmx-dev`;
@@ -58,7 +59,7 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
    content type `application/json`, and the events Branch or tag creation, Branch or tag deletion, Pull
    requests and Pushes. Without it the watcher still looks every 15 minutes, and whenever you press a key.
 6. Optional: PR titles. If the `gh` CLI is logged in (or `GITHUB_TOKEN` is set), the list shows the base
-   branch and then the branches with an open pull request, newest first, labelled by PR title. Without a
+   branch and then the branches with an open pull request, newest commit first, labelled by PR title. Without a
    token it shows every branch by newest commit.
 7. Optional: the Stream Deck keys, see [OpenDeck](#opendeck).
 

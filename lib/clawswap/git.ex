@@ -100,10 +100,10 @@ defmodule Clawswap.Git do
   end
 
   @doc """
-  The list the keys show: the base branch first, then the open PRs' branches by when the PR last changed
-  (or, without PR info, every branch by its newest commit). The current branch is always in it.
-  `merged`: the branches whose every commit is already in the base branch. `short_name` gives each entry
-  the name keys show.
+  The list the keys show: the base branch first, then the others by their newest commit, newest first.
+  With PR info that's the open PRs' branches; without it, every branch. The current branch is always in
+  it. `remote` comes newest commit first (as `remote_branches/1` gives it). `merged`: the branches whose
+  every commit is already in the base branch. `short_name` gives each entry the name keys show.
   """
   def branch_list(opts) do
     remote = Keyword.fetch!(opts, :remote)
@@ -116,19 +116,11 @@ defmodule Clawswap.Git do
     by_name = Map.new(remote, &{&1.branch, &1})
 
     rest =
-      if pulls do
-        pulls
-        |> Enum.filter(fn {b, _} -> Map.has_key?(by_name, b) and b != base end)
-        |> Enum.sort_by(fn {_, pr} -> pr.updated_at end, :desc)
-        |> Enum.map(&elem(&1, 0))
-      else
-        remote |> Enum.map(& &1.branch) |> Enum.reject(&(&1 == base))
-      end
+      remote
+      |> Enum.map(& &1.branch)
+      |> Enum.filter(&(&1 != base and (is_nil(pulls) or Map.has_key?(pulls, &1) or &1 == current)))
 
-    names = [base | rest]
-    names = if current && current not in names && Map.has_key?(by_name, current), do: List.insert_at(names, 1, current), else: names
-
-    names
+    [base | rest]
     |> Enum.filter(&Map.has_key?(by_name, &1))
     |> Enum.map(fn branch ->
       %{branch: branch, short: short_name.(branch), sha: by_name[branch].sha, date: by_name[branch].date}

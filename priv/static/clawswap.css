@@ -1,8 +1,8 @@
 :root { color-scheme: light dark; --bg: #f6f7f9; --fg: #1d2129; --muted: #6a7280; --card: #ffffff; --line: #dde1e7;
-  --current: #2f9e44; --running: #c08a00; --failed: #d63a2c; --behind: #2f74d0; }
+  --current: #2f9e44; --running: #c08a00; --failed: #d63a2c; --behind: #2f74d0; --open: #2f74d0; --merged: #2f9e44; }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #15181e; --fg: #eef1f5; --muted: #a3abb8; --card: #20242c; --line: #333945;
-    --current: #3fb950; --running: #e3b341; --failed: #e0503f; --behind: #58a6ff; }
+    --current: #3fb950; --running: #e3b341; --failed: #e0503f; --behind: #58a6ff; --open: #58a6ff; --merged: #3fb950; }
 }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, sans-serif; }
 main { max-width: 720px; margin: 0 auto; padding: 16px; }
@@ -23,9 +23,33 @@ li.running button { border-left-color: var(--running); }
 li.failed button { border-left-color: var(--failed); }
 li.behind button { border-left-color: var(--behind); }
 .mark, .number { color: var(--muted); }
+.mark { cursor: help; }
+.mark.open { color: var(--open); }
+.mark.merged { color: var(--merged); }
 .title { flex: 1; overflow-wrap: anywhere; }
 .status { font-size: 13px; color: var(--muted); }
 li.current .status { color: var(--current); }
 li.running .status { color: var(--running); }
 li.failed .status { color: var(--failed); }
 li.behind .status { color: var(--behind); }
+
+/* Narrow, as in an app's dropdown menu (examples/react-embed): bmx's branch menu, a tight list of rows
+   with the current one tinted, instead of cards. */
+@media (max-width: 480px) {
+  body { font-size: 14px; background: var(--card); }
+  main { padding: 6px; }
+  header { gap: 8px; margin: 0 4px 4px; }
+  h1 { font-size: 12px; font-weight: normal; color: var(--muted); }
+  .webhook { font-size: 11px; }
+  .pull { padding: 1px 8px; font-size: 13px; }
+  .message { font-size: 12px; margin: 4px; }
+  ul { gap: 0; }
+  li button { flex-wrap: wrap; gap: 0 8px; border: 0; border-radius: 4px; padding: 5px 8px; background: none; }
+  li button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+  li.current button { background: color-mix(in srgb, var(--current) 15%, transparent); }
+  .mark { width: 12px; flex-shrink: 0; text-align: center; }
+  .number { min-width: 36px; flex-shrink: 0; }
+  .title { flex-basis: 0; min-width: 0; }
+  .status { font-size: 11px; flex-basis: 100%; padding-left: 20px; }
+  .status:empty { display: none; }
+}
