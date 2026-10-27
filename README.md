@@ -94,6 +94,9 @@ button on each branch that switches to it, and Pull. It updates as a switch runs
 dev page can embed it in an iframe, or build its own control on the [API](#api);
 [examples/react-embed](examples/react-embed) does both.
 
+The ⚙ at the top of that page opens the config editor (`/settings`) in a new window, so it works from an
+app's iframe too. See [Editing the config from the page](#editing-the-config-from-the-page).
+
 Each pane runs its command through `bin/keep`. When the command stops (Ctrl+C, or Ctrl+C twice for the
 watcher and other BEAM programs), the pane keeps a shell instead of closing, and the up arrow brings the
 command back. Without it, zellij closes a pane whose command has exited when you press Ctrl+C there, and
@@ -177,6 +180,21 @@ steps:
 Environment variables override a few keys for one run: `CLAWSWAP_PORT`, `CLAWSWAP_BASE`,
 `CLAWSWAP_SESSION`, `CLAWSWAP_MULTIPLEXER`, `CLAWSWAP_SMEE` (the channel) and `CLAWSWAP_CONFIG` (another config file, read as YAML when it ends in `.yml` or `.yaml`).
 
+
+### Editing the config from the page
+
+`http://127.0.0.1:8790/settings` (the ⚙ on the branch page) edits the config clawswap is running, in its
+own format: the settings above as fields, and a row for each server, pane, step and note, which you can add,
+remove and move up. Save checks that clawswap can load the result before writing it, then restarts the
+watcher on it. The file is part of your repo, so commit the change: a switch refuses uncommitted changes.
+
+- A `clawswap.exs` is changed in place: only the settings you changed are rewritten, and comments, the
+  Elixir in it and keys the page doesn't show stay as they were. The file is printed by Elixir's formatter,
+  at the repo's `.formatter.exs` line length or the file's own widest line.
+- A `clawswap.yml` is written afresh, so comments in it are lost. Regexes and Elixir go back as strings.
+- A field holding something a plain field can't (a function, a variable, a Regex with options, a command
+  as a list) is shown in monospace as Elixir, or as the YAML's string of Elixir, and saved as written.
+- In `when` fields, a line written `/like this/` is a Regex.
 
 ### zellij or tmux
 

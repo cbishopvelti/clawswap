@@ -1,7 +1,8 @@
 defmodule ClawswapWeb.BranchesPage do
   @moduledoc """
-  The watcher's page: the branches the keys show, a button for each that switches to it, and Pull. The
-  watcher broadcasts each change, so the page follows a switch step by step.
+  The watcher's page: the branches the keys show, a button for each that switches to it, Pull, and a link
+  to the settings page (in a new window, as this page is often in an app's iframe). The watcher
+  broadcasts each change, so the page follows a switch step by step.
   """
 
   use Hologram.Page
@@ -24,6 +25,7 @@ defmodule ClawswapWeb.BranchesPage do
         <h1>{@view.project}</h1>
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
         <button class="pull {@view.pull_class}" $click={command: :pull}>{@view.pull_label}</button>
+        <a class="settings-link" href="/settings" target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
       {%if @view.error}<p class="message">{@view.error}</p>{/if}
