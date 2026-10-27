@@ -39,8 +39,8 @@ CLAWSWAP_CONFIG=examples/react-embed/clawswap.exs clawswap up
 
 ## Things this tests
 
-- **Framing.** clawswap's endpoint doesn't set `X-Frame-Options` or `frame-ancestors`, so the page should
-  frame. If something in the stack does, the panel goes blank and the browser console says why.
+- **Framing.** Neither clawswap's endpoint nor Hologram sets `X-Frame-Options` or `frame-ancestors`, so
+  the page frames. If that changes, the panel goes blank and the browser console says why.
 - **Same site.** Hologram's session cookie is `SameSite=Lax`. `localhost:5173` and `localhost:8790` are the
   same site (ports don't count), so the framed page gets its cookie. Mixing `localhost` and `127.0.0.1`
   makes them cross-site, so use `localhost` for both (Vite is pinned to it in `vite.config.js`).

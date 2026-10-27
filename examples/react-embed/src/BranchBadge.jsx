@@ -12,6 +12,8 @@ export default function BranchBadge() {
   }
   if (!state) return <div className="badge">clawswap…</div>;
 
+  // current is { branch, sha }; branch is null on a detached HEAD.
+  const current = state.current?.branch || "";
   const sw = state.switch;
   const phase = sw?.phase;
   const act = (p) => p.then(() => setMessage(null), (e) => setMessage(e.message));
@@ -20,12 +22,12 @@ export default function BranchBadge() {
     <div className={`badge ${phase || ""} ${state.upstream?.behind ? "behind" : ""}`}>
       <span className="label">branch</span>
       <select
-        value={state.current || ""}
+        value={current}
         disabled={phase === "running"}
         onChange={(e) => act(switchTo(e.target.value))}
       >
-        {state.current && !state.branches.some((b) => b.branch === state.current) && (
-          <option value={state.current}>{state.current}</option>
+        {!state.branches.some((b) => b.branch === current) && (
+          <option value={current}>{current || "detached HEAD"}</option>
         )}
         {state.branches.map((b) => (
           <option key={b.branch} value={b.branch}>
