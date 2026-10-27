@@ -15,10 +15,11 @@ JavaScript; clawswap itself isn't. It embeds clawswap two ways:
 
 ## Try it
 
-clawswap needs a repo to manage, with branches on a remote, so give the example one of its own:
+clawswap needs a repo to manage, with branches on a remote, so give the example one of its own. From
+the root of your clawswap clone, copy it to a folder outside it (any path; `../react-embed` here):
 
 ```bash
-cp -r examples/react-embed ~/react-embed && cd ~/react-embed
+cp -r examples/react-embed ../react-embed && cd ../react-embed
 git init -b main && git add . && git commit -m "react-embed"
 gh repo create react-embed --private --source . --push   # or any remote
 clawswap up

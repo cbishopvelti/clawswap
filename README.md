@@ -31,17 +31,18 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
    Clone it anywhere. The command is `bin/clawswap` in the clone, and you run it from inside *your
    project's* repo, since that's the repo it acts on (it finds its own folder by itself):
    ```bash
-   cd ~/code/myproject
-   ~/playground/clawswap/bin/clawswap status   # wherever you cloned it
+   cd <path-to-your-project>
+   <path-to-clawswap>/bin/clawswap status
    ```
-   To type just `clawswap`, link it into a folder on your `PATH`. Run this from the clone's root so the
-   link gets the full path:
+   To type just `clawswap`, link it into a folder on your `PATH`. Run this from the clone's root, so
+   `$PWD` gives the link the full path:
    ```bash
    mkdir -p ~/.local/bin && ln -sf "$PWD/bin/clawswap" ~/.local/bin/clawswap
    ```
    If `clawswap` is then "command not found", `~/.local/bin` isn't on your `PATH` (check with
    `echo $PATH`): add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc` and open a new
-   terminal. The rest of this README writes `clawswap`; without the link, use the full path instead.
+   terminal. The rest of this README writes `clawswap`; without the link, use
+   `<path-to-clawswap>/bin/clawswap` instead.
    Hologram's compiler bundles the page's JavaScript with esbuild, which it installs with npm the first
    time, so Node.js has to be there for `mix compile`. Nothing of clawswap's own is JavaScript. On Linux
    the page also needs inotify-tools (`sudo apt install inotify-tools`), which Hologram's dev server uses
@@ -170,7 +171,7 @@ anyone with the channel URL could post to it.
 
 ## OpenDeck
 
-`opendeck/install.sh` copies the plugin into [OpenDeck](https://github.com/nekename/OpenDeck)'s plugins
+`<path-to-clawswap>/opendeck/install.sh` (it can be run from anywhere) copies the plugin into [OpenDeck](https://github.com/nekename/OpenDeck)'s plugins
 folder (run it again after updating clawswap). OpenDeck starts it as `bin/plugin`, which runs
 `plugin.exs` with `elixir`, so Elixir 1.18 or newer has to be on the PATH OpenDeck sees (a version
 manager that only sets it up in your shell won't do). Quit OpenDeck fully (tray > Quit) and start it
