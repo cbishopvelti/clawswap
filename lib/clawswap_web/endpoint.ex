@@ -18,6 +18,8 @@ defmodule ClawswapWeb.Endpoint do
   )
 
   plug(Plug.Session, store: :cookie, key: "clawswap_session", signing_salt: "clawswap", same_site: "Lax")
+  # Hologram's client keeps its session alive with HEAD /hologram/ping, and its router only has GET.
+  plug(Plug.Head)
   plug(Hologram.Router)
 
   # Whatever Hologram didn't serve (/favicon.ico, say), so Bandit doesn't log it as a crash.
