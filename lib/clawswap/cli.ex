@@ -13,6 +13,7 @@ defmodule Clawswap.CLI do
     update [rev]     Run the steps for what changed since they last ran (or since rev), or --all
     smee [url]       Set up the smee.io channel for the GitHub webhook
     walk [name...]   Run walkthroughs in Chrome (default: the ones this branch added); --headless
+    browser          Open a dev Chrome that walkthroughs play in, at your app
     layout           Print the layout up opens (zellij's layout, or tmux's commands)
     watch            The watcher, with its page and API (runs in the session's clawswap pane)
   """
@@ -28,6 +29,7 @@ defmodule Clawswap.CLI do
       ["update" | rest] -> update(List.first(rest))
       ["smee" | rest] -> smee(List.first(rest))
       ["walk" | rest] -> walk(rest)
+      ["browser"] -> browser()
       ["layout"] -> layout()
       [help] when help in ["help", "--help", "-h"] -> IO.write(@usage)
       [] -> IO.write(@usage)
@@ -227,6 +229,21 @@ defmodule Clawswap.CLI do
       end)
 
     if failed != [], do: System.halt(1)
+  end
+
+  # Opens the dev Chrome (its own profile, kept between runs, with a debugging port) at the first server, so
+  # walkthroughs play in a tab of it rather than a window of their own.
+  defp browser do
+    project = project!()
+    cache = System.get_env("XDG_CACHE_HOME") || Path.expand("~/.cache")
+
+    url =
+      Enum.find_value(project.server_names, "http://localhost:#{project.port}", &(project.servers[&1].port && "http://localhost:#{project.servers[&1].port}"))
+
+    case Walkthrough.Browser.open_dev_chrome(Path.join(cache, "clawswap/chrome"), url) do
+      {:ok, address} -> IO.puts("Dev Chrome on #{address}: walkthroughs play in a tab of it while it's open")
+      {:error, message} -> fail(message)
+    end
   end
 
   # Makes a smee.io channel for the GitHub webhook and saves it for this checkout.

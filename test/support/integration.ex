@@ -98,7 +98,9 @@ defmodule Clawswap.Integration do
       {"CLAWSWAP_MULTIPLEXER", to_string(multiplexer)},
       {"CLAWSWAP_SESSION", project.session},
       # ▶ on the page runs a walkthrough in the watcher: headless too, unless you're watching.
-      {"CLAWSWAP_HEADLESS", System.get_env("CLAWSWAP_HEADLESS") || "1"}
+      {"CLAWSWAP_HEADLESS", System.get_env("CLAWSWAP_HEADLESS") || "1"},
+      # Nor in a dev Chrome you may have open.
+      {"CLAWSWAP_CHROME_DEBUGGER", "off"}
     ]
 
     command = "#{Path.join(@tool, "bin/clawswap")} up"
@@ -124,8 +126,8 @@ defmodule Clawswap.Integration do
   end
 
   @doc "Runs bin/clawswap in the project, as you would: `{output, exit status}`."
-  def clawswap(project, args) do
-    System.cmd(Path.join(@tool, "bin/clawswap"), args, cd: project.work, env: [{"MIX_ENV", nil}], stderr_to_stdout: true)
+  def clawswap(project, args, env \\ []) do
+    System.cmd(Path.join(@tool, "bin/clawswap"), args, cd: project.work, env: [{"MIX_ENV", nil} | env], stderr_to_stdout: true)
   end
 
   defp free_ports, do: Enum.each(@ports, &Clawswap.Ports.free_port(&1, fn _ -> :ok end))
@@ -139,7 +141,7 @@ defmodule Clawswap.Integration do
   @doc "Opens Chrome for the test, headless unless CLAWSWAP_HEADLESS=0, and closes it after."
   def browser!(project) do
     {:ok, config} = Clawswap.Config.load(project.work)
-    {:ok, browser} = Browser.start(headless: true, project: config)
+    {:ok, browser} = Browser.start(headless: true, dev_chrome: false, project: config)
     ExUnit.Callbacks.on_exit(fn -> Browser.stop(browser.session) end)
     browser
   end

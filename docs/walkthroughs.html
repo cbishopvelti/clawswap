@@ -73,14 +73,27 @@ clawswap walk --headless       # without a window, to check one passes</code></p
   <li><strong>API.</strong> <code>POST /walk {"name": "badge-pull"}</code>, then follow <code>walk</code> in
     <code>/state</code>; see <a href="api.html">API</a>.</li>
 </ul>
+<h3 id="dev-chrome">In a Chrome you keep open</h3>
+<p>Each walkthrough opens a Chrome window of its own, unless a dev Chrome is open. Start one with</p>
+<pre><code>clawswap browser</code></pre>
+<p>It opens Chrome at your app, with a profile of its own (kept in <code>~/.cache/clawswap/chrome</code>, so logins
+stay between runs) and a debugging port (9333). While it's open, walkthroughs, from the page or
+<code>clawswap walk</code>, play in a tab of it: the same tab each time, leaving your other tabs alone. Chrome won't
+open a debugging port on your everyday profile, so it can't be your usual window.
+<code>CLAWSWAP_CHROME_DEBUGGER</code> points at another Chrome started with <code>--remote-debugging-port</code>
+(<code>localhost:9222</code>, say), or <code>off</code> ignores the dev Chrome.</p>
 <p>A failure names the line, the caption it was showing and what it couldn't find, and saves a screenshot of that
 moment in the temp folder (its path is in the message).</p>
 
 <h2 id="setup">What it needs</h2>
 <ul>
-  <li><strong>Chrome and chromedriver of the same version.</strong> clawswap drives Chrome through chromedriver (with
-    <a href="https://hexdocs.pm/wallaby">Wallaby</a>). Install chromedriver from your package manager, or take the build
-    matching your Chrome from <a href="https://googlechromelabs.github.io/chrome-for-testing/">Chrome for Testing</a>. If
+  <li><strong>Chrome and chromedriver of the same major version.</strong> chromedriver is a small program from Google
+    that lets other programs drive Chrome; clawswap uses it through <a href="https://hexdocs.pm/wallaby">Wallaby</a>.
+    Install it from your package manager (<code>brew install --cask chromedriver</code>,
+    <code>sudo apt install chromium-driver</code>), or get Chrome and chromedriver together from
+    <a href="https://googlechromelabs.github.io/chrome-for-testing/">Chrome for Testing</a>
+    (<code>npx @puppeteer/browsers install chrome@stable chromedriver@stable</code>), so an update to your everyday
+    Chrome can't put them out of step. If
     they aren't on your <code>PATH</code> as <code>chromedriver</code> and <code>google-chrome</code> (or <code>chromium</code>),
     set <code>CLAWSWAP_CHROMEDRIVER</code> and <code>CLAWSWAP_CHROME</code> to their paths, in the shell you run
     <code>clawswap up</code> from.</li>
@@ -94,6 +107,7 @@ moment in the temp folder (its path is in the message).</p>
   <tr><td><code>CLAWSWAP_SLOW</code></td><td>Milliseconds to wait before each action (twice that on a caption). 600 with a window, 0 without.</td></tr>
   <tr><td><code>CLAWSWAP_WAIT</code></td><td>How long a command waits for what it looks for, in ms. 10000.</td></tr>
   <tr><td><code>CLAWSWAP_CHROME</code>, <code>CLAWSWAP_CHROMEDRIVER</code></td><td>The binaries' paths.</td></tr>
+  <tr><td><code>CLAWSWAP_CHROME_DEBUGGER</code></td><td>The <a href="#dev-chrome">Chrome to play in</a> (host:port), or <code>off</code>. The dev Chrome on 9333 when it's open.</td></tr>
 </table>
 <p>The folder is <code>walkthroughs</code> next to the config; set <code>walkthroughs:</code> in the
 <a href="configuration.html">config</a> for another.</p>

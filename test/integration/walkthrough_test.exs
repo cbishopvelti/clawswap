@@ -62,4 +62,30 @@ defmodule Clawswap.Integration.WalkthroughTest do
     assert out =~ ~s(broken failed: line 3)
     assert out =~ "screenshot: "
   end
+
+  # A dev Chrome needs a display (run the tests under xvfb-run to include this).
+  if System.get_env("DISPLAY") not in [nil, ""] do
+    test "with a dev Chrome open, walkthroughs play in one tab of it", %{project: project} do
+      port = Clawswap.Walkthrough.Browser.dev_port()
+      on_exit(fn -> Clawswap.Ports.free_port(port, fn _ -> :ok end) end)
+      env = [{"CLAWSWAP_HEADLESS", nil}, {"CLAWSWAP_CHROME_DEBUGGER", nil}, {"XDG_CACHE_HOME", Path.join(project.dir, "cache")}]
+
+      {out, 0} = Integration.clawswap(project, ["browser"], env)
+      assert out =~ "Dev Chrome on 127.0.0.1:#{port}"
+      assert tabs(port) == ["http://localhost:5173/"]
+
+      for _ <- 1..2 do
+        {out, 0} = Integration.clawswap(project, ["walk", "branches-menu"], env)
+        assert out =~ "branches-menu ran to the end"
+      end
+
+      # The one it opened at the app, and the walkthroughs' tab, used both times.
+      assert tabs(port) == ["http://localhost:5173/", "http://localhost:5173/"]
+    end
+
+    defp tabs(port) do
+      {:ok, {_, _, body}} = :httpc.request(:get, {~c"http://127.0.0.1:#{port}/json/list", []}, [], body_format: :binary)
+      for %{"type" => "page", "url" => url} <- JSON.decode!(body), do: url
+    end
+  end
 end

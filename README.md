@@ -70,7 +70,7 @@ pages in `docs/` directly.
    token it shows every branch by newest commit.
 7. Optional: the Stream Deck keys, through [OpenDeck](#opendeck) or straight from the watcher's page in
    Chrome ([WebHID](#stream-deck-from-the-page-webhid)).
-8. Optional: [walkthroughs](#walkthroughs) need Chrome and a chromedriver of the same version.
+8. Optional: [walkthroughs](#walkthroughs) need Chrome and a chromedriver of the same major version.
 
 ## Use
 
@@ -85,6 +85,7 @@ clawswap pull              # pull the current branch the same way
 clawswap update            # the steps for what changed since they last ran (after a manual git pull)
 clawswap update --all      # every step
 clawswap walk [name...]    # play walkthroughs in Chrome (default: the ones this branch added)
+clawswap browser           # open a dev Chrome at your app, that walkthroughs play in
 clawswap layout            # the zellij layout up opens, to start your own from (tmux: its commands)
 ```
 
@@ -308,11 +309,19 @@ The commands: `say`, `visit`, `url`, `click`, `fill_in`, `choose`, `press`, `see
 [examples/react-embed/walkthroughs](examples/react-embed/walkthroughs) for a whole one.
 
 It drives Chrome through chromedriver ([Wallaby](https://hexdocs.pm/wallaby)), so both have to be installed,
-at the same version (chromedriver from your package manager, or
-[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/)). `CLAWSWAP_CHROME` and
+at the same major version (chromedriver from your package manager, or both from
+[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/):
+`npx @puppeteer/browsers install chrome@stable chromedriver@stable`). `CLAWSWAP_CHROME` and
 `CLAWSWAP_CHROMEDRIVER` name them when they aren't on the `PATH`. Without a display (Linux with no `DISPLAY`
 or `WAYLAND_DISPLAY`: CI, Claude's cloud sessions) it runs headless. `CLAWSWAP_HEADLESS=1` or `0` forces it,
 `CLAWSWAP_SLOW` sets the pause before each action (600 ms with a window, 0 without).
+
+Each walkthrough opens a Chrome window of its own, unless a dev Chrome is open: `clawswap browser` starts
+one at your app, with a profile of its own (kept in `~/.cache/clawswap/chrome`, so logins stay) and a
+debugging port (9333). While it's open, walkthroughs play in a tab of it, the same tab each time, and leave
+your other tabs alone. Chrome won't open that port on your everyday profile, which is why it's a separate
+window. `CLAWSWAP_CHROME_DEBUGGER` points at another Chrome's debugging address, or `off` ignores the dev
+Chrome.
 
 To have Claude write them, put this in your repo's `CLAUDE.md`:
 
