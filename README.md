@@ -70,7 +70,9 @@ The session has a pane for each server, one called `clawswap` (the watcher; swit
 one for each of the config's other `panes`. Ctrl+Q leaves zellij; `up` again comes back.
 
 The watcher serves a page at `http://127.0.0.1:8790` (the config's `port`): the same list as the keys, a
-button on each branch that switches to it, and Pull. It updates as a switch runs, step by step.
+button on each branch that switches to it, and Pull. It updates as a switch runs, step by step. Your app's
+dev page can embed it in an iframe, or build its own control on the [API](#api);
+[examples/react-embed](examples/react-embed) does both.
 
 Each pane runs its command through `bin/keep`. When the command stops (Ctrl+C, or Ctrl+C twice for the
 watcher and other BEAM programs), the pane keeps a shell instead of closing, and the up arrow brings the
