@@ -63,10 +63,19 @@ defmodule Clawswap.WebSocket do
   def decode(<<fin::1, _::3, code::4, masked::1, len::7, rest::binary>> = buffer, frames, partial) do
     {len, rest} =
       case len do
-        126 when byte_size(rest) >= 2 -> <<n::16, r::binary>> = rest; {n, r}
-        127 when byte_size(rest) >= 8 -> <<n::64, r::binary>> = rest; {n, r}
-        n when n < 126 -> {n, rest}
-        _ -> {nil, rest}
+        126 when byte_size(rest) >= 2 ->
+          <<n::16, r::binary>> = rest
+          {n, r}
+
+        127 when byte_size(rest) >= 8 ->
+          <<n::64, r::binary>> = rest
+          {n, r}
+
+        n when n < 126 ->
+          {n, rest}
+
+        _ ->
+          {nil, rest}
       end
 
     mask_size = if masked == 1, do: 4, else: 0

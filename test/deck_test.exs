@@ -25,7 +25,12 @@ defmodule Clawswap.DeckTest do
   end
 
   defp appear(deck, context, settings, row, column, action \\ "dev.clawswap.branch") do
-    Deck.handle(deck, %{"event" => "willAppear", "action" => action, "context" => context, "payload" => %{"settings" => settings, "coordinates" => %{"row" => row, "column" => column}}})
+    Deck.handle(deck, %{
+      "event" => "willAppear",
+      "action" => action,
+      "context" => context,
+      "payload" => %{"settings" => settings, "coordinates" => %{"row" => row, "column" => column}}
+    })
   end
 
   # The last image sent for a key, decoded.
@@ -38,7 +43,13 @@ defmodule Clawswap.DeckTest do
   end
 
   test "keys on next branch take the list in deck order; named keys show their branch" do
-    instances = %{"b" => key(%{}, 0, 1), "a" => key(%{}, 0, 0), "pinned" => key(%{"branch" => "claude/streamdeck-branch-switcher"}, 0, 2), "c" => key(%{}, 1, 0)}
+    instances = %{
+      "b" => key(%{}, 0, 1),
+      "a" => key(%{}, 0, 0),
+      "pinned" => key(%{"branch" => "claude/streamdeck-branch-switcher"}, 0, 2),
+      "c" => key(%{}, 1, 0)
+    }
+
     shown = Deck.assign(instances, @state["branches"])
     assert shown["a"]["branch"] == "claude-main"
     assert shown["b"]["branch"] == "claude/undo-sliders-abc123"
@@ -74,9 +85,18 @@ defmodule Clawswap.DeckTest do
   end
 
   test "keys on different watchers get their own lists" do
-    other = %{"current" => %{"branch" => "main", "sha" => "7"}, "branches" => [%{"branch" => "main", "short" => "main", "sha" => "7"}, %{"branch" => "fix", "short" => "fix", "sha" => "8"}]}
+    other = %{
+      "current" => %{"branch" => "main", "sha" => "7"},
+      "branches" => [%{"branch" => "main", "short" => "main", "sha" => "7"}, %{"branch" => "fix", "short" => "fix", "sha" => "8"}]
+    }
+
     me = self()
-    deck = start(fn method, url, body -> send(me, {:request, method, url, body}) && {:ok, 200, if(String.starts_with?(url, "http://shop"), do: other, else: @state)} end)
+
+    deck =
+      start(fn method, url, body ->
+        send(me, {:request, method, url, body}) && {:ok, 200, if(String.starts_with?(url, "http://shop"), do: other, else: @state)}
+      end)
+
     appear(deck, "a", %{}, 0, 0)
     appear(deck, "s1", %{"url" => "http://shop/"}, 0, 1)
     appear(deck, "s2", %{"url" => "http://shop"}, 0, 2)
@@ -102,7 +122,12 @@ defmodule Clawswap.DeckTest do
     assert Deck.pull_look(Map.put(@state, "upstream", %{"sha" => "9", "behind" => 3})).status == "3 new commits"
     assert Deck.pull_look(Map.put(@state, "upstream", nil)).status == "Not on GitHub"
 
-    pulling = Map.merge(@state, %{"upstream" => %{"sha" => "9", "behind" => 1}, "switch" => %{"target" => "claude-main", "pull" => true, "phase" => "running", "step" => "mix deps.get"}})
+    pulling =
+      Map.merge(@state, %{
+        "upstream" => %{"sha" => "9", "behind" => 1},
+        "switch" => %{"target" => "claude-main", "pull" => true, "phase" => "running", "step" => "mix deps.get"}
+      })
+
     assert Deck.pull_look(pulling).status == "mix deps.get"
 
     me = self()
@@ -141,7 +166,13 @@ defmodule Clawswap.DeckTest do
       {:ok, request} = :gen_tcp.recv(socket, 0)
       [_, key] = Regex.run(~r/Sec-WebSocket-Key: (\S+)/, request)
       accept = Base.encode64(:crypto.hash(:sha, key <> "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
-      :gen_tcp.send(socket, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: #{accept}\r\n\r\n" <> <<1::1, 0::3, 1::4, 0::1, 2::7>> <> "hi")
+
+      :gen_tcp.send(
+        socket,
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: #{accept}\r\n\r\n" <>
+          <<1::1, 0::3, 1::4, 0::1, 2::7>> <> "hi"
+      )
+
       {:ok, frame} = :gen_tcp.recv(socket, 0)
       send(Process.whereis(:deck_test_ws) || self(), {:server_got, WebSocket.decode(frame)})
       Process.sleep(500)

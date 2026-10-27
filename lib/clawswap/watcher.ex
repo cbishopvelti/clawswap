@@ -254,12 +254,23 @@ defmodule Clawswap.Watcher do
     run = %{target: target, pull: true}
 
     cond do
-      running?(view) -> {{:error, 409, "Already switching to #{view.switch.target}"}, state}
-      target in [nil, "HEAD"] -> refuse(state, run, 409, "Not on a branch")
-      view.upstream == nil -> refuse(state, run, 404, "#{target} isn't on GitHub")
-      view.upstream.behind == 0 -> reply_ok(changed(put_in(state.view.switch, Map.merge(run, %{phase: "done", step: nil, error: nil, notes: ["Already up to date"], at: now()}))))
-      view.dirty -> refuse(state, run, 409, "Uncommitted changes: commit or stash them first")
-      true -> start_run(state, run)
+      running?(view) ->
+        {{:error, 409, "Already switching to #{view.switch.target}"}, state}
+
+      target in [nil, "HEAD"] ->
+        refuse(state, run, 409, "Not on a branch")
+
+      view.upstream == nil ->
+        refuse(state, run, 404, "#{target} isn't on GitHub")
+
+      view.upstream.behind == 0 ->
+        reply_ok(changed(put_in(state.view.switch, Map.merge(run, %{phase: "done", step: nil, error: nil, notes: ["Already up to date"], at: now()}))))
+
+      view.dirty ->
+        refuse(state, run, 409, "Uncommitted changes: commit or stash them first")
+
+      true ->
+        start_run(state, run)
     end
   end
 

@@ -21,7 +21,13 @@ defmodule Clawswap.Run do
       if code == 0 do
         {:ok, out}
       else
-        stderr = case File.read(err), do: ({:ok, text} -> text; _ -> "")
+        stderr =
+          case File.read(err),
+            do: (
+              {:ok, text} -> text
+              _ -> ""
+            )
+
         {:error, first_present([last_line(stderr), last_line(out), "#{cmd} #{Enum.join(args, " ")} exited with #{code}"])}
       end
     after

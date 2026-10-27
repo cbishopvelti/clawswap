@@ -124,7 +124,13 @@ defmodule Clawswap.CLI do
       fail("clawswap needs zellij 0.44 or newer (found #{found}): https://github.com/zellij-org/zellij/releases")
     end
 
-    sessions = case Run.capture("zellij", ["list-sessions", "--no-formatting"]), do: ({:ok, out} -> out; _ -> "")
+    sessions =
+      case Run.capture("zellij", ["list-sessions", "--no-formatting"]),
+        do: (
+          {:ok, out} -> out
+          _ -> ""
+        )
+
     line = sessions |> String.split("\n") |> Enum.find(&(hd(String.split(&1, " ")) == project.session))
     # An exited session would come back with its panes waiting for Enter; start it fresh instead.
     if line && line =~ "EXITED", do: Run.capture("zellij", ["delete-session", project.session])
@@ -262,7 +268,13 @@ defmodule Clawswap.CLI do
   end
 
   defp init do
-    root = case Git.repo_root(repo_dir()), do: ({:ok, root} -> root; {:error, message} -> fail(message))
+    root =
+      case Git.repo_root(repo_dir()),
+        do: (
+          {:ok, root} -> root
+          {:error, message} -> fail(message)
+        )
+
     path = Path.join(root, Config.file_name())
     if File.exists?(path), do: fail("#{path} already exists")
     File.write!(path, @starter)

@@ -28,11 +28,12 @@ defmodule ClawswapWeb.View do
       webhook_class: if(state.webhook == "connected", do: "ok", else: "off"),
       busy: running,
       pull_label: pull_label(run, current, behind),
-      pull_class: cond do
-        running and match?(%{pull: true}, run) -> "running"
-        behind > 0 -> "behind"
-        true -> ""
-      end,
+      pull_class:
+        cond do
+          running and match?(%{pull: true}, run) -> "running"
+          behind > 0 -> "behind"
+          true -> ""
+        end,
       error: (match?(%{phase: "failed"}, run) && "#{run.target}: #{run.error}") || state.error,
       branches: Enum.map(state.branches, &branch(&1, state, run, current))
     }
@@ -56,7 +57,7 @@ defmodule ClawswapWeb.View do
       cond do
         targeted and run.phase == "running" -> {"running", run.step || "Switching"}
         targeted and run.phase == "failed" -> {"failed", "Failed"}
-        b.branch == current and b.sha && b.sha != state.current.sha -> {"behind", "New commits"}
+        (b.branch == current and b.sha) && b.sha != state.current.sha -> {"behind", "New commits"}
         b.branch == current -> {"current", if(state.dirty, do: "Uncommitted", else: "Current")}
         true -> {"", ""}
       end
@@ -66,12 +67,13 @@ defmodule ClawswapWeb.View do
       title: (pr && pr.title) || b.short,
       number: pr && "##{pr.number}",
       # ✓ merged into the base, ● open PR, ◌ draft PR, ○ neither.
-      mark: cond do
-        Map.get(b, :merged) -> "✓"
-        pr && pr.draft -> "◌"
-        pr -> "●"
-        true -> "○"
-      end,
+      mark:
+        cond do
+          Map.get(b, :merged) -> "✓"
+          pr && pr.draft -> "◌"
+          pr -> "●"
+          true -> "○"
+        end,
       class: class,
       status: status
     }

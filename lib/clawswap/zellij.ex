@@ -80,7 +80,13 @@ defmodule Clawswap.Zellij do
   @doc "Waits (up to `ms`) for something to listen on the port."
   def wait_for_port(port, ms \\ 30_000) do
     Enum.reduce_while(0..div(ms, 500), nil, fn _, _ ->
-      if port_open?(port), do: {:halt, :ok}, else: (Process.sleep(500); {:cont, :timeout})
+      if port_open?(port),
+        do: {:halt, :ok},
+        else:
+          (
+            Process.sleep(500)
+            {:cont, :timeout}
+          )
     end)
   end
 

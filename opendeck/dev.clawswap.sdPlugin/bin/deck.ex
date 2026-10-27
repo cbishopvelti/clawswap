@@ -56,7 +56,9 @@ defmodule Clawswap.Deck do
       look.title
       |> wrap(11, if(number, do: 3, else: 4))
       |> Enum.with_index()
-      |> Enum.map_join(fn {l, i} -> ~s(<text x="10" y="#{top + i * 21}" font-family="sans-serif" font-size="18" font-weight="600" fill="#eef1f5">#{escape_xml(l)}</text>) end)
+      |> Enum.map_join(fn {l, i} ->
+        ~s(<text x="10" y="#{top + i * 21}" font-family="sans-serif" font-size="18" font-weight="600" fill="#eef1f5">#{escape_xml(l)}</text>)
+      end)
 
     svg =
       ~s(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144"><rect width="144" height="144" fill="#20242c"/>) <>
@@ -84,11 +86,20 @@ defmodule Clawswap.Deck do
     targeted = run["target"] == entry["branch"]
 
     cond do
-      targeted and run["phase"] == "running" -> Map.merge(look, %{bar: @colours.switching, status: run["step"] || "Switching"})
-      targeted and recently_failed?(run) -> Map.merge(look, %{bar: @colours.failed, status: "Failed"})
-      current["branch"] == entry["branch"] and entry["sha"] && current["sha"] != entry["sha"] -> Map.merge(look, %{bar: @colours.behind, status: "New commits"})
-      current["branch"] == entry["branch"] -> Map.merge(look, %{bar: @colours.current, status: if(state["dirty"], do: "Uncommitted", else: "Current")})
-      true -> look
+      targeted and run["phase"] == "running" ->
+        Map.merge(look, %{bar: @colours.switching, status: run["step"] || "Switching"})
+
+      targeted and recently_failed?(run) ->
+        Map.merge(look, %{bar: @colours.failed, status: "Failed"})
+
+      (current["branch"] == entry["branch"] and entry["sha"]) && current["sha"] != entry["sha"] ->
+        Map.merge(look, %{bar: @colours.behind, status: "New commits"})
+
+      current["branch"] == entry["branch"] ->
+        Map.merge(look, %{bar: @colours.current, status: if(state["dirty"], do: "Uncommitted", else: "Current")})
+
+      true ->
+        look
     end
   end
 
@@ -101,11 +112,20 @@ defmodule Clawswap.Deck do
     mine = run["pull"] == true and run["target"] == branch
 
     cond do
-      mine and run["phase"] == "running" -> Map.merge(look, %{bar: @colours.switching, status: run["step"] || "Pulling"})
-      mine and recently_failed?(run) -> Map.merge(look, %{bar: @colours.failed, status: "Failed"})
-      state["upstream"] == nil -> Map.put(look, :status, "Not on GitHub")
-      state["upstream"]["behind"] > 0 -> Map.merge(look, %{bar: @colours.behind, status: "#{state["upstream"]["behind"]} new commit#{if state["upstream"]["behind"] == 1, do: "", else: "s"}"})
-      true -> Map.put(look, :status, "Up to date")
+      mine and run["phase"] == "running" ->
+        Map.merge(look, %{bar: @colours.switching, status: run["step"] || "Pulling"})
+
+      mine and recently_failed?(run) ->
+        Map.merge(look, %{bar: @colours.failed, status: "Failed"})
+
+      state["upstream"] == nil ->
+        Map.put(look, :status, "Not on GitHub")
+
+      state["upstream"]["behind"] > 0 ->
+        Map.merge(look, %{bar: @colours.behind, status: "#{state["upstream"]["behind"]} new commit#{if state["upstream"]["behind"] == 1, do: "", else: "s"}"})
+
+      true ->
+        Map.put(look, :status, "Up to date")
     end
   end
 

@@ -23,7 +23,10 @@ defmodule Clawswap.SmeeTest do
         send(test, {:request, request})
         delivery = JSON.encode!(%{"x-github-event" => "create", "body" => %{"ref" => "claude/x"}})
         :gen_tcp.send(socket, "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
-        for part <- ["event: ready\ndata: {}\n\n", "data: #{delivery}\n\n"], do: :gen_tcp.send(socket, Integer.to_string(byte_size(part), 16) <> "\r\n" <> part <> "\r\n")
+
+        for part <- ["event: ready\ndata: {}\n\n", "data: #{delivery}\n\n"],
+            do: :gen_tcp.send(socket, Integer.to_string(byte_size(part), 16) <> "\r\n" <> part <> "\r\n")
+
         # The stream stays open until the test is done.
         receive do
           :done -> :gen_tcp.close(socket)

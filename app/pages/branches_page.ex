@@ -9,9 +9,9 @@ defmodule ClawswapWeb.BranchesPage do
   alias Clawswap.Watcher
   alias ClawswapWeb.View
 
-  route "/"
+  route("/")
 
-  layout ClawswapWeb.MainLayout
+  layout(ClawswapWeb.MainLayout)
 
   def init(_params, component, server) do
     {put_state(component, view: View.page(Watcher.state()), message: nil), put_subscription(server, :clawswap)}

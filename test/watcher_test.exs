@@ -27,7 +27,14 @@ defmodule Clawswap.WatcherTest do
       start_supervised!(
         {Watcher,
          Keyword.merge(
-           [name: nil, project: project, servers: servers, run_step: fn step -> send(me, {:call, step.name}) && :ok end, exit: &send(me, {:exit, &1}), quiet: true],
+           [
+             name: nil,
+             project: project,
+             servers: servers,
+             run_step: fn step -> send(me, {:call, step.name}) && :ok end,
+             exit: &send(me, {:exit, &1}),
+             quiet: true
+           ],
            opts
          )}
       )

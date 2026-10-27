@@ -16,7 +16,12 @@
   ],
   # In this order: the schema needs SurrealDB up, the access needs the schema and the deps.
   steps: [
-    [name: "docker", label: "Rebuilding containers", when: [~r/^docker-compose\.ya?ml$/, "beat-tracker/"], run: "docker compose up -d --build surrealdb beat-tracker"],
+    [
+      name: "docker",
+      label: "Rebuilding containers",
+      when: [~r/^docker-compose\.ya?ml$/, "beat-tracker/"],
+      run: "docker compose up -d --build surrealdb beat-tracker"
+    ],
     [name: "npm", label: "npm install", when: ["frontend/package.json", "frontend/package-lock.json"], run: "npm install", cwd: "frontend"],
     [name: "deps", label: "mix deps.get", when: ["backend/mix.exs", "backend/mix.lock"], run: "mix deps.get", cwd: "backend"],
     [name: "migrate", label: "mix ecto.migrate", when: "backend/priv/repo/migrations/", run: "mix ecto.migrate", cwd: "backend"],
