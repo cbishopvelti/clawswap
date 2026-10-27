@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html" aria-current="page">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>API</h1>
+<p class="lede">The watcher's JSON API, for your own control, script or key.</p>
+
+<p>The watcher listens on <code>127.0.0.1:&lt;port&gt;</code> (8790 by default). The CLI, the Stream Deck keys and
+the React example all use this API.</p>
+
+<h2 id="endpoints">Endpoints</h2>
+<table>
+  <tr><th>Request</th><th>Body</th><th>Answer</th></tr>
+  <tr><td><code>GET /state</code></td><td></td><td>200 and the <a href="#state">state</a>.</td></tr>
+  <tr><td><code>POST /switch</code></td><td><code>{"branch": "..."}</code></td><td>202 and the state once the switch has started; follow <code>/state</code>'s <code>switch</code>. It looks at origin first, so a branch pushed a moment ago is found. Otherwise <code>{"error": "..."}</code>: 409 for uncommitted changes or a switch already running, 404 for a branch that isn't listed.</td></tr>
+  <tr><td><code>POST /pull</code></td><td><code>{}</code></td><td>The checkout's branch: 202 with <code>switch.pull</code> true, or 202 with <code>"Already up to date"</code> in <code>switch.notes</code>. 409 when not on a branch, 404 when the branch isn't on GitHub.</td></tr>
+  <tr><td><code>POST /refresh</code></td><td><code>{}</code></td><td>Looks at git and GitHub now; 200 and the state when done.</td></tr>
+</table>
+<p>POSTs need <code>Content-Type: application/json</code>.</p>
+<pre><code>curl -s http://127.0.0.1:8790/state
+curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-login"}' http://127.0.0.1:8790/switch</code></pre>
+
+<h2 id="state">The state</h2>
+<pre><code>{
+  "project": "bmx",
+  "base": "main",
+  "current": { "branch": "claude/fix-login", "sha": "…" },
+  "dirty": false,
+  "upstream": { "sha": "…", "behind": 2 },
+  "branches": [
+    { "branch": "main", "short": "main", "sha": "…", "date": "…" },
+    { "branch": "claude/fix-login", "short": "fix-login", "sha": "…", "date": "…",
+      "merged": true, "pr": { "number": 42, "title": "Fix login", "draft": false, "updatedAt": "…" } }
+  ],
+  "prs": true,
+  "webhook": "connected",
+  "webhookError": null,
+  "refreshedAt": "…",
+  "error": null,
+  "switch": { "target": "claude/fix-login", "pull": false, "phase": "running",
+              "step": "mix deps.get", "error": null, "notes": [], "at": "…" }
+}</code></pre>
+<table>
+  <tr><th>Field</th><th>What it is</th></tr>
+  <tr><td><code>current</code></td><td>The checkout's branch and commit.</td></tr>
+  <tr><td><code>dirty</code></td><td>Tracked files have uncommitted changes (a switch would be refused).</td></tr>
+  <tr><td><code>upstream</code></td><td>The checkout's branch on origin, and how many commits the checkout is behind it; <code>null</code> when the branch isn't on origin.</td></tr>
+  <tr><td><code>branches</code></td><td>The list, base first. <code>merged</code> is there when every commit is in the base; <code>pr</code> when it has an open pull request.</td></tr>
+  <tr><td><code>prs</code></td><td>Whether the list comes from open PRs (a GitHub token was found).</td></tr>
+  <tr><td><code>webhook</code></td><td><code>"off"</code> (no channel set), <code>"connecting"</code> or <code>"connected"</code>.</td></tr>
+  <tr><td><code>switch</code></td><td>The last switch or pull: <code>phase</code> is <code>"running"</code>, <code>"done"</code> or <code>"failed"</code>, <code>step</code> the label of the step it's on.</td></tr>
+</table>
+
+<h2 id="security">Who can call it</h2>
+<ul>
+  <li>It answers this machine only: the <code>Host</code> header must be <code>localhost</code> or <code>127.0.0.1</code>,
+    which also stops DNS rebinding.</li>
+  <li>Browsers only from allowed origins: the watcher's own, the servers' <code>localhost</code> and
+    <code>127.0.0.1</code> ports, and the config's <code>origins</code>. A page elsewhere can't make the browser send a
+    JSON POST here without a CORS preflight, which only those origins pass.</li>
+  <li>Webhook deliveries are only a hint to look again; the watcher never acts on their contents.</li>
+</ul>
+<div class="pager"><span><a href="page.html">← Branch page</a></span><span><a href="opendeck.html">Stream Deck →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

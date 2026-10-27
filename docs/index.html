@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html" aria-current="page">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>clawswap</h1>
+<p class="lede">Runs a project's dev servers in one zellij or tmux session, and switches the checkout to another branch
+from a Stream Deck key, a web page or the command line.</p>
+
+<p>clawswap is made for reviewing the branches Claude (or anyone) pushes. A switch stops your servers, checks
+the branch out, runs only what the change needs (<code>mix deps.get</code>, migrations, <code>npm install</code>...)
+and starts the servers again. The branch list shows the open pull requests, newest commit first, with each
+one's merge status, and lights up when the branch you're on has new commits on GitHub.</p>
+
+<div class="cards">
+  <a href="install.html"><strong>Install</strong><span>Elixir, zellij and clawswap, and the <code>clawswap</code> command.</span></a>
+  <a href="usage.html"><strong>Use</strong><span><code>clawswap up</code>, the session and every command.</span></a>
+  <a href="configuration.html"><strong>Configure</strong><span><code>clawswap.exs</code> or <code>clawswap.yml</code>: servers, steps, panes.</span></a>
+  <a href="switching.html"><strong>Switching</strong><span>What a switch and a pull do, step by step.</span></a>
+  <a href="page.html"><strong>Branch page</strong><span>The watcher's page, merge marks, and embedding it in your app.</span></a>
+  <a href="api.html"><strong>API</strong><span>The JSON API, to build your own control.</span></a>
+  <a href="opendeck.html"><strong>Stream Deck</strong><span>Branch and pull keys through OpenDeck.</span></a>
+  <a href="roadmap.html"><strong>Coming next</strong><span>A config editor, and Stream Deck keys straight from the browser.</span></a>
+</div>
+
+<h2 id="how">How it fits together</h2>
+<pre><code>GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane) ──zellij/tmux── server panes
+                                        ▲ 127.0.0.1:8790
+              OpenDeck "clawswap branch" keys, the Hologram page at /, clawswap switch</code></pre>
+<ul>
+  <li><strong>The session.</strong> <code>clawswap up</code> opens a <a href="https://zellij.dev">zellij</a> or <a href="https://github.com/tmux/tmux">tmux</a> session
+    with a pane for each of your servers, one for the watcher and one for each extra pane you configure.</li>
+  <li><strong>The watcher</strong> (<code>clawswap watch</code>, in the session's <code>clawswap</code> pane) is an OTP
+    app. It keeps the branch list up to date from git and GitHub, runs switches, and serves a page and a JSON API on
+    <code>127.0.0.1:8790</code>.</li>
+  <li><strong>The webhook.</strong> GitHub posts branch, push and pull-request events to a
+    <a href="https://smee.io">smee.io</a> channel; the watcher follows the channel and looks again when one arrives.
+    Without it, it looks every 15 minutes and whenever you press a key.</li>
+  <li><strong>The controls.</strong> Stream Deck keys (an OpenDeck plugin), the watcher's
+    <a href="https://hologram.page">Hologram</a> page (on its own or in an iframe in your app), your own control
+    built on the API, and the CLI all drive the same watcher.</li>
+</ul>
+
+<h2 id="quick-start">Quick start</h2>
+<p>Once clawswap is <a href="install.html">installed</a> and <code>clawswap</code> is on your <code>PATH</code>:</p>
+<pre><code>cd &lt;path-to-your-project&gt;
+clawswap init     # writes a starter clawswap.exs from what it finds
+clawswap smee     # optional: a webhook channel, so new branches show up straight away
+clawswap up       # opens the session; the page is at http://127.0.0.1:8790</code></pre>
+<p>Then pick a branch on the page, press a key, or run <code>clawswap switch &lt;branch&gt;</code>.</p>
+
+<h2 id="elixir">All Elixir</h2>
+<p>clawswap is written in Elixir. The watcher is an OTP application, its page is a Hologram page served by
+Phoenix, and the OpenDeck plugin is an Elixir script. It started as <code>devtools/bmx-dev</code> in the bmx
+project; the servers and steps that were written into it are now a config file in each repo.</p>
+<div class="pager"><span></span><span><a href="install.html">Install →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

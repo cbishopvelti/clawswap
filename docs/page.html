@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Branch page · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html" aria-current="page">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>The branch page</h1>
+<p class="lede">The watcher's web page, what its marks mean, and embedding it in your own app.</p>
+
+<p>The watcher serves a page at <code>http://127.0.0.1:8790</code> (the config's <code>port</code>). It shows the
+same list as the Stream Deck keys, with a button on each branch that switches to it, and a Pull button. It's a
+<a href="https://hologram.page">Hologram</a> page: the watcher pushes every change to it, so it follows a switch step
+by step without reloading.</p>
+
+<h2 id="header">The header</h2>
+<ul>
+  <li><strong>The project's name</strong> (the config's <code>name</code>).</li>
+  <li><strong>The webhook's state</strong>: <em>webhook on</em>, <em>webhook connecting</em>, <em>webhook lost</em> (with
+    why), or <em>webhook off: run clawswap smee</em> when no channel is set.</li>
+  <li><strong>Pull</strong>, with how many new commits the checkout's branch has on origin ("↓ Pull 3 new commits",
+    or "up to date"). While a pull runs it shows the step it's on.</li>
+</ul>
+
+<h2 id="marks">Merge-status marks</h2>
+<p>Each row starts with a mark for its merge status, as bmx's branch menu shows it. Hover it for what it means.</p>
+<ul class="marks">
+  <li><span class="mark">⎇</span> The base branch, the one the others merge into.</li>
+  <li><span class="mark merged">✓</span> Merged into the base: every commit of the branch is already in origin's base branch.</li>
+  <li><span class="mark open">●</span> An open pull request, not merged yet.</li>
+  <li><span class="mark">◌</span> A draft pull request, not merged yet.</li>
+  <li><span class="mark">○</span> Not merged, and no open PR (or no GitHub token to ask with).</li>
+</ul>
+<p>Then the PR's number and title (or the branch's short name), and its status on the right.</p>
+
+<h2 id="status">Row status</h2>
+<p>The coloured edge on the left of a row, and the text on its right:</p>
+<ul class="marks">
+  <li><span class="bar current"></span><strong>Current</strong>: the checkout's branch (<em>Uncommitted</em> if tracked files have changes).</li>
+  <li><span class="bar behind"></span><strong>New commits</strong>: the checkout's branch has commits on GitHub it doesn't have. Pull to get them.</li>
+  <li><span class="bar running"></span><strong>A step's label</strong>: a switch to this branch is running, on that step.</li>
+  <li><span class="bar failed"></span><strong>Failed</strong>: the last switch to this branch failed; the error shows above the list.</li>
+</ul>
+
+<h2 id="base">The base branch, pinned first</h2>
+<p>The base branch is always the first row, whatever its commit date. The rest follow newest commit first. The base
+is the config's <code>base</code>, else origin's default branch (what <code>origin/HEAD</code> points at), else
+<code>main</code> or <code>master</code>, whichever origin has. <code>CLAWSWAP_BASE</code> overrides it for one run. The
+<span class="mark merged">✓</span> marks are worked out against it, so set <code>base</code> if your PRs merge into
+something other than the default branch.</p>
+
+<h2 id="narrow">Narrow layout</h2>
+<p>Below 480 px wide the page lays itself out as a compact list, like a dropdown menu: tight rows, the current one
+tinted, the status under the title. That's the width it gets in an app's menu (below). It follows your system's
+light or dark theme.</p>
+
+<h2 id="embed">Embedding it in your app</h2>
+<p>Your app's dev page can show clawswap two ways: frame the watcher's page, or build its own control on the
+<a href="api.html">API</a>. The <a href="https://github.com/cbishopvelti/clawswap/tree/main/examples/react-embed"><code>examples/react-embed</code></a>
+Vite + React app does both. (It's a test target, so it's JavaScript; clawswap itself isn't.)</p>
+
+<h3 id="iframe">The page in an iframe</h3>
+<p>The simplest: a button in your top bar that opens a dropdown with the page in it.</p>
+<pre><code>&lt;iframe src="http://localhost:8790" title="clawswap"&gt;&lt;/iframe&gt;</code></pre>
+<p>The example's <code>BranchMenu</code> keeps the frame loaded once it has been opened (it's only hidden when the menu
+closes), so it keeps following a switch while closed, and adds reload, open-in-a-tab and close buttons. Things to know:</p>
+<ul>
+  <li><strong>Framing.</strong> Neither clawswap's endpoint nor Hologram sets <code>X-Frame-Options</code> or
+    <code>frame-ancestors</code>, so the page frames.</li>
+  <li><strong>Use <code>localhost</code> for both.</strong> Hologram's session cookie is <code>SameSite=Lax</code>.
+    <code>localhost:5173</code> and <code>localhost:8790</code> are the same site (ports don't count), so the framed page
+    gets its cookie. Mixing <code>localhost</code> and <code>127.0.0.1</code> makes them cross-site.</li>
+  <li><strong>Restarts.</strong> A switch kills your dev server, so your app reloads and its state resets, while the
+    framed page keeps its own connection to the watcher and follows the switch to the end.</li>
+</ul>
+
+<h3 id="badge">Your own control on the API</h3>
+<p>The example's <code>BranchBadge</code> shows the checkout's branch as a picker, Pull with how far behind it is, and
+the step a switch is on, from <code>GET /state</code>, <code>POST /switch</code> and <code>POST /pull</code>. Its
+<code>useClawswap</code> hook polls <code>/state</code> every 2 s while a switch runs and every 10 s otherwise, and
+treats failed fetches during a switch as expected (its own server is restarting). The browser can call the API
+because a server's own <code>localhost</code> port is an allowed origin; add others with <code>origins</code>.</p>
+
+<h3 id="try">Try the example</h3>
+<p>clawswap needs a repo with branches on a remote, so give the example one of its own. From your clawswap clone:</p>
+<pre><code>cp -r examples/react-embed ../react-embed &amp;&amp; cd ../react-embed
+git init -b main &amp;&amp; git add . &amp;&amp; git commit -m "react-embed"
+gh repo create react-embed --private --source . --push   # or any remote
+clawswap up</code></pre>
+<p>Open <code>http://localhost:5173</code>, push a branch that changes <code>src/App.jsx</code> (or adds a dependency),
+and switch to it from the Branches menu or the badge. Set <code>VITE_CLAWSWAP_URL</code> in <code>.env.local</code> when
+the config's <code>port</code> isn't 8790.</p>
+<div class="pager"><span><a href="switching.html">← Switching</a></span><span><a href="api.html">API →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

@@ -18,6 +18,10 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
               OpenDeck "clawswap branch" keys, the Hologram page at /, clawswap switch
 ```
 
+The full docs are in [docs/](docs/index.html), published at
+[cbishopvelti.github.io/clawswap](https://cbishopvelti.github.io/clawswap/). They're plain HTML and CSS: edit the
+pages in `docs/` directly.
+
 ## Setup
 
 1. Elixir 1.19 or newer (Hologram needs it) with Erlang/OTP 26 or newer.
