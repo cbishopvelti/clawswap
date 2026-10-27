@@ -7,7 +7,7 @@ defmodule ClawswapWeb.BranchesPage do
   use Hologram.Page
 
   alias Clawswap.Watcher
-  alias ClawswapWeb.View
+  alias ClawswapWeb.{StreamDeck, View}
 
   route("/")
 
@@ -24,6 +24,7 @@ defmodule ClawswapWeb.BranchesPage do
         <h1>{@view.project}</h1>
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
         <button class="pull {@view.pull_class}" $click={command: :pull}>{@view.pull_label}</button>
+        <StreamDeck cid="stream_deck" keys={@view.keys} />
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
       {%if @view.error}<p class="message">{@view.error}</p>{/if}
@@ -43,7 +44,12 @@ defmodule ClawswapWeb.BranchesPage do
     """
   end
 
-  def action(:state_changed, params, component), do: put_state(component, :view, params.view)
+  def action(:state_changed, params, component) do
+    component
+    |> put_state(:view, params.view)
+    |> put_action(name: :draw, target: "stream_deck", params: %{keys: params.view.keys})
+  end
+
   def action(:show_message, params, component), do: put_state(component, :message, params.message)
 
   def command(:switch, params, server), do: answer(server, Watcher.switch_to(params.branch))

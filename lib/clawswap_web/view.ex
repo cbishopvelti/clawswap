@@ -35,7 +35,22 @@ defmodule ClawswapWeb.View do
           true -> ""
         end,
       error: (match?(%{phase: "failed"}, run) && "#{run.target}: #{run.error}") || state.error,
-      branches: Enum.map(state.branches, &branch(&1, state, run, current))
+      branches: Enum.map(state.branches, &branch(&1, state, run, current)),
+      keys: keys(state)
+    }
+  end
+
+  @doc """
+  The Stream Deck keys a page that drives a deck itself (ClawswapWeb.StreamDeck) shows: each branch's
+  image, and the pull key's. They're the OpenDeck plugin's (Clawswap.Deck), so the two decks look alike.
+  """
+  def keys(state) do
+    # The plugin reads the state as the API sends it: JSON, with string keys.
+    json = state |> JSON.encode!() |> JSON.decode!()
+
+    %{
+      branches: Enum.map(json["branches"] || [], &%{branch: &1["branch"], image: Clawswap.Deck.branch_image(Clawswap.Deck.key_look(json, &1))}),
+      pull: Clawswap.Deck.branch_image(Clawswap.Deck.pull_look(json))
     }
   end
 
