@@ -87,10 +87,10 @@ with <code>respawn-pane</code>, so it keeps its place and size.</p>
 <ul>
   <li>a pane for each server, named as in <code>servers</code>;</li>
   <li>one called <code>clawswap</code>, the watcher, where switch output shows;</li>
-  <li>one for each of the config's other <code>panes</code>.</li>
+  <li>one for each of the config's other <code>panes</code>; a pane with no command is an empty shell, at the repo root unless it has a <code>cwd</code> (<a href="configuration.html#keys"><code>shell: []</code></a>).</li>
 </ul>
 <p>Ctrl+Q leaves zellij (in tmux, Ctrl+B then D); <code>clawswap up</code> again comes back.</p>
-<p>Each pane runs its command through <code>bin/keep</code>. When the command stops (Ctrl+C, or Ctrl+C twice for
+<p>Each pane with a command runs it through <code>bin/keep</code>. When the command stops (Ctrl+C, or Ctrl+C twice for
 the watcher and other BEAM programs), the pane keeps a shell instead of closing, and the up arrow brings the
 command back. Without it, zellij closes a pane whose command has exited when you press Ctrl+C there, and tmux closes it as
 soon as the command exits.</p>

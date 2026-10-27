@@ -58,7 +58,7 @@ YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <
     api: [command: "iex -S mix phx.server", cwd: "api", port: 4000],
     web: [command: "npm run dev", cwd: "web", port: 5173]
   ],
-  panes: [db: [command: "docker compose up postgres"]],
+  panes: [db: [command: "docker compose up postgres"], shell: []],
   prepare: [[label: "Starting Postgres", run: "docker compose up -d postgres", wait_for_port: 5432]],
   steps: [
     [label: "mix deps.get", when: ["api/mix.exs", "api/mix.lock"], run: "mix deps.get", cwd: "api"],
@@ -79,7 +79,7 @@ YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <
   <tr><td><code>base</code></td><td>origin's default branch</td><td>The branch pinned first in the list. Merged branches are marked against it. See <a href="page.html#base">base branch</a>.</td></tr>
   <tr><td><code>port</code></td><td><code>8790</code></td><td>The watcher's page and API. Give each project its own to run several at once.</td></tr>
   <tr><td><code>servers</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:, port:, match:]]</code>: what a switch stops and starts again, each in a pane of that name, in this order. See <a href="#servers">servers</a>.</td></tr>
-  <tr><td><code>panes</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:]]</code>: other panes, left running across switches (logs, a database). A pane can't be called <code>clawswap</code> or share a server's name.</td></tr>
+  <tr><td><code>panes</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:]]</code>: other panes, left running across switches (logs, a database). A pane with no <code>command</code> is an empty shell in its <code>cwd</code> (the repo root by default): <code>shell: []</code>, or <code>shell: {}</code> in YAML. A pane can't be called <code>clawswap</code> or share a server's name.</td></tr>
   <tr><td><code>prepare</code></td><td><code>[]</code></td><td>Steps <code>up</code> runs before it starts a new session. A step with <code>wait_for_port:</code> waits (up to 30 s) for that port to open.</td></tr>
   <tr><td><code>steps</code></td><td><code>[]</code></td><td><code>[[name:, label:, when:, run:, cwd:]]</code>: what a switch (or <code>up</code>, or <code>update</code>) runs when files matching <code>when</code> changed, in this order. See <a href="#steps">steps</a>.</td></tr>
   <tr><td><code>notes</code></td><td><code>[]</code></td><td><code>[[when:, message:]]</code>: said after a switch that changed matching files ("restart OpenDeck").</td></tr>
@@ -129,6 +129,7 @@ run as written.</p>
   web: {command: npm run dev, cwd: web, port: 5173}
 panes:
   db: {command: docker compose up postgres}
+  shell: {}
 steps:
   - {label: mix deps.get, when: [api/mix.exs, api/mix.lock], run: mix deps.get, cwd: api}
   - {label: Migrating, when: api/priv/repo/migrations/, run: mix ecto.migrate, cwd: api}</code></pre>

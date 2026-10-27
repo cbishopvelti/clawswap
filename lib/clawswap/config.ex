@@ -29,8 +29,9 @@ defmodule Clawswap.Config do
 
     panes =
       for {name, p} <- config[:panes] || [], into: %{} do
-        p = Map.new(p)
-        {to_string(name), %{command: p[:command], cwd: p[:cwd] || "."}}
+        p = Map.new(p || [])
+        # No command (or an empty one): a plain shell in the pane's folder.
+        {to_string(name), %{command: if(p[:command] in [nil, "", []], do: nil, else: p[:command]), cwd: p[:cwd] || "."}}
       end
 
     for name <- Map.keys(panes), Map.has_key?(servers, name) or name == "clawswap" do

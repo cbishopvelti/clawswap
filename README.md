@@ -94,7 +94,7 @@ for whatever changed since they last ran (all of them the first time), so the se
 deps. It remembers the commit in `.git/clawswap.json`.
 
 The session has a pane for each server, one called `clawswap` (the watcher; switch output shows here) and
-one for each of the config's other `panes`. Ctrl+Q leaves zellij (in tmux, Ctrl+B then D); `up` again
+one for each of the config's other `panes` (one with no command is an empty shell). Ctrl+Q leaves zellij (in tmux, Ctrl+B then D); `up` again
 comes back.
 
 The watcher serves a page at `http://127.0.0.1:8790` (the config's `port`): the same list as the keys, a
@@ -105,7 +105,7 @@ dev page can embed it in an iframe, or build its own control on the [API](#api);
 The ⚙ at the top of that page opens the config editor (`/settings`) in a new window, so it works from an
 app's iframe too. See [Editing the config from the page](#editing-the-config-from-the-page).
 
-Each pane runs its command through `bin/keep`. When the command stops (Ctrl+C, or Ctrl+C twice for the
+Each pane with a command runs it through `bin/keep`. When the command stops (Ctrl+C, or Ctrl+C twice for the
 watcher and other BEAM programs), the pane keeps a shell instead of closing, and the up arrow brings the
 command back. Without it, zellij closes a pane whose command has exited when you press Ctrl+C there, and
 tmux closes it as soon as the command exits.
@@ -130,7 +130,7 @@ or a list of the program and its arguments. A `cwd` is relative to the repo root
 | `base` | origin's default branch | The branch listed first. Merged branches are marked against it. |
 | `port` | `8790` | The watcher's page and API. Give each project its own to run several at once. |
 | `servers` | `[]` | `[name: [command:, cwd:, port:, match:]]`: what a switch stops and starts again, each in a pane of that name, in this order. With `port`, the switch makes sure the port is free before checking out (a server left running outside the session is sent TERM, then KILL). `match` (a Regex) finds the pane by its command if it has been renamed. |
-| `panes` | `[]` | `[name: [command:, cwd:]]`: other panes, left running across switches (logs, a database). |
+| `panes` | `[]` | `[name: [command:, cwd:]]`: other panes, left running across switches (logs, a database). A pane with no `command` is an empty shell in its `cwd` (the repo root by default): `shell: []`, or `shell: {}` in YAML. |
 | `prepare` | `[]` | Steps `up` runs before it starts a new session. A step with `wait_for_port:` waits (up to 30 s) for that port to open. |
 | `steps` | `[]` | `[[name:, label:, when:, run:, cwd:]]`: what a switch (or `up`, or `update`) runs when files matching `when` changed, in this order. |
 | `notes` | `[]` | `[[when:, message:]]`: said after a switch that changed matching files ("restart OpenDeck"). |
@@ -149,7 +149,7 @@ folder), a function of the path, or a list of those.
     api: [command: "iex -S mix phx.server", cwd: "api", port: 4000],
     web: [command: "npm run dev", cwd: "web", port: 5173]
   ],
-  panes: [db: [command: "docker compose up postgres"]],
+  panes: [db: [command: "docker compose up postgres"], shell: []],
   prepare: [[label: "Starting Postgres", run: "docker compose up -d postgres", wait_for_port: 5432]],
   steps: [
     [label: "mix deps.get", when: ["api/mix.exs", "api/mix.lock"], run: "mix deps.get", cwd: "api"],
@@ -181,6 +181,7 @@ servers:
   web: {command: npm run dev, cwd: web, port: 5173}
 panes:
   db: {command: docker compose up postgres}
+  shell: {}
 steps:
   - {label: mix deps.get, when: [api/mix.exs, api/mix.lock], run: mix deps.get, cwd: api}
   - {label: Migrating, when: api/priv/repo/migrations/, run: mix ecto.migrate, cwd: api}

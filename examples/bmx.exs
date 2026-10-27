@@ -9,7 +9,9 @@
     vite: [command: "npm run dev", cwd: "frontend", port: 5173, match: ~r/npm run dev|vite/]
   ],
   panes: [
-    docker: [command: "docker compose up -d && docker compose logs -f --tail 20"]
+    docker: [command: "docker compose up -d && docker compose logs -f --tail 20"],
+    # No command: an empty shell at the repo's root.
+    shell: []
   ],
   prepare: [
     [label: "Starting SurrealDB and the beat tracker", run: "docker compose up -d", wait_for_port: 8000]

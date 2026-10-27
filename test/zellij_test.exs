@@ -15,6 +15,12 @@ defmodule Clawswap.ZellijTest do
     assert Zellij.layout(Config.normalise([panes: [q: [command: ~s(echo "hi")]]], root: "/r")) =~ ~s(args "echo \\"hi\\"")
   end
 
+  test "a pane with no command is a plain shell" do
+    kdl = Zellij.layout(Config.normalise([panes: [shell: [], sub: [cwd: "web"]]], root: "/r"))
+    assert kdl =~ ~s(pane name="shell" cwd="/r"\n)
+    assert kdl =~ ~s(pane name="sub" cwd="/r/web"\n)
+  end
+
   test "needs zellij 0.44 or newer" do
     refute Zellij.version_ok?([0, 43, 1])
     assert Zellij.version_ok?([0, 44, 0])
