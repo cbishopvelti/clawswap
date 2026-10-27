@@ -82,3 +82,8 @@ li.behind .status { color: var(--behind); }
 .settings .save { background: var(--behind); color: #fff; border: 0; border-radius: 6px; padding: 6px 18px; }
 .settings .save[disabled] { opacity: 0.6; }
 .settings .saved { color: var(--current); }
+/* The Stream Deck the page drives over WebHID (ClawswapWeb.StreamDeck). */
+.deck { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.deck-on { color: var(--current); }
+.deck-message { color: var(--failed); }
+@media (max-width: 480px) { .deck { display: none; } }

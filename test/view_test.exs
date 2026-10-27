@@ -1,7 +1,7 @@
 defmodule ClawswapWeb.ViewTest do
   use ExUnit.Case, async: true
 
-  alias ClawswapWeb.View
+  alias ClawswapWeb.{StreamDeck, View}
 
   @state %{
     project: "bmx",
@@ -38,5 +38,25 @@ defmodule ClawswapWeb.ViewTest do
     failed = View.page(%{@state | switch: %{target: "claude/a", pull: false, phase: "failed", step: nil, error: "Uncommitted changes"}})
     assert failed.error == "claude/a: Uncommitted changes"
     assert Enum.at(failed.branches, 1).class == "failed"
+  end
+
+  test "draws the OpenDeck plugin's key images for a deck the page drives" do
+    keys = View.page(@state).keys
+    assert Enum.map(keys.branches, & &1.branch) == ["claude-main", "claude/a", "claude/b"]
+    [main, a, _] = Enum.map(keys.branches, &URI.decode(&1.image))
+    assert main =~ "New commits"
+    assert a =~ "#4" and a =~ "Add A"
+    assert URI.decode(keys.pull) =~ "2 new commits"
+  end
+
+  test "lays the branches out on a deck's keys, with Pull on the last" do
+    keys = %{branches: Enum.map(1..20, &%{branch: "b#{&1}", image: "i#{&1}"}), pull: "pull"}
+    images = StreamDeck.key_images(keys, 15)
+    assert length(images) == 15
+    assert {hd(images), Enum.at(images, 13), List.last(images)} == {"i1", "i14", "pull"}
+    assert StreamDeck.key_images(%{keys | branches: Enum.take(keys.branches, 2)}, 15) == ["i1", "i2"] ++ List.duplicate(nil, 12) ++ ["pull"]
+    assert StreamDeck.key_command(keys, 15, 0) == {:switch, "b1"}
+    assert StreamDeck.key_command(keys, 15, 14) == :pull
+    assert StreamDeck.key_command(%{keys | branches: []}, 15, 3) == nil
   end
 end

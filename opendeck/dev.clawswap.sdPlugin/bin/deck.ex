@@ -61,7 +61,7 @@ defmodule Clawswap.Deck do
       end)
 
     svg =
-      ~s(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144"><rect width="144" height="144" fill="#20242c"/>) <>
+      ~s(<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" fill="#20242c"/>) <>
         if(bar, do: ~s(<rect width="144" height="10" fill="#{bar}"/>), else: "") <>
         if(number, do: ~s(<text x="10" y="30" font-family="sans-serif" font-size="16" fill="#a3abb8">##{number}</text>), else: "") <>
         text <>

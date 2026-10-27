@@ -18,6 +18,10 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
               OpenDeck "clawswap branch" keys, the Hologram page at /, clawswap switch
 ```
 
+The full docs are in [docs/](docs/index.html), published at
+[cbishopvelti.github.io/clawswap](https://cbishopvelti.github.io/clawswap/). They're plain HTML and CSS: edit the
+pages in `docs/` directly.
+
 ## Setup
 
 1. Elixir 1.19 or newer (Hologram needs it) with Erlang/OTP 26 or newer.
@@ -64,7 +68,8 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
 6. Optional: PR titles. If the `gh` CLI is logged in (or `GITHUB_TOKEN` is set), the list shows the base
    branch and then the branches with an open pull request, newest commit first, labelled by PR title. Without a
    token it shows every branch by newest commit.
-7. Optional: the Stream Deck keys, see [OpenDeck](#opendeck).
+7. Optional: the Stream Deck keys, through [OpenDeck](#opendeck) or straight from the watcher's page in
+   Chrome ([WebHID](#stream-deck-from-the-page-webhid)).
 
 ## Use
 
@@ -248,6 +253,23 @@ with its step, red a failed one.
 
 Each key has a Watcher setting, empty for `http://127.0.0.1:8790`. Point keys at another project's port to
 drive several projects from one deck; keys on the same watcher share its list.
+
+## Stream Deck from the page (WebHID)
+
+Instead of OpenDeck, the watcher's page can drive the deck itself: open it in Chrome or Edge (WebHID is
+Chromium only) and press **Connect Stream Deck**, then pick the deck. Its keys show the base branch and
+then the newest PRs, in deck order, row by row, with Pull on the last key. They look like the OpenDeck
+keys, and pressing one switches. Chrome remembers the deck, so the page opens it again when it loads and
+when the deck is plugged back in.
+
+It works while that tab is open; close it and the keys stop. Quit OpenDeck first, since both would draw on
+the same keys. It knows the Stream Deck (v2), MK.2 and XL; the Mini, Neo and + aren't supported yet. On
+Linux your user needs access to the deck's hidraw device: the udev rule OpenDeck installs should cover that, or
+add one for vendor `0fd9`. An iframe needs `allow="hid"` for it, so press Connect on the page itself (the
+narrow embed menu leaves the button out).
+
+It's Elixir too: `app/components/stream_deck.ex` calls `navigator.hid` and a canvas through Hologram's JS
+interop.
 
 ## Tests
 

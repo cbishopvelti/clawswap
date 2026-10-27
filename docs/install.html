@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html" aria-current="page">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+      </ul>
+      <h4>Project</h4>
+      <ul>
+        <li><a href="roadmap.html">Coming next</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Install</h1>
+<p class="lede">What clawswap needs, getting it, and putting the <code>clawswap</code> command on your <code>PATH</code>.</p>
+
+<h2 id="requirements">Requirements</h2>
+<table>
+  <tr><th>What</th><th>Version</th><th>Why</th></tr>
+  <tr><td>Elixir</td><td>1.19 or newer</td><td>Hologram, the page's framework, needs it.</td></tr>
+  <tr><td>Erlang/OTP</td><td>26 or newer</td><td>The watcher is an OTP app.</td></tr>
+  <tr><td><a href="https://zellij.dev">zellij</a></td><td>0.44 or newer</td><td>It added <code>--pane-id</code> to its CLI, which switches use.
+    Ubuntu's package may be older; take the binary from <a href="https://github.com/zellij-org/zellij/releases">the releases</a>
+    or <code>cargo install --locked zellij</code>.</td></tr>
+  <tr><td>or <a href="https://github.com/tmux/tmux">tmux</a></td><td>3.1 or newer</td><td>Instead of zellij. Distro packages are new enough (<code>sudo apt install tmux</code>).
+    See <a href="usage.html#multiplexer">zellij or tmux</a>.</td></tr>
+  <tr><td>Node.js</td><td>any current</td><td>Only at compile time: Hologram bundles the page's JavaScript with esbuild, which it installs with npm the first time. Nothing of clawswap's own is JavaScript.</td></tr>
+  <tr><td>inotify-tools</td><td>Linux only</td><td>Hologram's dev server watches its files with it: <code>sudo apt install inotify-tools</code>.</td></tr>
+  <tr><td><code>gh</code> or <code>GITHUB_TOKEN</code></td><td>optional</td><td>For pull-request titles, and to list only branches with an open PR.</td></tr>
+</table>
+
+<h2 id="clone">Get clawswap</h2>
+<pre><code>git clone https://github.com/cbishopvelti/clawswap
+cd clawswap &amp;&amp; mix deps.get &amp;&amp; mix compile</code></pre>
+<p>Clone it anywhere. The command is <code>bin/clawswap</code> in the clone. You run it from inside <em>your
+project's</em> repo, since that's the repo it acts on; it finds its own folder by itself:</p>
+<pre><code>cd &lt;path-to-your-project&gt;
+&lt;path-to-clawswap&gt;/bin/clawswap status</code></pre>
+
+<h2 id="path">Put <code>clawswap</code> on your PATH</h2>
+<p>To type just <code>clawswap</code>, link it into a folder on your <code>PATH</code>. Run this from the clone's root,
+so <code>$PWD</code> gives the link the full path:</p>
+<pre><code>mkdir -p ~/.local/bin &amp;&amp; ln -sf "$PWD/bin/clawswap" ~/.local/bin/clawswap</code></pre>
+<p>If <code>clawswap</code> is then "command not found", <code>~/.local/bin</code> isn't on your <code>PATH</code>
+(check with <code>echo $PATH</code>). Add this to <code>~/.bashrc</code> or <code>~/.zshrc</code> and open a new terminal:</p>
+<pre><code>export PATH="$HOME/.local/bin:$PATH"</code></pre>
+<p>These docs write <code>clawswap</code>; without the link, use <code>&lt;path-to-clawswap&gt;/bin/clawswap</code> instead.</p>
+
+<h2 id="project">Set up your project</h2>
+<ol class="steps">
+  <li><strong>A config.</strong> In your project, <code>clawswap init</code> writes a starter <code>clawswap.exs</code>
+    at the repo root, filled in from what it finds there: <code>mix phx.server</code> on port 4000 for a Phoenix app
+    (with <code>mix ecto.migrate</code> when there are migrations), <code>npm run dev</code> (or pnpm, yarn) for a
+    <code>package.json</code> with a <code>dev</code> script (port 5173 for Vite, 3000 for Next), and no servers when it
+    can't tell. Check the servers and steps (see <a href="configuration.html">Configuration</a>) and commit it. Prefer
+    YAML? Write a <code>clawswap.yml</code> instead.</li>
+  <li><strong>The webhook</strong>, so new branches show up straight away:
+    <pre><code>clawswap smee</code></pre>
+    makes a smee.io channel, saves it for this checkout (in <code>.git/clawswap.json</code>, never committed) and prints
+    what to put in GitHub's <em>Settings &gt; Webhooks &gt; Add webhook</em>: the channel as Payload URL, content type
+    <code>application/json</code>, and the events <em>Branch or tag creation</em>, <em>Branch or tag deletion</em>,
+    <em>Pull requests</em> and <em>Pushes</em>. Pass a URL (<code>clawswap smee &lt;url&gt;</code>) to reuse a channel you
+    already have. Without a webhook the watcher still looks every 15 minutes, and whenever you press a key.</li>
+  <li><strong>PR titles</strong> (optional). If the <code>gh</code> CLI is logged in, or <code>GITHUB_TOKEN</code> is set,
+    the list shows the base branch and then the branches with an open pull request, labelled by PR title. Without a
+    token it shows every branch.</li>
+  <li><strong>Stream Deck keys</strong> (optional): see <a href="opendeck.html">Stream Deck</a>.</li>
+</ol>
+
+<h2 id="tests">Running clawswap's tests</h2>
+<pre><code>mix test</code></pre>
+<div class="pager"><span><a href="index.html">← Overview</a></span><span><a href="usage.html">Use →</a></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

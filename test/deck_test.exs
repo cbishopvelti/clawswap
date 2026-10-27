@@ -1,6 +1,3 @@
-Code.require_file("../opendeck/dev.clawswap.sdPlugin/bin/deck.ex", __DIR__)
-Code.require_file("../opendeck/dev.clawswap.sdPlugin/bin/websocket.ex", __DIR__)
-
 defmodule Clawswap.DeckTest do
   use ExUnit.Case, async: true
 
