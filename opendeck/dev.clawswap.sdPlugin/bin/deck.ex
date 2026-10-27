@@ -19,6 +19,7 @@ defmodule Clawswap.Deck do
   # A failed switch stays on its key this long.
   @failed_ms 60_000
   @colours %{current: "#3fb950", switching: "#e3b341", failed: "#e0503f", behind: "#58a6ff"}
+  @muted "#a3abb8"
 
   def branch_action, do: @branch_action
   def pull_action, do: @pull_action
@@ -45,30 +46,42 @@ defmodule Clawswap.Deck do
 
   defp escape_xml(text), do: String.replace(text, ~r/[<>&"]/, &%{"<" => "&lt;", ">" => "&gt;", "&" => "&amp;", ~s(") => "&quot;"}[&1])
 
-  @doc "One key: a coloured bar for its state, the PR number, the title (or branch name), and a status line."
+  @doc """
+  One key: a coloured bar for its state, the PR number, the merge status mark (top right) and tint, the
+  title (or branch name), a status line, and a green outline on the checkout's branch.
+  """
   def branch_image(look) do
     number = look[:number]
+    mark = look[:mark]
     bar = look[:bar]
     status = look[:status]
-    top = if number, do: 52, else: 34
+    # The first row is the number and the mark's, when there are any.
+    header = number || mark
+    top = if header, do: 52, else: 34
 
     text =
       look.title
-      |> wrap(11, if(number, do: 3, else: 4))
+      |> wrap(11, if(header, do: 3, else: 4))
       |> Enum.with_index()
       |> Enum.map_join(fn {l, i} ->
         ~s(<text x="10" y="#{top + i * 21}" font-family="sans-serif" font-size="18" font-weight="600" fill="#eef1f5">#{escape_xml(l)}</text>)
       end)
 
     svg =
-      ~s(<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" fill="#20242c"/>) <>
+      ~s(<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" fill="#{look[:background] || "#20242c"}"/>) <>
         if(bar, do: ~s(<rect width="144" height="10" fill="#{bar}"/>), else: "") <>
-        if(number, do: ~s(<text x="10" y="30" font-family="sans-serif" font-size="16" fill="#a3abb8">##{number}</text>), else: "") <>
+        if(number, do: ~s(<text x="10" y="30" font-family="sans-serif" font-size="16" fill="#{@muted}">##{number}</text>), else: "") <>
+        if(mark,
+          do: ~s(<text x="132" y="33" text-anchor="end" font-family="sans-serif" font-size="26" fill="#{look[:mark_colour] || @muted}">#{mark}</text>),
+          else: ""
+        ) <>
         text <>
         if(status && status != "",
-          do: ~s(<text x="10" y="132" font-family="sans-serif" font-size="14" fill="#{bar || "#a3abb8"}">#{escape_xml(String.slice(status, 0, 16))}</text>),
+          do: ~s(<text x="10" y="132" font-family="sans-serif" font-size="14" fill="#{bar || @muted}">#{escape_xml(String.slice(status, 0, 16))}</text>),
           else: ""
-        ) <> "</svg>"
+        ) <>
+        if(look[:current], do: ~s(<rect x="3" y="3" width="138" height="138" rx="6" fill="none" stroke="#{@colours.current}" stroke-width="6"/>), else: "") <>
+        "</svg>"
 
     "data:image/svg+xml," <> URI.encode(svg, &URI.char_unreserved?/1)
   end
@@ -80,7 +93,12 @@ defmodule Clawswap.Deck do
   def key_look(_state, nil), do: %{title: "No branch", status: ""}
 
   def key_look(state, entry) do
-    look = %{title: get_in(entry, ["pr", "title"]) || entry["short"] || entry["branch"], number: get_in(entry, ["pr", "number"])}
+    look =
+      Map.merge(
+        %{title: get_in(entry, ["pr", "title"]) || entry["short"] || entry["branch"], number: get_in(entry, ["pr", "number"])},
+        merge_mark(state, entry)
+      )
+
     run = state["switch"] || %{}
     current = state["current"] || %{}
     targeted = run["target"] == entry["branch"]
@@ -93,13 +111,28 @@ defmodule Clawswap.Deck do
         Map.merge(look, %{bar: @colours.failed, status: "Failed"})
 
       (current["branch"] == entry["branch"] and entry["sha"]) && current["sha"] != entry["sha"] ->
-        Map.merge(look, %{bar: @colours.behind, status: "New commits"})
+        Map.merge(look, %{bar: @colours.behind, status: "New commits", current: true})
 
       current["branch"] == entry["branch"] ->
-        Map.merge(look, %{bar: @colours.current, status: if(state["dirty"], do: "Uncommitted", else: "Current")})
+        Map.merge(look, %{bar: @colours.current, status: if(state["dirty"], do: "Uncommitted", else: "Current"), current: true})
 
       true ->
         look
+    end
+  end
+
+  @doc """
+  The branch's merge status, with the page's marks in GitHub's colours, and a tint on the key so it shows
+  from across the desk: ⎇ the base branch, ✓ merged into it (purple), ● open PR (green), ◌ draft PR
+  (grey), ○ neither.
+  """
+  def merge_mark(state, entry) do
+    cond do
+      entry["branch"] == state["base"] -> %{mark: "⎇"}
+      entry["merged"] -> %{mark: "✓", mark_colour: "#a371f7", background: "#2b2440"}
+      get_in(entry, ["pr", "draft"]) -> %{mark: "◌", mark_colour: "#8b949e"}
+      entry["pr"] -> %{mark: "●", mark_colour: "#3fb950", background: "#1d2e25"}
+      true -> %{mark: "○"}
     end
   end
 

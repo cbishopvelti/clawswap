@@ -249,7 +249,10 @@ in deck order, row by row; the first shows the base branch. A key can name a bra
 
 Keys show the branch's PR number and title, with a bar for its state: green is the checkout, blue means
 the checkout's branch has new commits on GitHub (press it to pull them), amber is a switch in progress
-with its step, red a failed one.
+with its step, red a failed one. The checkout's key also has a green outline. The top right corner marks
+the merge status, as the page's list does, in GitHub's colours: ⎇ the base branch, ● an open PR (green,
+and the key is tinted green), ◌ a draft PR (grey), ✓ merged into the base (purple, tinted purple), ○
+neither.
 
 Each key has a Watcher setting, empty for `http://127.0.0.1:8790`. Point keys at another project's port to
 drive several projects from one deck; keys on the same watcher share its list.
