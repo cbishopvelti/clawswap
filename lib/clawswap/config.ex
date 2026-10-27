@@ -1,6 +1,6 @@
 defmodule Clawswap.Config do
   @moduledoc """
-  The project clawswap runs: its clawswap.exs (committed, at the repo root), and the per-checkout state in
+  The project clawswap runs: its clawswap.exs (committed, at the repo root or in a project's subfolder), and the per-checkout state in
   .git/clawswap.json (the smee.io channel, and the commit the steps last ran for, so `up` can catch up a
   checkout that moved while clawswap wasn't watching).
   """
@@ -66,19 +66,39 @@ defmodule Clawswap.Config do
     for {_, %{port: port}} <- servers, port, origin <- ["http://localhost:#{port}", "http://127.0.0.1:#{port}"], do: origin
   end
 
-  @doc "Finds the repo from `cwd` and loads its config (CLAWSWAP_CONFIG names another file)."
+  @doc """
+  Finds the repo from `cwd` and loads its config: the nearest clawswap.exs from `cwd` up to the repo's
+  root, so a project in a subfolder (examples/react-embed, say) has its own. CLAWSWAP_CONFIG names another
+  file, relative to the root.
+  """
   def load(cwd) do
     with {:ok, root} <- Git.repo_root(cwd) do
-      file = env("CLAWSWAP_CONFIG") || @file_name
+      file = env("CLAWSWAP_CONFIG") || nearest(cwd, root)
       path = Path.expand(file, root)
 
       if File.exists?(path) do
         {config, _} = Code.eval_file(path)
         {:ok, normalise(config || [], root: root, file: file, base: Git.default_base(root), local_file: Git.git_path(root, "clawswap.json"))}
       else
-        {:error, "No #{file} in #{root} (clawswap init writes one)"}
+        {:error, "No #{@file_name} in #{Path.expand(cwd)} or the folders above it in #{root} (clawswap init writes one)"}
       end
     end
+  end
+
+  # The config's path from the root: in `cwd`'s folder or the closest above it, else the root's.
+  defp nearest(cwd, root) do
+    prefix =
+      case Git.git(cwd, ["rev-parse", "--show-prefix"]) do
+        {:ok, out} -> String.trim(out)
+        _ -> ""
+      end
+
+    prefix
+    |> Path.split()
+    |> Enum.scan(&Path.join(&2, &1))
+    |> Enum.reverse()
+    |> Enum.map(&Path.join(&1, @file_name))
+    |> Enum.find(@file_name, &File.exists?(Path.join(root, &1)))
   end
 
   def read_local(project) do

@@ -37,6 +37,22 @@ defmodule Clawswap.ConfigTest do
     end
   end
 
+  test "loads the closest clawswap.exs above the folder it's run from" do
+    %{dir: dir, work: work} = TestRepo.setup()
+
+    try do
+      File.write!("#{work}/clawswap.exs", ~s([name: "root"]))
+      File.write!("#{work}/frontend/clawswap.exs", ~s([name: "frontend"]))
+      File.mkdir_p!("#{work}/frontend/src")
+      assert {:ok, %{name: "frontend", file: "frontend/clawswap.exs"} = p} = Config.load("#{work}/frontend/src")
+      assert p.restart.("frontend/clawswap.exs")
+      assert Clawswap.Zellij.layout(p) =~ ~r/name="clawswap".* cwd="#{Regex.escape(p.root)}\/frontend"/
+      assert {:ok, %{name: "root", file: "clawswap.exs"}} = Config.load(work)
+    after
+      File.rm_rf!(dir)
+    end
+  end
+
   test "catches up from the last updated commit, or runs everything the first time" do
     %{dir: dir, work: work} = TestRepo.setup()
     project = Config.normalise(TestRepo.bmx_config(), root: work)

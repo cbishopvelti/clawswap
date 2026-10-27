@@ -34,7 +34,7 @@ It can also run in place, in a clone of clawswap that isn't the one clawswap run
 out the whole repo, and the branch has to have this folder):
 
 ```bash
-CLAWSWAP_CONFIG=examples/react-embed/clawswap.exs clawswap up
+cd examples/react-embed && clawswap up
 ```
 
 ## Things this tests
