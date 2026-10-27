@@ -26,9 +26,9 @@ defmodule ClawswapWeb.ViewTest do
     assert view.pull_class == "behind"
     assert view.webhook =~ "clawswap smee"
     assert [main, a, b] = view.branches
-    assert {main.class, main.status, main.mark} == {"behind", "New commits", "○"}
-    assert {a.title, a.number, a.mark} == {"Add A", "#4", "●"}
-    assert {b.title, b.mark} == {"b", "✓"}
+    assert {main.class, main.status, main.mark} == {"behind", "New commits", "⎇"}
+    assert {a.title, a.number, a.mark, a.mark_class, a.mark_title} == {"Add A", "#4", "●", "open", "Open PR #4, not merged yet"}
+    assert {b.title, b.mark, b.mark_class, b.mark_title} == {"b", "✓", "merged", "Merged into claude-main"}
   end
 
   test "follows a switch" do

@@ -10,7 +10,7 @@ defmodule Clawswap.GitTest do
     %{branch: "claude/merged", sha: "4", date: "2026-10-20"}
   ]
 
-  test "lists the base first, then open PRs by last update, else branches by newest commit" do
+  test "lists the base first, then open PRs' branches (or every branch) by newest commit" do
     names = &Enum.map(&1, fn b -> b.branch end)
     assert names.(Git.branch_list(remote: @remote, base: "claude-main", current: "claude-main")) == ["claude-main", "claude/b", "claude/a", "claude/merged"]
 
@@ -20,7 +20,7 @@ defmodule Clawswap.GitTest do
     }
 
     list = Git.branch_list(remote: @remote, pulls: pulls, base: "claude-main", current: "claude/merged", short_name: &String.replace_prefix(&1, "claude/", ""))
-    assert names.(list) == ["claude-main", "claude/merged", "claude/a", "claude/b"]
+    assert names.(list) == ["claude-main", "claude/b", "claude/a", "claude/merged"]
     assert Enum.at(list, 2).pr.number == 1
     assert Enum.at(list, 2).short == "a"
   end
