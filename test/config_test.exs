@@ -53,6 +53,30 @@ defmodule Clawswap.ConfigTest do
     end
   end
 
+  test "reads a clawswap.yml as the same config as its clawswap.exs" do
+    {exs, _} = Code.eval_file(Path.expand("../examples/bmx.exs", __DIR__))
+    assert {:ok, yml} = Config.read(Path.expand("../examples/bmx.yml", __DIR__))
+    # Two compiled Regexes with the same source aren't ==, so compare their sources.
+    assert regex_sources(yml) == regex_sources(exs)
+    assert %Regex{} = yml[:servers][:phx][:match]
+  end
+
+  test "loads a clawswap.yml or .yaml the same way, and refuses two configs in one folder" do
+    %{dir: dir, work: work} = TestRepo.setup()
+
+    try do
+      File.write!("#{work}/clawswap.yaml", "name: root\n")
+      File.write!("#{work}/frontend/clawswap.yml", "name: frontend\nservers:\n  b: {command: x}\n  a: {command: y}\n")
+      assert {:ok, %{name: "frontend", file: "frontend/clawswap.yml", server_names: ["b", "a"]} = p} = Config.load("#{work}/frontend")
+      assert p.restart.("frontend/clawswap.yml")
+      assert {:ok, %{name: "root", file: "clawswap.yaml"}} = Config.load(work)
+      File.write!("#{work}/frontend/clawswap.exs", ~s([name: "exs"]))
+      assert {:error, "frontend/clawswap.exs and frontend/clawswap.yml are in the same folder" <> _} = Config.load("#{work}/frontend")
+    after
+      File.rm_rf!(dir)
+    end
+  end
+
   test "catches up from the last updated commit, or runs everything the first time" do
     %{dir: dir, work: work} = TestRepo.setup()
     project = Config.normalise(TestRepo.bmx_config(), root: work)
@@ -71,4 +95,9 @@ defmodule Clawswap.ConfigTest do
       File.rm_rf!(dir)
     end
   end
+
+  defp regex_sources(%Regex{source: source}), do: {:regex, source}
+  defp regex_sources(list) when is_list(list), do: Enum.map(list, &regex_sources/1)
+  defp regex_sources({k, v}), do: {k, regex_sources(v)}
+  defp regex_sources(other), do: other
 end

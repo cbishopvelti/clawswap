@@ -248,7 +248,11 @@ defmodule Clawswap.CLI do
         )
 
     path = Path.join(root, Config.file_name())
-    if File.exists?(path), do: fail("#{path} already exists")
+
+    for name <- Config.file_names(), File.exists?(Path.join(root, name)) do
+      fail("#{Path.join(root, name)} already exists")
+    end
+
     File.write!(path, Starter.config(root))
 
     found =
