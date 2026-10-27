@@ -52,8 +52,8 @@ one's merge status, and lights up when the branch you're on has new commits on G
   <a href="switching.html"><strong>Switching</strong><span>What a switch and a pull do, step by step.</span></a>
   <a href="page.html"><strong>Branch page</strong><span>The watcher's page, merge marks, and embedding it in your app.</span></a>
   <a href="api.html"><strong>API</strong><span>The JSON API, to build your own control.</span></a>
-  <a href="opendeck.html"><strong>Stream Deck</strong><span>Branch and pull keys through OpenDeck.</span></a>
-  <a href="roadmap.html"><strong>Coming next</strong><span>A config editor, and Stream Deck keys straight from the browser.</span></a>
+  <a href="opendeck.html"><strong>Stream Deck</strong><span>Branch and pull keys through OpenDeck, or from the page over WebHID.</span></a>
+  <a href="roadmap.html"><strong>Coming next</strong><span>A config editor.</span></a>
 </div>
 
 <h2 id="how">How it fits together</h2>
@@ -69,7 +69,7 @@ one's merge status, and lights up when the branch you're on has new commits on G
   <li><strong>The webhook.</strong> GitHub posts branch, push and pull-request events to a
     <a href="https://smee.io">smee.io</a> channel; the watcher follows the channel and looks again when one arrives.
     Without it, it looks every 15 minutes and whenever you press a key.</li>
-  <li><strong>The controls.</strong> Stream Deck keys (an OpenDeck plugin), the watcher's
+  <li><strong>The controls.</strong> Stream Deck keys (an OpenDeck plugin, or the page itself over WebHID), the watcher's
     <a href="https://hologram.page">Hologram</a> page (on its own or in an iframe in your app), your own control
     built on the API, and the CLI all drive the same watcher.</li>
 </ul>
