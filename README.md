@@ -29,7 +29,9 @@ GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane)
    ln -s ~/clawswap/bin/clawswap ~/.local/bin/clawswap
    ```
    Hologram's compiler bundles the page's JavaScript with esbuild, which it installs with npm the first
-   time, so Node.js has to be there for `mix compile`. Nothing of clawswap's own is JavaScript.
+   time, so Node.js has to be there for `mix compile`. Nothing of clawswap's own is JavaScript. On Linux
+   the page also needs inotify-tools (`sudo apt install inotify-tools`), which Hologram's dev server uses
+   to watch its files.
 4. In your project: `clawswap init` writes a starter `clawswap.exs` at the repo root. Fill in the servers
    and steps (see [Configuration](#configuration)) and commit it.
 5. The webhook, so new branches show up straight away:

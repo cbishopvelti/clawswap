@@ -156,6 +156,11 @@ defmodule Clawswap.CLI do
 
   defp watch do
     project = project!()
+
+    # Hologram's dev server watches its source with inotifywait on Linux, and won't start without it.
+    if match?({:unix, :linux}, :os.type()) and !System.find_executable("inotifywait"),
+      do: fail("The page needs inotify-tools (sudo apt install inotify-tools)")
+
     {:ok, _} = Application.ensure_all_started(:clawswap)
     smee = System.get_env("CLAWSWAP_SMEE") || Config.read_local(project)["smee"]
     :ok = Clawswap.Application.start_watcher(project, smee)
