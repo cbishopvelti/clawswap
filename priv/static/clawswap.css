@@ -9,6 +9,8 @@ main { max-width: 720px; margin: 0 auto; padding: 16px; }
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
 h1 { font-size: 20px; margin: 0; flex: 1; }
 .webhook { font-size: 13px; color: var(--muted); }
+.on { font-size: 13px; color: var(--muted); }
+.on strong { color: var(--current); font-weight: 600; }
 .webhook.off { color: var(--failed); }
 button { font: inherit; color: inherit; cursor: pointer; }
 .pull { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
@@ -18,7 +20,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 li button { width: 100%; display: flex; align-items: baseline; gap: 10px; text-align: left; background: var(--card);
   border: 1px solid var(--line); border-left: 6px solid var(--line); border-radius: 6px; padding: 10px 12px; }
-li.current button { border-left-color: var(--current); }
+li.current button, li.checkout button { border-left-color: var(--current); }
 li.running button { border-left-color: var(--running); }
 li.failed button { border-left-color: var(--failed); }
 li.behind button { border-left-color: var(--behind); }
@@ -47,7 +49,11 @@ li.behind .status { color: var(--behind); }
   ul { gap: 0; }
   li button { flex-wrap: wrap; gap: 0 8px; border: 0; border-radius: 4px; padding: 5px 8px; background: none; }
   li button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
-  li.current button { background: color-mix(in srgb, var(--current) 15%, transparent); }
+  li.checkout button { background: color-mix(in srgb, var(--current) 15%, transparent); box-shadow: inset 3px 0 var(--current); }
+  h1 { flex: 0 0 auto; }
+  /* The checkout's branch keeps its room before the webhook's note does. */
+  .webhook { flex: 0 4 auto; }
+  .on { flex: 0 1 auto; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mark { width: 12px; flex-shrink: 0; text-align: center; }
   .number { min-width: 36px; flex-shrink: 0; }
   .title { flex-basis: 0; min-width: 0; }

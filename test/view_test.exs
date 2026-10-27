@@ -29,6 +29,10 @@ defmodule ClawswapWeb.ViewTest do
     assert {main.class, main.status, main.mark} == {"behind", "New commits", "⎇"}
     assert {a.title, a.number, a.mark, a.mark_class, a.mark_title} == {"Add A", "#4", "●", "open", "Open PR #4, not merged yet"}
     assert {b.title, b.mark, b.mark_class, b.mark_title} == {"b", "✓", "merged", "Merged into claude-main"}
+    # The checkout's row is marked even while it shows new commits, and the header names it.
+    assert {main.row_class, a.row_class} == {"behind checkout", ""}
+    assert view.on == "claude-main"
+    assert View.page(%{@state | current: %{branch: "claude/a", sha: "3"}}).on == "Add A"
   end
 
   test "follows a switch" do

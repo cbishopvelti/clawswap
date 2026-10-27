@@ -23,6 +23,7 @@ defmodule ClawswapWeb.BranchesPage do
     <main>
       <header>
         <h1>{@view.project}</h1>
+        {%if @view.on}<span class="on" title="The branch checked out now">On <strong>{@view.on}</strong></span>{/if}
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
         <button class="pull {@view.pull_class}" $click={command: :pull}>{@view.pull_label}</button>
         <a class="settings-link" href="/settings" target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
@@ -32,7 +33,7 @@ defmodule ClawswapWeb.BranchesPage do
       {%if @view.error}<p class="message">{@view.error}</p>{/if}
       <ul>
         {%for b <- @view.branches}
-          <li class={b.class}>
+          <li class={b.row_class}>
             <button $click={command: :switch, params: %{branch: b.branch}}>
               <span class="mark {b.mark_class}" title={b.mark_title}>{b.mark}</span>
               {%if b.number}<span class="number">{b.number}</span>{/if}
