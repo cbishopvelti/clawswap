@@ -6,6 +6,7 @@ defmodule ClawswapWeb.Api do
       POST /switch  {"branch": ...}  202, then follow /state's switch
       POST /pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
       POST /refresh                  look at GitHub now
+      POST /walk    {"name": ...}    202, then follow /state's walk
 
   It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
   the browser send a JSON POST here without a preflight, which only those origins pass. The Host check
@@ -18,7 +19,7 @@ defmodule ClawswapWeb.Api do
 
   alias Clawswap.Watcher
 
-  @paths ["/state", "/switch", "/pull", "/refresh"]
+  @paths ["/state", "/switch", "/pull", "/refresh", "/walk"]
 
   @impl true
   def init(opts), do: opts
@@ -71,6 +72,16 @@ defmodule ClawswapWeb.Api do
   end
 
   defp post(conn, "/pull", _body), do: answer(conn, Watcher.pull())
+
+  defp post(conn, "/walk", body) do
+    name =
+      case JSON.decode(if(body == "", do: "{}", else: body)) do
+        {:ok, %{"name" => name}} -> to_string(name)
+        _ -> ""
+      end
+
+    answer(conn, Watcher.walk(name))
+  end
 
   defp answer(conn, {:ok, state}), do: json(conn, 202, state)
   defp answer(conn, {:error, status, message}), do: json(conn, status, %{error: message})

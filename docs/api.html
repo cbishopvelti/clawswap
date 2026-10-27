@@ -25,6 +25,7 @@
         <li><a href="page.html">Branch page</a></li>
         <li><a href="api.html" aria-current="page">API</a></li>
         <li><a href="opendeck.html">Stream Deck</a></li>
+        <li><a href="walkthroughs.html">Walkthroughs</a></li>
       </ul>
     <h4>Elsewhere</h4>
     <ul>
@@ -45,6 +46,7 @@ the React example all use this API.</p>
   <tr><td><code>POST /switch</code></td><td><code>{"branch": "..."}</code></td><td>202 and the state once the switch has started; follow <code>/state</code>'s <code>switch</code>. It looks at origin first, so a branch pushed a moment ago is found. Otherwise <code>{"error": "..."}</code>: 409 for uncommitted changes or a switch already running, 404 for a branch that isn't listed.</td></tr>
   <tr><td><code>POST /pull</code></td><td><code>{}</code></td><td>The checkout's branch: 202 with <code>switch.pull</code> true, or 202 with <code>"Already up to date"</code> in <code>switch.notes</code>. 409 when not on a branch, 404 when the branch isn't on GitHub.</td></tr>
   <tr><td><code>POST /refresh</code></td><td><code>{}</code></td><td>Looks at git and GitHub now; 200 and the state when done.</td></tr>
+  <tr><td><code>POST /walk</code></td><td><code>{"name": "…"}</code></td><td>Runs a <a href="walkthroughs.html">walkthrough</a> in a browser on this machine; 202, then follow the state's <code>walk</code>. 409 while one or a switch is running.</td></tr>
 </table>
 <p>POSTs need <code>Content-Type: application/json</code>.</p>
 <pre><code>curl -s http://127.0.0.1:8790/state
@@ -68,7 +70,9 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-lo
   "refreshedAt": "…",
   "error": null,
   "switch": { "target": "claude/fix-login", "pull": false, "phase": "running",
-              "step": "mix deps.get", "error": null, "notes": [], "at": "…" }
+              "step": "mix deps.get", "error": null, "notes": [], "at": "…" },
+  "walkthroughs": [{ "name": "fix-login", "path": "walkthroughs/fix-login.exs", "new": true }],
+  "walk": { "name": "fix-login", "phase": "running", "step": "Log in with the new form", "error": null, "at": "…" }
 }</code></pre>
 <table>
   <tr><th>Field</th><th>What it is</th></tr>
@@ -79,6 +83,8 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-lo
   <tr><td><code>prs</code></td><td>Whether the list comes from open PRs (a GitHub token was found).</td></tr>
   <tr><td><code>webhook</code></td><td><code>"off"</code> (no channel set), <code>"connecting"</code> or <code>"connected"</code>.</td></tr>
   <tr><td><code>switch</code></td><td>The last switch or pull: <code>phase</code> is <code>"running"</code>, <code>"done"</code> or <code>"failed"</code>, <code>step</code> the label of the step it's on.</td></tr>
+  <tr><td><code>walkthroughs</code></td><td>The checkout's <a href="walkthroughs.html">walkthroughs</a>; <code>new</code> when the branch added or changed it since it left the base.</td></tr>
+  <tr><td><code>walk</code></td><td>The last walkthrough run from the page or API: <code>phase</code> is <code>"running"</code>, <code>"passed"</code> or <code>"failed"</code>, <code>step</code> its caption.</td></tr>
 </table>
 
 <h2 id="security">Who can call it</h2>
