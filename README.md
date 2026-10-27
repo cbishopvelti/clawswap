@@ -98,7 +98,8 @@ nothing new it does nothing and leaves the servers running.
 
 ## Configuration
 
-`clawswap.exs` at the repo root is evaluated as Elixir and returns a keyword list. Only `servers` matters
+`clawswap.exs` is evaluated as Elixir and returns a keyword list. clawswap uses the closest one, looking from
+the folder you run it in up to the repo root, so a project in a subfolder can have its own. Only `servers` matters
 to get going; everything else has a default. A command (`command`, `run`) is a string, run with `sh -c`,
 or a list of the program and its arguments. A `cwd` is relative to the repo root.
 
