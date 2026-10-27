@@ -26,10 +26,6 @@
         <li><a href="api.html">API</a></li>
         <li><a href="opendeck.html">Stream Deck</a></li>
       </ul>
-      <h4>Project</h4>
-      <ul>
-        <li><a href="roadmap.html">Coming next</a></li>
-      </ul>
     <h4>Elsewhere</h4>
     <ul>
       <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
@@ -152,6 +148,30 @@ steps:
 <p>Each must be a function of one argument. It's evaluated when the config loads.</p>
 <div class="note"><p>A YAML config runs code just as a <code>clawswap.exs</code> does. Treat either as you would any
 script in the repo: switching to a branch runs that branch's config and steps.</p></div>
+
+<h2 id="editor">Editing the config from the page</h2>
+<p>The watcher has a config editor at <code>http://127.0.0.1:8790/settings</code>. The ⚙ at the top of the
+<a href="page.html">branch page</a> opens it in a new window, so it works from an app's iframe too. It edits the config
+clawswap is running, in that config's own format: the settings above as fields, and a row for each server, pane, step
+and note, which you can add, remove and move up.</p>
+<ul>
+  <li><strong>Save checks first.</strong> It makes sure clawswap can load the result before writing it, then restarts
+    the watcher on it.</li>
+  <li><strong>Commit the change.</strong> The file is part of your repo, and a switch refuses uncommitted changes.</li>
+  <li><strong><code>clawswap.exs</code> is changed in place.</strong> Only the settings you changed are rewritten.
+    Comments, the Elixir in it and keys the page doesn't show stay as they were. The file is printed by Elixir's
+    formatter, at the repo's <code>.formatter.exs</code> line length or the file's own widest line.</li>
+  <li><strong><code>clawswap.yml</code> is written afresh</strong>, so comments in it are lost. Regexes and Elixir go
+    back as strings.</li>
+  <li><strong>Code fields.</strong> A field holding something a plain field can't (a function, a variable, a Regex with
+    options, a command as a list) is shown in monospace as Elixir, or as the YAML's string of Elixir, and saved as
+    written.</li>
+  <li><strong>Regexes in <code>when</code>.</strong> In <code>when</code> fields, a line written <code>/like this/</code>
+    is a Regex.</li>
+</ul>
+<div class="note"><p>Saving writes a config, and a config runs as code, so the whole watcher (pages as well as the
+<a href="api.html">API</a>) answers only requests addressed to <code>localhost</code> or <code>127.0.0.1</code>. A site
+that points its own name at 127.0.0.1 gets 403.</p></div>
 
 <h2 id="env">Environment variables</h2>
 <p>These override a few keys for one run:</p>

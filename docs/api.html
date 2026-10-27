@@ -26,10 +26,6 @@
         <li><a href="api.html" aria-current="page">API</a></li>
         <li><a href="opendeck.html">Stream Deck</a></li>
       </ul>
-      <h4>Project</h4>
-      <ul>
-        <li><a href="roadmap.html">Coming next</a></li>
-      </ul>
     <h4>Elsewhere</h4>
     <ul>
       <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
@@ -88,7 +84,7 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-lo
 <h2 id="security">Who can call it</h2>
 <ul>
   <li>It answers this machine only: the <code>Host</code> header must be <code>localhost</code> or <code>127.0.0.1</code>,
-    which also stops DNS rebinding.</li>
+    which also stops DNS rebinding. The same goes for the pages, including the config editor.</li>
   <li>Browsers only from allowed origins: the watcher's own, the servers' <code>localhost</code> and
     <code>127.0.0.1</code> ports, and the config's <code>origins</code>. A page elsewhere can't make the browser send a
     JSON POST here without a CORS preflight, which only those origins pass.</li>
