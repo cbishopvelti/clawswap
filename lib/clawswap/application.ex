@@ -25,7 +25,7 @@ defmodule Clawswap.Application do
       {Clawswap.Watcher,
        project: project,
        smee_url: smee_url,
-       servers: Clawswap.Zellij.servers(project, &Clawswap.Watcher.log/1),
+       servers: Clawswap.Multiplexer.pick(project).servers(project, &Clawswap.Watcher.log/1),
        run_step: Clawswap.Watcher.step_runner(project),
        on_change: &ClawswapWeb.View.broadcast/1}
 

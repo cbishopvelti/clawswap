@@ -1,6 +1,6 @@
 defmodule Clawswap.Watcher do
   @moduledoc """
-  The watcher that runs in the zellij session's "clawswap" pane: keeps the branch list fresh (GitHub
+  The watcher that runs in the session's "clawswap" pane: keeps the branch list fresh (GitHub
   webhook through smee.io), and switches branch when a Stream Deck key or a page asks.
 
   Options: `project` (from `Clawswap.Config`), `servers` (`%{stop: fn name, note, start: fn name}`:

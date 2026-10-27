@@ -55,6 +55,7 @@ defmodule Clawswap.Config do
       servers: servers,
       panes: panes,
       layout: config[:layout],
+      multiplexer: env("CLAWSWAP_MULTIPLEXER") || config[:multiplexer],
       prepare: (config[:prepare] || []) |> Enum.with_index() |> Enum.map(fn {s, i} -> Plan.normalise_step(s, i) end),
       steps: (config[:steps] || []) |> Enum.with_index() |> Enum.map(fn {s, i} -> Plan.normalise_step(s, i) end),
       notes: for(n <- config[:notes] || [], do: %{message: Map.new(n).message, test: Plan.matcher(Map.new(n)[:when])}),

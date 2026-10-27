@@ -4,13 +4,9 @@ defmodule Clawswap.Zellij do
   the servers' panes in it.
   """
 
-  alias Clawswap.Run
+  alias Clawswap.{Ports, Run}
 
-  @tool Path.expand("../..", __DIR__)
-
-  @doc "Runs a pane's command and leaves a shell there when it stops. A single argument goes through sh -c."
-  def keep, do: Path.join(@tool, "bin/keep")
-  def cli, do: Path.join(@tool, "bin/clawswap")
+  import Clawswap.Multiplexer, only: [keep: 0, cli: 0]
 
   def version do
     with {:ok, out} <- Run.capture("zellij", ["--version"]),
@@ -23,6 +19,47 @@ defmodule Clawswap.Zellij do
 
   def version_ok?([major, minor, _]), do: major > 0 or minor >= 44
   def version_ok?(_), do: false
+
+  def check do
+    version = version()
+
+    if version_ok?(version),
+      do: :ok,
+      else:
+        {:error,
+         "clawswap needs zellij 0.44 or newer (found #{if version, do: Enum.join(version, "."), else: "none"}): https://github.com/zellij-org/zellij/releases"}
+  end
+
+  @doc "zellij's command for `up`: attach to the running session, or start it from the layout."
+  def up(project, catch_up) do
+    sessions =
+      case Run.capture("zellij", ["list-sessions", "--no-formatting"]),
+        do: (
+          {:ok, out} -> out
+          _ -> ""
+        )
+
+    line = sessions |> String.split("\n") |> Enum.find(&(hd(String.split(&1, " ")) == project.session))
+    # An exited session would come back with its panes waiting for Enter; start it fresh instead.
+    if line && line =~ "EXITED", do: Run.capture("zellij", ["delete-session", project.session])
+
+    if line != nil and not (line =~ "EXITED") do
+      ["zellij", "attach", project.session]
+    else
+      catch_up.()
+
+      layout =
+        if project.layout do
+          Path.expand(project.layout, project.root)
+        else
+          path = String.replace_suffix(project.local_file, ".json", ".kdl")
+          File.write!(path, layout(project))
+          path
+        end
+
+      ["zellij", "--session", project.session, "--new-session-with-layout", layout]
+    end
+  end
 
   defp kdl(s), do: ~s(") <> (s |> to_string() |> String.replace("\\", "\\\\") |> String.replace(~s("), ~s(\\"))) <> ~s(")
   defp indent(text, n), do: String.replace(text, ~r/^/m, String.duplicate(" ", n))
@@ -67,112 +104,6 @@ defmodule Clawswap.Zellij do
     """
   end
 
-  def port_open?(port) do
-    case :gen_tcp.connect(~c"127.0.0.1", port, [], 500) do
-      {:ok, socket} ->
-        :gen_tcp.close(socket)
-        true
-
-      _ ->
-        false
-    end
-  end
-
-  @doc "Waits (up to `ms`) for something to listen on the port."
-  def wait_for_port(port, ms \\ 30_000) do
-    Enum.reduce_while(0..div(ms, 500), nil, fn _, _ ->
-      if port_open?(port),
-        do: {:halt, :ok},
-        else:
-          (
-            Process.sleep(500)
-            {:cont, :timeout}
-          )
-    end)
-  end
-
-  @doc """
-  Whoever listens on the port. On Linux: the listening sockets' inodes from /proc/net/tcp*, then the
-  processes holding them. Elsewhere: lsof. Only your own processes can be seen, which are the only ones we
-  could stop.
-  """
-  def port_pids(port) do
-    if match?({:unix, :linux}, :os.type()), do: proc_port_pids(port), else: lsof_port_pids(port)
-  end
-
-  defp lsof_port_pids(port) do
-    case Run.capture("lsof", ["-t", "-iTCP:#{port}", "-sTCP:LISTEN"]) do
-      {:ok, out} -> out |> String.split("\n", trim: true) |> Enum.map(&String.to_integer/1)
-      _ -> []
-    end
-  end
-
-  defp proc_port_pids(port) do
-    hex = port |> Integer.to_string(16) |> String.pad_leading(4, "0")
-
-    inodes =
-      for file <- ["/proc/net/tcp", "/proc/net/tcp6"],
-          {:ok, text} <- [File.read(file)],
-          line <- text |> String.split("\n") |> Enum.drop(1),
-          cols = String.split(String.trim(line)),
-          # local_address is ADDR:PORT; state 0A is LISTEN.
-          length(cols) > 9 and String.ends_with?(Enum.at(cols, 1), ":" <> hex) and Enum.at(cols, 3) == "0A",
-          into: MapSet.new(),
-          do: Enum.at(cols, 9)
-
-    if MapSet.size(inodes) == 0 do
-      []
-    else
-      for pid <- File.ls!("/proc"),
-          String.match?(pid, ~r/^\d+$/),
-          {:ok, fds} <- [File.ls("/proc/#{pid}/fd")],
-          Enum.any?(fds, &MapSet.member?(inodes, socket_inode("/proc/#{pid}/fd/#{&1}"))),
-          do: String.to_integer(pid)
-    end
-  end
-
-  defp socket_inode(fd_path) do
-    with {:ok, link} <- :file.read_link(String.to_charlist(fd_path)),
-         [_, inode] <- Regex.run(~r/^socket:\[(\d+)\]$/, to_string(link)) do
-      inode
-    else
-      _ -> nil
-    end
-  end
-
-  # Waits up to 5 s for the port to close; true when it has.
-  defp wait_closed(port, tries \\ 20) do
-    cond do
-      not port_open?(port) -> true
-      tries == 0 -> false
-      true -> Process.sleep(250) && wait_closed(port, tries - 1)
-    end
-  end
-
-  @doc """
-  Waits for the port to close, then ends whatever still holds it (a server started outside zellij, or one
-  that ignored its pane closing): TERM, then KILL.
-  """
-  def free_port(port, log) do
-    if wait_closed(port) do
-      :ok
-    else
-      Enum.reduce_while(["TERM", "KILL"], nil, fn signal, _ ->
-        case port_pids(port) do
-          [] ->
-            {:halt, nil}
-
-          pids ->
-            log.("Port #{port} is still taken; sending #{signal} to #{Enum.join(pids, ", ")}")
-            Enum.each(pids, &System.cmd("kill", ["-#{signal}", to_string(&1)], stderr_to_stdout: true))
-            if wait_closed(port), do: {:halt, :ok}, else: {:cont, nil}
-        end
-      end)
-
-      if port_open?(port), do: raise(RuntimeError, "Port #{port} is still in use"), else: :ok
-    end
-  end
-
   @doc """
   `%{stop: fn name, note -> ... end, start: fn name -> ... end}` for the watcher: replaces a server's
   pane in place, with a note while the switch runs, then with the server again.
@@ -199,7 +130,7 @@ defmodule Clawswap.Zellij do
       stop: fn name, note ->
         server = project.servers[name]
         replace.(name, ["sh", "-c", ~s(printf '%s\\n' "$1"; exec sleep infinity), "sh", note], Path.expand(server.cwd, project.root))
-        if server.port, do: free_port(server.port, log)
+        if server.port, do: Ports.free_port(server.port, log)
         :ok
       end,
       # Through bin/keep, as in the layout, so the pane stays when the server stops.
