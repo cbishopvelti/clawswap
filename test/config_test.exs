@@ -1,7 +1,7 @@
 defmodule Clawswap.ConfigTest do
   use ExUnit.Case
 
-  alias Clawswap.{Config, TestRepo}
+  alias Clawswap.{Config, Plan, TestRepo}
 
   test "fills in the defaults" do
     p = Config.normalise([servers: [web: [command: "npm run dev", port: 3000]]], root: "/home/me/shop", base: "trunk")
@@ -59,6 +59,26 @@ defmodule Clawswap.ConfigTest do
     # Two compiled Regexes with the same source aren't ==, so compare their sources.
     assert regex_sources(yml) == regex_sources(exs)
     assert %Regex{} = yml[:servers][:phx][:match]
+  end
+
+  test "evaluates Elixir where a YAML config takes a function" do
+    path = Path.join(System.tmp_dir!(), "clawswap-#{System.unique_integer([:positive])}.yml")
+
+    File.write!(path, """
+    short_name: 'fn b -> String.replace_prefix(b, "feature/", "") end'
+    steps:
+      - {run: mix deps.get, when: ['&String.ends_with?(&1, ".lock")', mix.exs]}
+    """)
+
+    try do
+      assert {:ok, config} = Config.read(path)
+      p = Config.normalise(config, root: "/r")
+      assert p.short_name.("feature/x") == "x"
+      assert Enum.map(Plan.steps(p.steps, ["mix.lock"]), & &1.name) == ["mix"]
+      assert Plan.steps(p.steps, ["README.md"]) == []
+    after
+      File.rm!(path)
+    end
   end
 
   test "loads a clawswap.yml or .yaml the same way, and refuses two configs in one folder" do

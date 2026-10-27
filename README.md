@@ -146,7 +146,15 @@ folder), a function of the path, or a list of those.
 `clawswap.yml` has the same keys, with mappings for keyword lists. Order is kept, so servers and steps run
 as written. Where `.exs` takes a Regex (`when`, `restart_when`, a server's `match`), write the string
 between slashes, quoted so YAML leaves the backslashes alone: `'/^docker-compose\.ya?ml$/'`. Any other string
-is a path as before. Functions (`short_name`, a `when` function) need a `clawswap.exs`.
+is a path as before. Where `.exs` takes a function, write it as Elixir in a string: `short_name` is always
+Elixir, and a `when` or `restart_when` string starting with `fn ` or `&` is. It's evaluated when the config
+loads, so a YAML config runs code just as a `clawswap.exs` does.
+
+```yaml
+short_name: 'fn branch -> String.replace_prefix(branch, "feature/", "") end'
+steps:
+  - {label: mix deps.get, when: ['&String.ends_with?(&1, ".lock")', mix.exs], run: mix deps.get}
+```
 [examples/bmx.yml](examples/bmx.yml) is [examples/bmx.exs](examples/bmx.exs) in YAML.
 
 ```yaml
