@@ -53,13 +53,15 @@ defmodule ClawswapWeb.ViewTest do
     assert URI.decode(keys.pull) =~ "2 new commits"
   end
 
-  test "lays the branches out on a deck's keys, with Pull on the last" do
-    keys = %{branches: Enum.map(1..20, &%{branch: "b#{&1}", image: "i#{&1}"}), pull: "pull"}
+  test "lays the branches out on a deck's keys, with the walkthrough and Pull on the last two" do
+    keys = %{branches: Enum.map(1..20, &%{branch: "b#{&1}", image: "i#{&1}"}), walk: %{name: "login", image: "walk"}, pull: "pull"}
     images = StreamDeck.key_images(keys, 15)
     assert length(images) == 15
-    assert {hd(images), Enum.at(images, 13), List.last(images)} == {"i1", "i14", "pull"}
-    assert StreamDeck.key_images(%{keys | branches: Enum.take(keys.branches, 2)}, 15) == ["i1", "i2"] ++ List.duplicate(nil, 12) ++ ["pull"]
+    assert {hd(images), Enum.at(images, 12), Enum.at(images, 13), List.last(images)} == {"i1", "i13", "walk", "pull"}
+    assert StreamDeck.key_images(%{keys | branches: Enum.take(keys.branches, 2)}, 15) == ["i1", "i2"] ++ List.duplicate(nil, 11) ++ ["walk", "pull"]
     assert StreamDeck.key_command(keys, 15, 0) == {:switch, "b1"}
+    assert StreamDeck.key_command(keys, 15, 13) == {:walk, "login"}
+    assert StreamDeck.key_command(%{keys | walk: %{name: nil, image: "none"}}, 15, 13) == nil
     assert StreamDeck.key_command(keys, 15, 14) == :pull
     assert StreamDeck.key_command(%{keys | branches: []}, 15, 3) == nil
   end

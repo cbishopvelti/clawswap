@@ -13,7 +13,7 @@ defmodule Clawswap.DeckTest do
     ]
   }
 
-  defp key(settings, row, column, pull \\ false), do: %{settings: settings, coordinates: %{"row" => row, "column" => column}, pull: pull}
+  defp key(settings, row, column, kind \\ :branch), do: %{settings: settings, coordinates: %{"row" => row, "column" => column}, kind: kind}
 
   defp start(fetch, url \\ "http://dev") do
     me = self()
@@ -199,6 +199,28 @@ defmodule Clawswap.DeckTest do
     tap_key(deck, "p")
     assert_received {:request, :post, "http://dev/pull", %{}}
     assert_received {:sent, %{event: "showOk", context: "p"}}
+  end
+
+  test "a walkthrough key plays the checkout's walkthrough and shows how it went" do
+    walks = [%{"name" => "login", "new" => true}, %{"name" => "old", "new" => false}]
+    state = Map.put(@state, "walkthroughs", walks)
+    assert Deck.walk_look(@state).title == "No walkthrough"
+    assert %{title: "login", mark: "▶", status: "New"} = Deck.walk_look(state)
+    running = Map.put(state, "walk", %{"name" => "login", "phase" => "running", "step" => "Signing in"})
+    assert Deck.walk_look(running).status == "Signing in"
+    assert Deck.walk_look(Map.put(state, "walk", %{"name" => "login", "phase" => "failed"})).status == "Failed"
+    assert Deck.walk_look(Map.put(state, "walk", %{"name" => "login", "phase" => "passed"})).status == "Ran to the end"
+
+    me = self()
+    deck = start(fn method, url, body -> send(me, {:request, method, url, body}) && {:ok, 200, state} end)
+    # A walkthrough key takes no branch from the list either.
+    appear(deck, "w", %{}, 0, 0, "dev.clawswap.walk")
+    appear(deck, "b", %{}, 0, 1)
+    Deck.poll(deck)
+    assert image("w") =~ "login"
+    assert image("b") =~ "claude-main"
+    tap_key(deck, "w")
+    assert_received {:request, :post, "http://dev/walk", %{name: "login"}}
   end
 
   test "frames WebSocket messages both ways" do

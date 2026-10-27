@@ -1,7 +1,8 @@
 defmodule Clawswap.Deck do
   @moduledoc """
   The "clawswap branch" keys: each shows a branch from a clawswap watcher (the base branch, then the newest
-  open PRs) and switches to it when pressed; "clawswap pull" pulls whatever branch the checkout is on.
+  open PRs) and switches to it when pressed; "clawswap pull" pulls whatever branch the checkout is on;
+  "clawswap walkthrough" plays the checkout's walkthrough (the first one its branch added, else the first).
   Each key names its watcher's URL, so one deck can drive several projects. See ../../../README.md.
 
   Options: `send` (posts one event to OpenDeck), `fetch` (`fn method, url, body -> {:ok, status, map} |
@@ -10,13 +11,14 @@ defmodule Clawswap.Deck do
   sends the deck `message` after ms: the long press timer), `log`.
 
   A tap switches (or pulls) when the key is let go; holding it for half a second opens the Claude Code
-  thread that made the key's branch instead (the checkout's branch, on a pull key).
+  thread that made the key's branch instead (the checkout's branch, on a pull or walkthrough key).
   """
 
   use GenServer
 
   @branch_action "dev.clawswap.branch"
   @pull_action "dev.clawswap.pull"
+  @walk_action "dev.clawswap.walk"
   @default_url "http://127.0.0.1:8790"
   @poll_ms 1000
   @retry_ms 3000
@@ -29,6 +31,7 @@ defmodule Clawswap.Deck do
 
   def branch_action, do: @branch_action
   def pull_action, do: @pull_action
+  def walk_action, do: @walk_action
 
   @doc "Up to `lines` lines of about `width` characters, breaking at spaces, slashes and dashes."
   def wrap(text, width, lines) do
@@ -169,13 +172,38 @@ defmodule Clawswap.Deck do
   end
 
   @doc """
+  The walkthrough a walkthrough key plays: the first one the checkout's branch added or changed, else the
+  first one (the watcher lists the new ones first), or nil.
+  """
+  def walkthrough(state), do: List.first(state["walkthroughs"] || [])
+
+  @doc "What a walkthrough key shows: the walkthrough's name, and how its last run went."
+  def walk_look(state) do
+    case walkthrough(state) do
+      nil ->
+        %{title: "No walkthrough", status: ""}
+
+      w ->
+        look = %{title: w["name"], mark: "▶", mark_colour: @colours.current}
+        run = state["walk"] || %{}
+
+        cond do
+          run["name"] != w["name"] -> Map.put(look, :status, if(w["new"], do: "New", else: "Walkthrough"))
+          run["phase"] == "running" -> Map.merge(look, %{bar: @colours.switching, status: run["step"] || "Opening Chrome"})
+          run["phase"] == "failed" -> Map.merge(look, %{bar: @colours.failed, status: "Failed"})
+          true -> Map.merge(look, %{bar: @colours.current, status: "Ran to the end"})
+        end
+    end
+  end
+
+  @doc """
   Which branch each key shows: keys on "next branch" take the list in deck order (row by row), the first
   one the base branch; keys set to a branch name show that branch. `instances` are one watcher's keys.
   """
   def assign(instances, branches) do
     auto =
       instances
-      |> Enum.filter(fn {_, i} -> not i.pull and blank?(i.settings["branch"]) end)
+      |> Enum.filter(fn {_, i} -> i.kind == :branch and blank?(i.settings["branch"]) end)
       |> Enum.sort_by(fn {_, i} -> {i.coordinates["row"] || 0, i.coordinates["column"] || 0} end)
       |> Enum.with_index()
       |> Map.new(fn {{context, _}, n} -> {context, Enum.at(branches, n)} end)
@@ -183,7 +211,7 @@ defmodule Clawswap.Deck do
     Enum.reduce(instances, auto, fn {context, i}, acc ->
       name = i.settings["branch"]
 
-      if not i.pull and not blank?(name),
+      if i.kind == :branch and not blank?(name),
         do: Map.put(acc, context, Enum.find(branches, &(&1["branch"] == name)) || %{"branch" => name, "missing" => true}),
         else: acc
     end)
@@ -219,7 +247,7 @@ defmodule Clawswap.Deck do
        schedule: opts[:schedule] || fn ms -> Process.send_after(me, :poll, ms) end,
        later: opts[:later] || fn ms, message -> Process.send_after(me, message, ms) end,
        log: opts[:log] || fn _ -> :ok end,
-       # context -> %{settings, coordinates, pull, image}
+       # context -> %{settings, coordinates, kind (:branch, :pull or :walk), image}
        instances: %{},
        # url -> %{state} | %{error}
        watchers: %{},
@@ -244,7 +272,8 @@ defmodule Clawswap.Deck do
 
   defp on_message(%{"event" => "willAppear", "context" => context} = m, s) do
     payload = m["payload"] || %{}
-    instance = %{settings: payload["settings"] || %{}, coordinates: payload["coordinates"] || %{}, pull: m["action"] == @pull_action, image: nil}
+    kind = %{@pull_action => :pull, @walk_action => :walk}[m["action"]] || :branch
+    instance = %{settings: payload["settings"] || %{}, coordinates: payload["coordinates"] || %{}, kind: kind, image: nil}
     s.send.(%{event: "setTitle", context: context, payload: %{title: "", target: 0}})
     s |> put_in([:instances, context], instance) |> draw() |> schedule(0)
   end
@@ -303,7 +332,8 @@ defmodule Clawswap.Deck do
 
             look =
               cond do
-                i.pull -> pull_look(state)
+                i.kind == :pull -> pull_look(state)
+                i.kind == :walk -> walk_look(state)
                 entry && entry["missing"] -> %{title: entry["branch"], status: "Not listed"}
                 true -> key_look(state, entry)
               end
@@ -344,17 +374,25 @@ defmodule Clawswap.Deck do
     instance = s.instances[context]
     entry = s.shown[context]
 
-    if instance == nil or (not instance.pull and (entry == nil or entry["missing"])) do
+    walk = instance && instance.kind == :walk && walkthrough(get_in(s.watchers, [url_of(instance, s.url), :state]) || %{})
+
+    if instance == nil or (instance.kind == :branch and (entry == nil or entry["missing"] == true)) or (instance.kind == :walk and walk == nil) do
       s.send.(%{event: "showAlert", context: context})
       s
     else
       url = url_of(instance, s.url)
-      answer = if instance.pull, do: s.fetch.(:post, "#{url}/pull", %{}), else: s.fetch.(:post, "#{url}/switch", %{branch: entry["branch"]})
+
+      answer =
+        case instance.kind do
+          :pull -> s.fetch.(:post, "#{url}/pull", %{})
+          :walk -> s.fetch.(:post, "#{url}/walk", %{name: walk["name"]})
+          :branch -> s.fetch.(:post, "#{url}/switch", %{branch: entry["branch"]})
+        end
 
       case answer do
         {:ok, status, body} when status in 200..299 ->
           # Nothing new: a tick, since the key doesn't change.
-          if instance.pull and get_in(body, ["switch", "phase"]) == "done", do: s.send.(%{event: "showOk", context: context})
+          if instance.kind == :pull and get_in(body, ["switch", "phase"]) == "done", do: s.send.(%{event: "showOk", context: context})
 
         {:ok, _, body} ->
           s.log.("clawswap: #{body["error"]}")
@@ -372,10 +410,10 @@ defmodule Clawswap.Deck do
     instance = s.instances[context]
     entry = s.shown[context]
 
-    if instance == nil or (not instance.pull and (entry == nil or entry["missing"])) do
+    if instance == nil or (instance.kind == :branch and (entry == nil or entry["missing"])) do
       s.send.(%{event: "showAlert", context: context})
     else
-      branch = if instance.pull, do: nil, else: entry["branch"]
+      branch = if instance.kind == :branch, do: entry["branch"]
 
       case s.fetch.(:post, "#{url_of(instance, s.url)}/claude", %{branch: branch}) do
         {:ok, 200, _} ->

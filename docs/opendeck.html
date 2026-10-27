@@ -47,7 +47,7 @@ copy, since OpenDeck doesn't reliably follow a symlink there, so run it again af
     <code>bin/plugin</code>, which runs <code>plugin.exs</code> with <code>elixir</code>. A version manager that only sets
     Elixir up in your shell won't do.</li>
   <li>Quit OpenDeck fully (tray &gt; Quit) and start it again; it only starts plugins when it launches.</li>
-  <li>Drag <strong>clawswap branch</strong> (category clawswap) onto keys, and <strong>clawswap pull</strong> onto one.</li>
+  <li>Drag <strong>clawswap branch</strong> (category clawswap) onto keys, and <strong>clawswap pull</strong> and <strong>clawswap walkthrough</strong> onto one each.</li>
 </ol>
 <p>The keys need the project's watcher running (<code>clawswap up</code>).</p>
 
@@ -84,6 +84,11 @@ drives</a>.</p>
 <p>Pulls the branch the checkout is on and restarts the servers if anything came in, like
 <code>clawswap pull</code>.</p>
 
+<h2 id="walk">clawswap walkthrough</h2>
+<p>Plays the checkout's <a href="page.html#walkthroughs">walkthrough</a> in Chrome, like its ▶ on the page or
+<code>clawswap walk</code>: the first one the branch added or changed, else the first one. The key shows its name, the
+step it's on while it plays (amber), and then whether it ran to the end (green) or failed (red).</p>
+
 <h2 id="watcher">Several projects</h2>
 <p>Each key has a <strong>Watcher</strong> setting, empty for <code>http://127.0.0.1:8790</code>. Point keys at another
 project's <code>port</code> to drive several projects from one deck; keys on the same watcher share its list.</p>
@@ -99,7 +104,8 @@ Stream Deck app too. OpenDeck on Linux is what it's built for; the Elgato app ha
   <li>Open the watcher's page (<code>http://localhost:8790</code>) in Chrome or Edge. WebHID is Chromium only.</li>
   <li>Press <strong>Connect Stream Deck</strong> and pick the deck.</li>
 </ol>
-<p>The keys show the base branch and then the newest PRs, in deck order, row by row, with Pull on the last key. They
+<p>The keys show the base branch and then the newest PRs, in deck order, row by row, with the walkthrough and Pull on
+the last two keys. They
 look like the OpenDeck keys, with the same coloured bars and marks; tapping one switches, and holding one opens its
 <a href="#claude">Claude Code thread</a>. Chrome remembers the deck, so the
 page opens it again when it loads and when the deck is plugged back in.</p>
