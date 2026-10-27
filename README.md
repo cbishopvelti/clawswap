@@ -175,13 +175,13 @@ steps:
 ```
 
 Environment variables override a few keys for one run: `CLAWSWAP_PORT`, `CLAWSWAP_BASE`,
-`CLAWSWAP_SESSION`, `CLAWSWAP_SMEE` (the channel) and `CLAWSWAP_CONFIG` (another config file, read as YAML when it ends in `.yml` or `.yaml`).
+`CLAWSWAP_SESSION`, `CLAWSWAP_MULTIPLEXER`, `CLAWSWAP_SMEE` (the channel) and `CLAWSWAP_CONFIG` (another config file, read as YAML when it ends in `.yml` or `.yaml`).
 
 
 ### zellij or tmux
 
-clawswap runs the session in either. Set `multiplexer: :tmux` (or `:zellij`) in `clawswap.exs` to choose,
-or `CLAWSWAP_MULTIPLEXER=tmux` for one run. Without either it picks the one you run it inside (so
+clawswap runs the session in either. Set `multiplexer: :tmux` (or `:zellij`) in `clawswap.exs`, or
+`multiplexer: tmux` in `clawswap.yml`, to choose, or `CLAWSWAP_MULTIPLEXER=tmux` for one run. Without either it picks the one you run it inside (so
 `clawswap up` from a tmux window opens the session in tmux and switches to it), zellij for a config with
 its own `layout`, then zellij if it's installed, then tmux.
 

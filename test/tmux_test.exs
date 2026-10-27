@@ -40,4 +40,16 @@ defmodule Clawswap.TmuxTest do
     assert Multiplexer.pick(p, %{}, fn _ -> true end) == Zellij
     assert_raise ArgumentError, fn -> Multiplexer.pick(%{p | multiplexer: :screen}, %{}, none) end
   end
+
+  test "takes the multiplexer from a YAML config" do
+    %{dir: dir, work: work} = TestRepo.setup()
+
+    try do
+      File.write!("#{work}/clawswap.yml", "multiplexer: tmux\n")
+      assert {:ok, p} = Config.load(work)
+      assert Multiplexer.pick(p, %{"ZELLIJ" => "0"}, fn _ -> true end) == Tmux
+    after
+      File.rm_rf!(dir)
+    end
+  end
 end
