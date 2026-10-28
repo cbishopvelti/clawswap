@@ -34,13 +34,22 @@ defmodule Clawswap.GitTest do
   test "reads open PRs, and keeps the last list on a 304" do
     body =
       JSON.encode!([
-        %{number: 7, title: "Seven", updated_at: "2026-10-26T00:00:00Z", draft: false, head: %{ref: "claude/seven", repo: %{full_name: "me/app"}}},
+        %{
+          number: 7,
+          title: "Seven",
+          updated_at: "2026-10-26T00:00:00Z",
+          draft: false,
+          body: "_Requested by **C** · [project thread](https://claude.ai/code/project/chan_1?thread=cmsg_2)_\n\nhttps://claude.ai/code/session_3",
+          head: %{ref: "claude/seven", repo: %{full_name: "me/app"}}
+        },
         %{number: 8, title: "From a fork", updated_at: "2026-10-26T00:00:00Z", head: %{ref: "x", repo: %{full_name: "them/app"}}}
       ])
 
     {:ok, pulls, cache} = GitHub.read_pulls("me/app", "t", nil, fn _url, _headers -> {:ok, 200, [{"ETag", "\"abc\""}], body} end)
     assert Map.keys(pulls) == ["claude/seven"]
     assert pulls["claude/seven"].title == "Seven"
+    # The thread its description links to.
+    assert pulls["claude/seven"].claude == "https://claude.ai/code/project/chan_1?thread=cmsg_2"
 
     get = fn _url, headers ->
       assert {"if-none-match", "\"abc\""} in headers
@@ -49,5 +58,12 @@ defmodule Clawswap.GitTest do
 
     assert {:ok, ^pulls, ^cache} = GitHub.read_pulls("me/app", "t", cache, get)
     assert {:error, "GitHub answered 401", nil} = GitHub.read_pulls("me/app", "t", nil, fn _, _ -> {:ok, 401, [], ""} end)
+  end
+
+  test "finds the Claude Code link in a PR's description" do
+    assert GitHub.claude_link("Done.\n\nhttps://claude.ai/code/session_01AbC") == "https://claude.ai/code/session_01AbC"
+    assert GitHub.claude_link("[thread](https://claude.ai/code/project/chan_1?thread=cmsg_2) https://claude.ai/code/session_3") =~ "thread=cmsg_2"
+    assert GitHub.claude_link("No link") == nil
+    assert GitHub.claude_link(nil) == nil
   end
 end

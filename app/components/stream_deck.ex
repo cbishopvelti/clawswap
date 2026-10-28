@@ -2,7 +2,8 @@ defmodule ClawswapWeb.StreamDeck do
   @moduledoc """
   Drives a Stream Deck from the page itself, over WebHID, instead of through OpenDeck: "Connect Stream
   Deck" asks the browser for the deck, and from then on its keys show the page's branches (the base
-  branch first, then the newest PRs) with Pull on the last key, and pressing one switches. Chrome remembers
+  branch first, then the newest PRs) with Pull on the last key. Tapping one switches; holding one for half a
+  second opens the Claude Code thread that made its branch (the checkout's, on Pull). Chrome remembers
   the deck, so the page opens it again by itself next time, and when it's plugged back in.
 
   It's all browser APIs (navigator.hid, OffscreenCanvas) called through Hologram's JS interop, so this
@@ -32,11 +33,13 @@ defmodule ClawswapWeb.StreamDeck do
   # An image goes to the deck in output reports 2 of this many bytes (after the report id), each a
   # 7 byte header and then a page of the JPEG.
   @report_bytes 1023
+  # Holding a key this long opens its branch's Claude Code thread instead of switching.
+  @hold_ms 500
   @header_bytes 7
 
   def init(props, component, _server) do
     component
-    |> put_state(keys: props.keys, model: nil, count: 0, size: 0, sent: %{}, pressed: [], message: nil)
+    |> put_state(keys: props.keys, model: nil, count: 0, size: 0, sent: %{}, pressed: [], holds: %{}, presses: 0, message: nil)
     |> put_action(:reconnect)
   end
 
@@ -94,17 +97,48 @@ defmodule ClawswapWeb.StreamDeck do
     if component.state.model, do: draw(component), else: component
   end
 
-  # An input report: which keys are down now, 1 or 0 each.
+  # An input report: which keys are down now, 1 or 0 each. A key does its thing when it's let go, unless
+  # it was held long enough to open its branch's Claude Code thread instead (:held, below).
   def action(:keys, params, component) do
     before = component.state.pressed
+    changed = fn now -> params.keys |> Enum.with_index() |> Enum.find_value(fn {down, key} -> down == now and Enum.at(before, key, 0) != now and key end) end
     component = put_state(component, :pressed, params.keys)
 
-    params.keys
-    |> Enum.with_index()
-    |> Enum.find_value(fn {down, key} -> down == 1 and Enum.at(before, key) != 1 and key end)
-    |> case do
-      nil -> component
-      key -> press(component, key)
+    # A report says one change at a time (and a component chains one action or command), so one each.
+    case {changed.(1), changed.(0)} do
+      {nil, nil} ->
+        component
+
+      {down, nil} ->
+        press = component.state.presses + 1
+
+        component
+        |> put_state(presses: press, holds: Map.put(component.state.holds, down, {press, params.at}))
+        |> put_action(name: :held, params: %{key: down, press: press}, delay: @hold_ms)
+
+      {_, up} ->
+        {hold, holds} = Map.pop(component.state.holds, up)
+        component = put_state(component, :holds, holds)
+
+        case hold do
+          # :held may run late, behind a redraw that's still sending images, so the reports' times decide
+          # too (taken as they came in, as this action may be late as well).
+          {_press, at} -> if params.at - at >= @hold_ms, do: open_claude(component, up), else: press(component, up)
+          _ -> component
+        end
+    end
+  end
+
+  # A key still down since this press: open its branch's Claude Code thread.
+  def action(:held, params, component) do
+    case component.state.holds[params.key] do
+      {press, _at} when press == params.press ->
+        component
+        |> put_state(:holds, Map.put(component.state.holds, params.key, :held))
+        |> open_claude(params.key)
+
+      _ ->
+        component
     end
   end
 
@@ -117,6 +151,7 @@ defmodule ClawswapWeb.StreamDeck do
 
   def command(:switch, params, server), do: answer(server, Watcher.switch_to(params.branch))
   def command(:pull, _params, server), do: answer(server, Watcher.pull())
+  def command(:claude, params, server), do: answer(server, Watcher.open_claude(params.branch))
 
   defp answer(server, {:ok, _state}), do: put_action(server, name: :show_message, target: "page", params: %{message: nil})
   defp answer(server, {:error, _status, message}), do: put_action(server, name: :show_message, target: "page", params: %{message: message})
@@ -133,6 +168,14 @@ defmodule ClawswapWeb.StreamDeck do
       key == count - 1 -> :pull
       entry = Enum.at(keys.branches, key) -> {:switch, entry.branch}
       true -> nil
+    end
+  end
+
+  defp open_claude(component, key) do
+    case key_command(component.state.keys, component.state.count, key) do
+      :pull -> put_command(component, :claude, branch: nil)
+      {:switch, branch} -> put_command(component, :claude, branch: branch)
+      nil -> component
     end
   end
 
@@ -182,14 +225,14 @@ defmodule ClawswapWeb.StreamDeck do
         fn event ->
           if JS.get(event, :reportId) == 1 do
             data = JS.get(event, :data)
-            dispatch("keys", %{keys: Enum.map(0..(count - 1), &JS.call(data, :getUint8, [3 + &1]))})
+            dispatch("keys", %{keys: Enum.map(0..(count - 1), &JS.call(data, :getUint8, [3 + &1])), at: JS.call(:Date, :now, [])})
           end
         end
       ])
     end
 
     component
-    |> put_state(model: name, count: count, size: size, sent: %{}, pressed: [], message: nil)
+    |> put_state(model: name, count: count, size: size, sent: %{}, pressed: [], holds: %{}, message: nil)
     |> draw()
   end
 

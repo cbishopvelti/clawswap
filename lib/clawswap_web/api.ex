@@ -6,6 +6,8 @@ defmodule ClawswapWeb.Api do
       POST /switch  {"branch": ...}  202, then follow /state's switch
       POST /pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
       POST /refresh                  look at GitHub now
+      POST /claude  {"branch": ...}  open the Claude Code thread that made the branch (the checkout's
+                                     without one) in the browser; 200 {"url": ...} or 404
       POST /walk    {"name": ...}    202, then follow /state's walk
 
   It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
@@ -19,7 +21,7 @@ defmodule ClawswapWeb.Api do
 
   alias Clawswap.Watcher
 
-  @paths ["/state", "/switch", "/pull", "/refresh", "/walk"]
+  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk"]
 
   @impl true
   def init(opts), do: opts
@@ -61,17 +63,16 @@ defmodule ClawswapWeb.Api do
 
   defp post(conn, "/refresh", _body), do: json(conn, 200, Watcher.refresh())
 
-  defp post(conn, "/switch", body) do
-    branch =
-      case JSON.decode(if(body == "", do: "{}", else: body)) do
-        {:ok, %{"branch" => branch}} -> to_string(branch)
-        _ -> ""
-      end
-
-    answer(conn, Watcher.switch_to(branch))
-  end
+  defp post(conn, "/switch", body), do: answer(conn, Watcher.switch_to(branch_of(body)))
 
   defp post(conn, "/pull", _body), do: answer(conn, Watcher.pull())
+
+  defp post(conn, "/claude", body) do
+    case Watcher.open_claude(branch_of(body)) do
+      {:ok, url} -> json(conn, 200, %{url: url})
+      {:error, status, message} -> json(conn, status, %{error: message})
+    end
+  end
 
   defp post(conn, "/walk", body) do
     name =
@@ -81,6 +82,13 @@ defmodule ClawswapWeb.Api do
       end
 
     answer(conn, Watcher.walk(name))
+  end
+
+  defp branch_of(body) do
+    case JSON.decode(if(body == "", do: "{}", else: body)) do
+      {:ok, %{"branch" => branch}} when branch != nil -> to_string(branch)
+      _ -> ""
+    end
   end
 
   defp answer(conn, {:ok, state}), do: json(conn, 202, state)

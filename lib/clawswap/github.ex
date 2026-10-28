@@ -23,7 +23,8 @@ defmodule Clawswap.GitHub do
   @doc """
   A reader for `repo`'s open pull requests: call it with the previous reader state (nil the first time)
   and get `{:ok, pulls, state}` or `{:error, message, state}`. `pulls` is
-  `%{branch => %{number, title, updated_at, draft}}`. `get` does the request (for tests).
+  `%{branch => %{number, title, updated_at, draft, claude}}` (`claude`: `claude_link/1` of its description).
+  `get` does the request (for tests).
   """
   def read_pulls(repo, token, cache, get \\ &get/2) do
     url = "https://api.github.com/repos/#{repo}/pulls?state=open&per_page=100&sort=updated&direction=desc"
@@ -46,7 +47,7 @@ defmodule Clawswap.GitHub do
           |> JSON.decode!()
           |> Enum.filter(&(get_in(&1, ["head", "repo", "full_name"]) == repo))
           |> Map.new(fn p ->
-            {p["head"]["ref"], %{number: p["number"], title: p["title"], updated_at: p["updated_at"], draft: !!p["draft"]}}
+            {p["head"]["ref"], %{number: p["number"], title: p["title"], updated_at: p["updated_at"], draft: !!p["draft"], claude: claude_link(p["body"])}}
           end)
 
         etag = Enum.find_value(response_headers, fn {k, v} -> if String.downcase(k) == "etag", do: v end)
@@ -59,6 +60,21 @@ defmodule Clawswap.GitHub do
         {:error, reason, cache}
     end
   end
+
+  @doc """
+  The Claude Code link in a PR's description, or nil: the project thread that asked for it (a Claude
+  project's PR starts with one), else the session that wrote it.
+  """
+  def claude_link(body) when is_binary(body) do
+    Enum.find_value([~r{https://claude\.ai/code/project/[^\s)\]"'<>]+}, ~r{https://claude\.ai/code/session_\w+}], fn regex ->
+      case Regex.run(regex, body) do
+        [link] -> link
+        _ -> nil
+      end
+    end)
+  end
+
+  def claude_link(_), do: nil
 
   @doc "A GET with :httpc: `{:ok, status, headers, body}` or `{:error, message}`."
   def get(url, headers) do

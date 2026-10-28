@@ -51,6 +51,19 @@ defmodule Clawswap.Git do
     |> Enum.reject(&(&1.branch == "HEAD"))
   end
 
+  @doc """
+  The Claude Code session that wrote `branch` on origin, from the `Claude-Session:` trailer of its newest
+  commit (not in `base`) that has one, or nil.
+  """
+  def claude_session(root, branch, base) do
+    range = if branch == base, do: ["origin/#{branch}"], else: ["origin/#{base}..origin/#{branch}"]
+
+    case git(root, ["log", "-50", "--format=%(trailers:key=Claude-Session,valueonly)"] ++ range ++ ["--"]) do
+      {:ok, out} -> out |> String.split("\n", trim: true) |> Enum.map(&String.trim/1) |> Enum.find(&String.starts_with?(&1, "https://claude.ai/"))
+      {:error, _} -> nil
+    end
+  end
+
   @doc "origin's branches whose commits are all in origin's base branch."
   def merged_branches(root, base) do
     case git(root, ["branch", "-r", "--merged", "origin/#{base}", "--format=%(refname:strip=3)"]) do

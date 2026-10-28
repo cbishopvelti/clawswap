@@ -7,6 +7,7 @@ defmodule Clawswap.Watcher do
   `Clawswap.Zellij.servers/2` in the session, stand-ins in tests), `run_step` (runs one planned step),
   `smee_url`, `on_change` (called with the public state after every change; the web layer broadcasts it),
   `exit` (restarts the watcher after a switch changed its config), `refresh_git` (false skips git fetch),
+  `open_url` (opens a link in the browser; `open_url/1` by default).
   `run_walk` (runs a walkthrough: `Clawswap.Walkthrough.run/3`, or a stand-in in tests).
   """
 
@@ -44,6 +45,22 @@ defmodule Clawswap.Watcher do
   def save_config(server \\ __MODULE__, save), do: GenServer.call(server, {:save_config, save}, 30_000)
 
   @doc """
+  Opens the Claude Code thread that made `branch` (the checkout's branch when nil) in the browser: the
+  project thread its PR names, else the session in its commits. `{:ok, url}` or `{:error, status, message}`.
+  """
+  def open_claude(server \\ __MODULE__, branch), do: GenServer.call(server, {:open_claude, branch}, 30_000)
+
+  @doc "Opens `url` in the default browser, on the machine the watcher runs on."
+  def open_url(url) do
+    opener = if match?({:unix, :darwin}, :os.type()), do: "open", else: "xdg-open"
+
+    case System.find_executable(opener) do
+      nil -> {:error, "#{opener} isn't installed"}
+      path -> Task.start(fn -> System.cmd(path, [url], stderr_to_stdout: true) end) && :ok
+    end
+  end
+
+  @doc """
   Runs the walkthrough called `name` in a browser on this machine: `{:ok, state}` once it has started
   (follow the state's walk), or `{:error, http_status, message}`.
   """
@@ -63,6 +80,7 @@ defmodule Clawswap.Watcher do
       on_change: opts[:on_change] || fn _ -> :ok end,
       exit: opts[:exit] || fn code -> System.halt(code) end,
       refresh_git: Keyword.get(opts, :refresh_git, true),
+      open_url: opts[:open_url] || (&open_url/1),
       run_walk: opts[:run_walk] || (&Walkthrough.run/3),
       pr_cache: nil,
       refreshing: nil,
@@ -106,6 +124,24 @@ defmodule Clawswap.Watcher do
 
   @impl true
   def handle_call(:state, _from, state), do: {:reply, state.view, state}
+
+  def handle_call({:open_claude, branch}, _from, state) do
+    branch = if branch in [nil, ""], do: state.view.current && state.view.current.branch, else: branch
+    entry = Enum.find(state.view.branches, &(&1.branch == branch))
+    url = get_in(entry || %{}, [:pr, :claude]) || (branch && Git.claude_session(state.project.root, branch, state.project.base))
+
+    reply =
+      with url when url != nil <- url,
+           :ok <- state.open_url.(url) do
+        log("Opening #{url} (#{branch})")
+        {:ok, url}
+      else
+        nil -> {:error, 404, "No Claude Code thread found for #{branch || "this checkout"}"}
+        {:error, message} -> {:error, 500, message}
+      end
+
+    {:reply, reply, state}
+  end
 
   def handle_call({:save_config, _}, _from, %{view: %{switch: %{phase: "running"}}} = state) do
     {:reply, {:error, "A switch is running: save once it's done"}, state}
@@ -297,7 +333,7 @@ defmodule Clawswap.Watcher do
         short_name: project.short_name
       )
       |> Enum.map(fn
-        %{pr: pr} = b -> %{b | pr: %{number: pr.number, title: pr.title, updatedAt: pr.updated_at, draft: pr.draft}}
+        %{pr: pr} = b -> %{b | pr: %{number: pr.number, title: pr.title, updatedAt: pr.updated_at, draft: pr.draft, claude: pr[:claude]}}
         b -> b
       end)
 
