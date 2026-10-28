@@ -12,6 +12,10 @@ prefix = if in_clawswap, do: "examples/react-embed/", else: ""
     # The port makes the watcher let http://localhost:5173 call its API (BranchBadge does).
     web: [command: "npm run dev", cwd: here, port: 5173, match: ~r/npm run dev|vite/]
   ],
+  panes: [
+    # No command: an empty shell in the example's folder.
+    shell: [cwd: here]
+  ],
   prepare: [
     [label: "npm install", run: "test -d node_modules || npm install", cwd: here]
   ],

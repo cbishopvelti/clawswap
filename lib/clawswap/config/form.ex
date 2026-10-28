@@ -38,7 +38,7 @@ defmodule Clawswap.Config.Form do
        {:port, "Port", :integer, "freed before checkout"},
        {:match, "Match", :regex, "/regex/ to find a renamed pane"}
      ]},
-    {:panes, "Other panes", "Left running across switches.", :named, [{:command, "Command", :command, ""}, {:cwd, "Folder", :string, "."}]},
+    {:panes, "Other panes", "Left running across switches.", :named, [{:command, "Command", :command, "empty for a shell"}, {:cwd, "Folder", :string, "."}]},
     {:prepare, "Prepare", "What up runs before it starts a new session.", :list,
      [
        {:label, "Label", :string, ""},

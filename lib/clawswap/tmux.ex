@@ -43,8 +43,10 @@ defmodule Clawswap.Tmux do
   otherwise act on the pane they were run from.
   """
   def commands(project) do
-    pane = fn name, %{command: command, cwd: cwd} ->
-      {name, ["-c", Path.expand(cwd, project.root), "--", keep() | List.wrap(command)]}
+    pane = fn
+      # A pane with no command opens tmux's default shell there.
+      name, %{command: nil, cwd: cwd} -> {name, ["-c", Path.expand(cwd, project.root)]}
+      name, %{command: command, cwd: cwd} -> {name, ["-c", Path.expand(cwd, project.root), "--", keep() | List.wrap(command)]}
     end
 
     servers = Enum.map(project.server_names, &pane.(&1, project.servers[&1]))

@@ -6,10 +6,15 @@ defmodule Clawswap.TmuxTest do
   test "builds the servers on the left, the watcher and the other panes on the right" do
     cmds = Tmux.commands(Config.normalise(TestRepo.bmx_config(), root: "/work/bmx"))
     names = for ["set-option", "-p", "-t", "=bmx:", "@clawswap", n] <- cmds, do: n
-    assert names == ["phx", "clawswap", "docker", "vite"]
+    assert names == ["phx", "clawswap", "docker", "shell", "vite"]
     assert ["new-session", "-s", "bmx", "-n", "bmx", "-c", "/work/bmx/backend", "--", _keep, "iex -S mix phx.server"] = hd(cmds)
     assert Enum.any?(cmds, &match?(["split-window", "-h", "-t", "=bmx:", "-l", "40%" | _], &1))
     assert List.last(cmds) == ["select-pane", "-t", "=bmx:.{top-left}"]
+  end
+
+  test "a pane with no command is a plain shell" do
+    assert ["split-window", "-v", "-t", "=r:", "-l", "50%", "-c", "/r"] in Tmux.commands(Config.normalise([panes: [shell: nil]], root: "/r"))
+    assert Config.normalise([panes: [shell: [command: ""]]], root: "/r").panes["shell"].command == nil
   end
 
   test "splits a column evenly" do

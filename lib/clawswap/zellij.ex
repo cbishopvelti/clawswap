@@ -69,9 +69,14 @@ defmodule Clawswap.Zellij do
   other panes on the right. The watcher finds the servers' panes by these names.
   """
   def layout(project) do
-    pane = fn name, %{command: command, cwd: cwd}, focus ->
-      ~s(pane name=#{kdl(name)} command=#{kdl(keep())} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"} {\n) <>
-        ~s(    args #{command |> List.wrap() |> Enum.map_join(" ", &kdl/1)}\n})
+    pane = fn
+      # A pane with no command opens zellij's default shell there.
+      name, %{command: nil, cwd: cwd}, focus ->
+        ~s(pane name=#{kdl(name)} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"})
+
+      name, %{command: command, cwd: cwd}, focus ->
+        ~s(pane name=#{kdl(name)} command=#{kdl(keep())} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"} {\n) <>
+          ~s(    args #{command |> List.wrap() |> Enum.map_join(" ", &kdl/1)}\n})
     end
 
     servers = project.server_names |> Enum.with_index() |> Enum.map(fn {n, i} -> pane.(n, project.servers[n], i == 0) end)
