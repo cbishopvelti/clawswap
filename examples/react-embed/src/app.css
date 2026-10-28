@@ -8,6 +8,9 @@
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
 button, select { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line);
   border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+/* A select's open list takes the options' colours: without these, dark mode's light text lands on the
+   browser's white list. */
+option { background: var(--card); color: var(--fg); }
 button:disabled, select:disabled { opacity: 0.6; cursor: default; }
 code { font-size: 0.9em; }
 .muted { color: var(--muted); }

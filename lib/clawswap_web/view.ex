@@ -23,6 +23,8 @@ defmodule ClawswapWeb.View do
     %{
       project: state.project,
       current: current || "",
+      # The checkout's branch as its row names it, for the header.
+      on: on(state, current),
       dirty: state.dirty,
       webhook: webhook(state),
       webhook_class: if(state.webhook == "connected", do: "ok", else: "off"),
@@ -54,6 +56,16 @@ defmodule ClawswapWeb.View do
       branches: Enum.map(json["branches"] || [], &%{branch: &1["branch"], image: Clawswap.Deck.branch_image(Clawswap.Deck.key_look(json, &1))}),
       pull: Clawswap.Deck.branch_image(Clawswap.Deck.pull_look(json))
     }
+  end
+
+  defp on(_state, nil), do: nil
+
+  defp on(state, current) do
+    case Enum.find(state.branches, &(&1.branch == current)) do
+      %{pr: %{title: title}} -> title
+      %{short: short} -> short
+      _ -> current
+    end
   end
 
   # A walkthrough's button: new ones (the branch added or changed them) are marked, and the one running or
@@ -106,6 +118,8 @@ defmodule ClawswapWeb.View do
       mark_class: mark_class,
       mark_title: mark_title,
       class: class,
+      # The checkout's row is marked as such whatever else it shows (a switch, new commits).
+      row_class: if(b.branch == current, do: String.trim("#{class} checkout"), else: class),
       status: status
     }
   end

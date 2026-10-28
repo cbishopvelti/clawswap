@@ -57,12 +57,27 @@ defmodule Clawswap.DeckTest do
   test "a key says what its branch is doing" do
     [main, undo, switcher] = @state["branches"]
     assert Deck.key_look(@state, main).status == "Current"
-    assert Deck.key_look(@state, undo) == %{title: "Undo for sliders", number: 41}
+    assert Deck.key_look(@state, undo) == %{title: "Undo for sliders", number: 41, mark: "●", mark_colour: "#3fb950", background: "#1d2e25"}
     assert Deck.key_look(@state, switcher).title == "streamdeck-branch-switcher"
     assert Deck.key_look(@state, %{"branch" => "feature/x", "sha" => "9"}).title == "feature/x"
     switching = Map.put(@state, "switch", %{"target" => "claude/undo-sliders-abc123", "phase" => "running", "step" => "npm install"})
     assert Deck.key_look(switching, undo).status == "npm install"
     assert Deck.key_look(Map.put(@state, "current", %{"branch" => "claude-main", "sha" => "0"}), main).status == "New commits"
+  end
+
+  test "a key marks its merge status, as the page does" do
+    state = Map.put(@state, "base", "claude-main")
+    [main, undo, switcher] = state["branches"]
+    assert Deck.key_look(state, main).mark == "⎇"
+    assert Deck.key_look(state, undo).mark == "●"
+    assert Deck.key_look(state, put_in(undo, ["pr", "draft"], true)).mark == "◌"
+    assert Deck.key_look(state, switcher).mark == "○"
+    assert %{mark: "✓", mark_colour: "#a371f7"} = Deck.key_look(state, Map.put(switcher, "merged", true))
+    assert state |> Deck.key_look(undo) |> Deck.branch_image() |> URI.decode() =~ ~s(fill="#3fb950">●</text>)
+    # The checkout's branch is outlined.
+    assert Deck.key_look(state, main).current
+    refute Deck.key_look(state, undo)[:current]
+    assert state |> Deck.key_look(main) |> Deck.branch_image() |> URI.decode() =~ ~s(stroke="#3fb950")
   end
 
   test "wraps titles into a few short lines" do
