@@ -2,7 +2,7 @@ defmodule ClawswapWeb.StreamDeck do
   @moduledoc """
   Drives a Stream Deck from the page itself, over WebHID, instead of through OpenDeck: "Connect Stream
   Deck" asks the browser for the deck, and from then on its keys show the page's branches (the base
-  branch first, then the newest PRs) with Pull on the last key. Tapping one switches; holding one for half a
+  branch first, then the newest PRs) with the checkout's walkthrough and Pull on the last two keys. Tapping one switches; holding one for half a
   second opens the Claude Code thread that made its branch (the checkout's, on Pull). Chrome remembers
   the deck, so the page opens it again by itself next time, and when it's plugged back in.
 
@@ -151,21 +151,26 @@ defmodule ClawswapWeb.StreamDeck do
 
   def command(:switch, params, server), do: answer(server, Watcher.switch_to(params.branch))
   def command(:pull, _params, server), do: answer(server, Watcher.pull())
+  def command(:walk, params, server), do: answer(server, Watcher.walk(params.name))
   def command(:claude, params, server), do: answer(server, Watcher.open_claude(params.branch))
 
   defp answer(server, {:ok, _state}), do: put_action(server, name: :show_message, target: "page", params: %{message: nil})
   defp answer(server, {:error, _status, message}), do: put_action(server, name: :show_message, target: "page", params: %{message: message})
 
-  @doc "What each of a deck's `count` keys shows, in key order: the branches that fit, blanks, then Pull."
+  @doc """
+  What each of a deck's `count` keys shows, in key order: the branches that fit, blanks, then the
+  walkthrough key and Pull.
+  """
   def key_images(keys, count) do
-    branches = keys.branches |> Enum.take(count - 1) |> Enum.map(& &1.image)
-    branches ++ List.duplicate(nil, count - 1 - length(branches)) ++ [keys.pull]
+    branches = keys.branches |> Enum.take(count - 2) |> Enum.map(& &1.image)
+    branches ++ List.duplicate(nil, count - 2 - length(branches)) ++ [keys.walk.image, keys.pull]
   end
 
-  @doc "What pressing `key` does: `{:switch, branch}`, `:pull`, or nothing for a blank key."
+  @doc "What pressing `key` does: `{:switch, branch}`, `{:walk, name}`, `:pull`, or nothing for a blank key."
   def key_command(keys, count, key) do
     cond do
       key == count - 1 -> :pull
+      key == count - 2 -> keys.walk.name && {:walk, keys.walk.name}
       entry = Enum.at(keys.branches, key) -> {:switch, entry.branch}
       true -> nil
     end
@@ -173,15 +178,18 @@ defmodule ClawswapWeb.StreamDeck do
 
   defp open_claude(component, key) do
     case key_command(component.state.keys, component.state.count, key) do
-      :pull -> put_command(component, :claude, branch: nil)
       {:switch, branch} -> put_command(component, :claude, branch: branch)
-      nil -> component
+      # A blank branch key.
+      nil when key < component.state.count - 2 -> component
+      # Pull and the walkthrough: the checkout's branch.
+      _ -> put_command(component, :claude, branch: nil)
     end
   end
 
   defp press(component, key) do
     case key_command(component.state.keys, component.state.count, key) do
       :pull -> put_command(component, :pull)
+      {:walk, name} -> put_command(component, :walk, name: name)
       {:switch, branch} -> put_command(component, :switch, branch: branch)
       nil -> component
     end

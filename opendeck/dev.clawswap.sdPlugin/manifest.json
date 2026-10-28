@@ -52,6 +52,22 @@
       ],
       "SupportedInMultiActions": false,
       "PropertyInspectorPath": "pi/pull.html"
+    },
+    {
+      "UUID": "dev.clawswap.walk",
+      "Name": "clawswap walkthrough",
+      "Tooltip": "Plays the checkout's walkthrough in Chrome (needs clawswap up)",
+      "Icon": "icons/walk",
+      "States": [
+        {
+          "Image": "icons/walk"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "pi/walk.html"
     }
   ],
   "CodePathLin": "bin/plugin",
