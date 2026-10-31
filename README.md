@@ -206,6 +206,22 @@ watcher on it. The file is part of your repo, so commit the change: a switch ref
   as a list) is shown in monospace as Elixir, or as the YAML's string of Elixir, and saved as written.
 - In `when` fields, a line written `/like this/` is a Regex.
 
+### Ports
+
+clawswap opens one port: the watcher's, `27390` by default (`port`, or `CLAWSWAP_PORT`). Phoenix serves the
+page (Hologram), the JSON API and the settings editor all from it, on `127.0.0.1` only. GitHub's events don't
+need one: the watcher connects out to smee.io and reads them as a stream. The default is out of the way of
+the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.
+
+A `port` under `servers` is your app's, not clawswap's: your app picks it, and clawswap only frees it before
+a switch and lets that origin call the API. Two others come up only in particular cases:
+
+| Port | What | When |
+| --- | --- | --- |
+| `27390` | The watcher: page, API, settings | Always |
+| `27391` | [examples/react-embed](examples/react-embed)'s Vite server | Running that example, and `mix test.integration` |
+| `27392` | Chrome's debugging port (`CLAWSWAP_BROWSER_PORT`) | While `clawswap browser` has a dev Chrome open for [walkthroughs](#walkthroughs) |
+
 ### zellij or tmux
 
 clawswap runs the session in either. Set `multiplexer: :tmux` (or `:zellij`) in `clawswap.exs`, or

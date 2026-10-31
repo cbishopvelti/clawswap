@@ -176,6 +176,20 @@ and note, which you can add, remove and move up.</p>
 <a href="api.html">API</a>) answers only requests addressed to <code>localhost</code> or <code>127.0.0.1</code>. A site
 that points its own name at 127.0.0.1 gets 403.</p></div>
 
+<h2 id="ports">Ports</h2>
+<p>clawswap opens one port: the watcher's, <code>27390</code> by default (<code>port</code>, or <code>CLAWSWAP_PORT</code>).
+Phoenix serves the page (Hologram), the JSON API and the settings editor all from it, on <code>127.0.0.1</code> only.
+GitHub's events don't need one: the watcher connects out to smee.io and reads them as a stream. The default is out
+of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</p>
+<p>A <code>port</code> under <code>servers</code> is your app's, not clawswap's: your app picks it, and clawswap only
+frees it before a switch and lets that origin call the API. Two others come up only in particular cases:</p>
+<table>
+  <tr><th>Port</th><th>What</th><th>When</th></tr>
+  <tr><td><code>27390</code></td><td>The watcher: page, API, settings</td><td>Always</td></tr>
+  <tr><td><code>27391</code></td><td>The <a href="page.html">react-embed example</a>'s Vite server</td><td>Running that example, and <code>mix test.integration</code></td></tr>
+  <tr><td><code>27392</code></td><td>Chrome's debugging port (<code>CLAWSWAP_BROWSER_PORT</code>)</td><td>While <code>clawswap browser</code> has a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> open</td></tr>
+</table>
+
 <h2 id="env">Environment variables</h2>
 <p>These override a few keys for one run:</p>
 <table>
@@ -184,6 +198,7 @@ that points its own name at 127.0.0.1 gets 403.</p></div>
   <tr><td><code>CLAWSWAP_BASE</code></td><td><code>base</code></td></tr>
   <tr><td><code>CLAWSWAP_SESSION</code></td><td><code>session</code></td></tr>
   <tr><td><code>CLAWSWAP_MULTIPLEXER</code></td><td><code>multiplexer</code> (<code>zellij</code> or <code>tmux</code>)</td></tr>
+  <tr><td><code>CLAWSWAP_BROWSER_PORT</code></td><td>The dev Chrome's debugging port (27392). See <a href="#ports">ports</a>.</td></tr>
   <tr><td><code>CLAWSWAP_SMEE</code></td><td>The smee.io channel saved by <code>clawswap smee</code>.</td></tr>
   <tr><td><code>CLAWSWAP_CONFIG</code></td><td>Another config file, relative to the repo root; read as YAML when it ends in <code>.yml</code> or <code>.yaml</code>.</td></tr>
   <tr><td><code>GITHUB_TOKEN</code></td><td>The token for pull requests (else the <code>gh</code> CLI's, if it's logged in).</td></tr>
