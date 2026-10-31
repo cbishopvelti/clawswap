@@ -131,7 +131,7 @@ defmodule Clawswap.CLI do
   defp api_port do
     case Config.load(repo_dir()) do
       {:ok, project} -> project.port
-      _ -> String.to_integer(System.get_env("CLAWSWAP_PORT") || "8790")
+      _ -> String.to_integer(System.get_env("CLAWSWAP_PORT") || "27390")
     end
   end
 

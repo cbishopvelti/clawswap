@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 // The watcher's page and API. Override with VITE_CLAWSWAP_URL (in .env.local, say) when the config's
-// port isn't 8790.
-export const CLAWSWAP_URL = import.meta.env.VITE_CLAWSWAP_URL || "http://localhost:8790";
+// port isn't 27390.
+export const CLAWSWAP_URL = import.meta.env.VITE_CLAWSWAP_URL || "http://localhost:27390";
 
 // Follows GET /state: every 2 s while a switch runs, every 10 s otherwise. A switch restarts this page's
 // own dev server, so failed fetches are expected for a moment and only show as "unreachable".

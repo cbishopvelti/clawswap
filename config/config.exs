@@ -4,7 +4,7 @@ import Config
 # Clawswap.Application); it only listens on 127.0.0.1.
 config :clawswap, ClawswapWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
-  http: [ip: {127, 0, 0, 1}, port: 8790],
+  http: [ip: {127, 0, 0, 1}, port: 27390],
   url: [host: "localhost"],
   # Only this machine can reach it, and the API checks Origin itself.
   check_origin: false,

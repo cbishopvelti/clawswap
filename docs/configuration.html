@@ -77,7 +77,7 @@ YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <
   <tr><td><code>session</code></td><td><code>name</code></td><td>The zellij or tmux session's name.</td></tr>
   <tr><td><code>multiplexer</code></td><td>detected</td><td><code>:zellij</code> or <code>:tmux</code> (<code>zellij</code> or <code>tmux</code> in YAML). See <a href="usage.html#multiplexer">zellij or tmux</a>.</td></tr>
   <tr><td><code>base</code></td><td>origin's default branch</td><td>The branch pinned first in the list. Merged branches are marked against it. See <a href="page.html#base">base branch</a>.</td></tr>
-  <tr><td><code>port</code></td><td><code>8790</code></td><td>The watcher's page and API. Give each project its own to run several at once.</td></tr>
+  <tr><td><code>port</code></td><td><code>27390</code></td><td>The watcher's page and API. Give each project its own to run several at once. The default is out of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</td></tr>
   <tr><td><code>servers</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:, port:, match:]]</code>: what a switch stops and starts again, each in a pane of that name, in this order. See <a href="#servers">servers</a>.</td></tr>
   <tr><td><code>panes</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:]]</code>: other panes, left running across switches (logs, a database). A pane with no <code>command</code> is an empty shell in its <code>cwd</code> (the repo root by default): <code>shell: []</code>, or <code>shell: {}</code> in YAML. A pane can't be called <code>clawswap</code> or share a server's name.</td></tr>
   <tr><td><code>prepare</code></td><td><code>[]</code></td><td>Steps <code>up</code> runs before it starts a new session. A step with <code>wait_for_port:</code> waits (up to 30 s) for that port to open.</td></tr>
@@ -153,7 +153,7 @@ steps:
 script in the repo: switching to a branch runs that branch's config and steps.</p></div>
 
 <h2 id="editor">Editing the config from the page</h2>
-<p>The watcher has a config editor at <code>http://127.0.0.1:8790/settings</code>. The ⚙ at the top of the
+<p>The watcher has a config editor at <code>http://127.0.0.1:27390/settings</code>. The ⚙ at the top of the
 <a href="page.html">branch page</a> opens it in a new window, so it works from an app's iframe too. It edits the config
 clawswap is running, in that config's own format: the settings above as fields, and a row for each server, pane, step
 and note, which you can add, remove and move up.</p>
@@ -176,6 +176,20 @@ and note, which you can add, remove and move up.</p>
 <a href="api.html">API</a>) answers only requests addressed to <code>localhost</code> or <code>127.0.0.1</code>. A site
 that points its own name at 127.0.0.1 gets 403.</p></div>
 
+<h2 id="ports">Ports</h2>
+<p>clawswap opens one port: the watcher's, <code>27390</code> by default (<code>port</code>, or <code>CLAWSWAP_PORT</code>).
+Phoenix serves the page (Hologram), the JSON API and the settings editor all from it, on <code>127.0.0.1</code> only.
+GitHub's events don't need one: the watcher connects out to smee.io and reads them as a stream. The default is out
+of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</p>
+<p>A <code>port</code> under <code>servers</code> is your app's, not clawswap's: your app picks it, and clawswap only
+frees it before a switch and lets that origin call the API. Two others come up only in particular cases:</p>
+<table>
+  <tr><th>Port</th><th>What</th><th>When</th></tr>
+  <tr><td><code>27390</code></td><td>The watcher: page, API, settings</td><td>Always</td></tr>
+  <tr><td><code>27391</code></td><td>The <a href="page.html">react-embed example</a>'s Vite server</td><td>Running that example, and <code>mix test.integration</code></td></tr>
+  <tr><td><code>27392</code></td><td>Chrome's debugging port (<code>CLAWSWAP_BROWSER_PORT</code>)</td><td>While <code>clawswap browser</code> has a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> open</td></tr>
+</table>
+
 <h2 id="env">Environment variables</h2>
 <p>These override a few keys for one run:</p>
 <table>
@@ -184,6 +198,7 @@ that points its own name at 127.0.0.1 gets 403.</p></div>
   <tr><td><code>CLAWSWAP_BASE</code></td><td><code>base</code></td></tr>
   <tr><td><code>CLAWSWAP_SESSION</code></td><td><code>session</code></td></tr>
   <tr><td><code>CLAWSWAP_MULTIPLEXER</code></td><td><code>multiplexer</code> (<code>zellij</code> or <code>tmux</code>)</td></tr>
+  <tr><td><code>CLAWSWAP_BROWSER_PORT</code></td><td>The dev Chrome's debugging port (27392). See <a href="#ports">ports</a>.</td></tr>
   <tr><td><code>CLAWSWAP_SMEE</code></td><td>The smee.io channel saved by <code>clawswap smee</code>.</td></tr>
   <tr><td><code>CLAWSWAP_CONFIG</code></td><td>Another config file, relative to the repo root; read as YAML when it ends in <code>.yml</code> or <code>.yaml</code>.</td></tr>
   <tr><td><code>GITHUB_TOKEN</code></td><td>The token for pull requests (else the <code>gh</code> CLI's, if it's logged in).</td></tr>

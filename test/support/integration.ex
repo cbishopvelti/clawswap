@@ -17,7 +17,7 @@ defmodule Clawswap.Integration do
   @example Path.join(@tool, "examples/react-embed")
   # The tests' own tmux server, so they neither see nor touch yours.
   @socket "clawswap-tests"
-  @ports [8790, 5173]
+  @ports [27390, 27391]
 
   def heading, do: "Hello from the new-heading branch"
 
@@ -107,8 +107,8 @@ defmodule Clawswap.Integration do
     tmux!(["new-session", "-d", "-s", "up-" <> project.session, "-x", "200", "-y", "50", "-c", project.work, command], env)
 
     IO.puts("[integration] #{multiplexer} session #{project.session}: tmux -L #{@socket} attach")
-    wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 8790")
-    wait_for(fn -> http_ok?("http://localhost:5173/") end, 120_000, "the app on 5173")
+    wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
+    wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
     Map.put(project, :multiplexer, multiplexer)
   end
 
@@ -173,7 +173,7 @@ defmodule Clawswap.Integration do
 
   defp request(method, path, body \\ nil) do
     :inets.start()
-    url = ~c"http://127.0.0.1:8790" ++ String.to_charlist(path)
+    url = ~c"http://127.0.0.1:27390" ++ String.to_charlist(path)
 
     request =
       if method == :post,

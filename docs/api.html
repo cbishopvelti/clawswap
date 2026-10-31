@@ -36,7 +36,7 @@
 <h1>API</h1>
 <p class="lede">The watcher's JSON API, for your own control, script or key.</p>
 
-<p>The watcher listens on <code>127.0.0.1:&lt;port&gt;</code> (8790 by default). The CLI, the Stream Deck keys and
+<p>The watcher listens on <code>127.0.0.1:&lt;port&gt;</code> (27390 by default). The CLI, the Stream Deck keys and
 the React example all use this API.</p>
 
 <h2 id="endpoints">Endpoints</h2>
@@ -50,8 +50,8 @@ the React example all use this API.</p>
   <tr><td><code>POST /walk</code></td><td><code>{"name": "…"}</code></td><td>Runs a <a href="walkthroughs.html">walkthrough</a> in a browser on this machine; 202, then follow the state's <code>walk</code>. 409 while one or a switch is running.</td></tr>
 </table>
 <p>POSTs need <code>Content-Type: application/json</code>.</p>
-<pre><code>curl -s http://127.0.0.1:8790/state
-curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-login"}' http://127.0.0.1:8790/switch</code></pre>
+<pre><code>curl -s http://127.0.0.1:27390/state
+curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-login"}' http://127.0.0.1:27390/switch</code></pre>
 
 <h2 id="state">The state</h2>
 <pre><code>{

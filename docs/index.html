@@ -55,14 +55,14 @@ one's merge status, and lights up when the branch you're on has new commits on G
 
 <h2 id="how">How it fits together</h2>
 <pre><code>GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane) ──zellij/tmux── server panes
-                                        ▲ 127.0.0.1:8790
+                                        ▲ 127.0.0.1:27390
               OpenDeck "clawswap branch" keys, the Hologram page at /, clawswap switch</code></pre>
 <ul>
   <li><strong>The session.</strong> <code>clawswap up</code> opens a <a href="https://zellij.dev">zellij</a> or <a href="https://github.com/tmux/tmux">tmux</a> session
     with a pane for each of your servers, one for the watcher and one for each extra pane you configure.</li>
   <li><strong>The watcher</strong> (<code>clawswap watch</code>, in the session's <code>clawswap</code> pane) is an OTP
     app. It keeps the branch list up to date from git and GitHub, runs switches, and serves a page and a JSON API on
-    <code>127.0.0.1:8790</code>.</li>
+    <code>127.0.0.1:27390</code>.</li>
   <li><strong>The webhook.</strong> GitHub posts branch, push and pull-request events to a
     <a href="https://smee.io">smee.io</a> channel; the watcher follows the channel and looks again when one arrives.
     Without it, it looks every 15 minutes and whenever you press a key.</li>
@@ -76,7 +76,7 @@ one's merge status, and lights up when the branch you're on has new commits on G
 <pre><code>cd &lt;path-to-your-project&gt;
 clawswap init     # writes a starter clawswap.exs from what it finds
 clawswap smee     # optional: a webhook channel, so new branches show up straight away
-clawswap up       # opens the session; the page is at http://127.0.0.1:8790</code></pre>
+clawswap up       # opens the session; the page is at http://127.0.0.1:27390</code></pre>
 <p>Then pick a branch on the page, press a key, or run <code>clawswap switch &lt;branch&gt;</code>.</p>
 
 <h2 id="elixir">All Elixir</h2>

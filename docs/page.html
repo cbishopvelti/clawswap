@@ -36,7 +36,7 @@
 <h1>The branch page</h1>
 <p class="lede">The watcher's web page, what its marks mean, and embedding it in your own app.</p>
 
-<p>The watcher serves a page at <code>http://127.0.0.1:8790</code> (the config's <code>port</code>). It shows the
+<p>The watcher serves a page at <code>http://127.0.0.1:27390</code> (the config's <code>port</code>). It shows the
 same list as the Stream Deck keys, with a button on each branch that switches to it, and a Pull button. It's a
 <a href="https://hologram.page">Hologram</a> page: the watcher pushes every change to it, so it follows a switch step
 by step without reloading.</p>
@@ -96,14 +96,14 @@ Vite + React app does both. (It's a test target, so it's JavaScript; clawswap it
 
 <h3 id="iframe">The page in an iframe</h3>
 <p>The simplest: a button in your top bar that opens a dropdown with the page in it.</p>
-<pre><code>&lt;iframe src="http://localhost:8790" title="clawswap"&gt;&lt;/iframe&gt;</code></pre>
+<pre><code>&lt;iframe src="http://localhost:27390" title="clawswap"&gt;&lt;/iframe&gt;</code></pre>
 <p>The example's <code>BranchMenu</code> keeps the frame loaded once it has been opened (it's only hidden when the menu
 closes), so it keeps following a switch while closed, and adds reload, open-in-a-tab and close buttons. Things to know:</p>
 <ul>
   <li><strong>Framing.</strong> Neither clawswap's endpoint nor Hologram sets <code>X-Frame-Options</code> or
     <code>frame-ancestors</code>, so the page frames.</li>
   <li><strong>Use <code>localhost</code> for both.</strong> Hologram's session cookie is <code>SameSite=Lax</code>.
-    <code>localhost:5173</code> and <code>localhost:8790</code> are the same site (ports don't count), so the framed page
+    <code>localhost:27391</code> and <code>localhost:27390</code> are the same site (ports don't count), so the framed page
     gets its cookie. Mixing <code>localhost</code> and <code>127.0.0.1</code> makes them cross-site.</li>
   <li><strong>Restarts.</strong> A switch kills your dev server, so your app reloads and its state resets, while the
     framed page keeps its own connection to the watcher and follows the switch to the end.</li>
@@ -122,9 +122,9 @@ because a server's own <code>localhost</code> port is an allowed origin; add oth
 git init -b main &amp;&amp; git add . &amp;&amp; git commit -m "react-embed"
 gh repo create react-embed --private --source . --push   # or any remote
 clawswap up</code></pre>
-<p>Open <code>http://localhost:5173</code>, push a branch that changes <code>src/App.jsx</code> (or adds a dependency),
+<p>Open <code>http://localhost:27391</code>, push a branch that changes <code>src/App.jsx</code> (or adds a dependency),
 and switch to it from the Branches menu or the badge. Set <code>VITE_CLAWSWAP_URL</code> in <code>.env.local</code> when
-the config's <code>port</code> isn't 8790.</p>
+the config's <code>port</code> isn't 27390.</p>
 <div class="pager"><span><a href="switching.html">← Switching</a></span><span><a href="api.html">API →</a></span></div>
 <footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
   </main>
