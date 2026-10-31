@@ -8,7 +8,7 @@ defmodule Clawswap.ConfigTest do
     assert p.name == "shop"
     assert p.session == "shop"
     assert p.base == "trunk"
-    assert p.port == 8790
+    assert p.port == 27390
     assert MapSet.to_list(p.origins) |> Enum.sort() == ["http://127.0.0.1:3000", "http://localhost:3000"]
     assert p.short_name.("claude/fix-it") == "fix-it"
     assert p.restart.("clawswap.exs")

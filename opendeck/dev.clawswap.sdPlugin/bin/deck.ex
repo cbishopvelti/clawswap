@@ -19,7 +19,7 @@ defmodule Clawswap.Deck do
   @branch_action "dev.clawswap.branch"
   @pull_action "dev.clawswap.pull"
   @walk_action "dev.clawswap.walk"
-  @default_url "http://127.0.0.1:8790"
+  @default_url "http://127.0.0.1:27390"
   @poll_ms 1000
   @retry_ms 3000
   # Holding a key this long opens its branch's Claude Code thread instead of switching.

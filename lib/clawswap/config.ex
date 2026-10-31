@@ -47,7 +47,7 @@ defmodule Clawswap.Config do
       name: name,
       session: env("CLAWSWAP_SESSION") || config[:session] || name,
       base: env("CLAWSWAP_BASE") || config[:base] || opts[:base] || "main",
-      port: String.to_integer(env("CLAWSWAP_PORT") || to_string(config[:port] || 8790)),
+      port: String.to_integer(env("CLAWSWAP_PORT") || to_string(config[:port] || 27390)),
       # Pages allowed to call the API from a browser: the servers' own, and any the config adds.
       origins: MapSet.new(server_origins(servers) ++ (config[:origins] || [])),
       # Server and pane order, as written: a map would lose it.

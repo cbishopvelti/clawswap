@@ -2,7 +2,7 @@
 # Phoenix and vite are the servers; SurrealDB and the beat tracker run in docker, in a pane of their own.
 name: bmx
 base: claude-main
-port: 8790
+port: 27390
 servers:
   phx: {command: iex -S mix phx.server, cwd: backend, port: 4000, match: '/phx\.server/'}
   vite: {command: npm run dev, cwd: frontend, port: 5173, match: '/npm run dev|vite/'}

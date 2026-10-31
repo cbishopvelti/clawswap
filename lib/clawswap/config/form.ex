@@ -20,7 +20,7 @@ defmodule Clawswap.Config.Form do
     {:name, "Name", :string, "the repo folder's name"},
     {:session, "Session", :string, "the name"},
     {:base, "Base branch", :string, "origin's default branch"},
-    {:port, "Port", :integer, "8790"},
+    {:port, "Port", :integer, "27390"},
     {:multiplexer, "Multiplexer", :multiplexer, "detected"},
     {:layout, "zellij layout file", :string, "generated"},
     {:origins, "Origins allowed to call the API", :lines, "one per line; the servers' localhost ports always are"},

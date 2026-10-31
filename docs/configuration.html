@@ -77,7 +77,7 @@ YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <
   <tr><td><code>session</code></td><td><code>name</code></td><td>The zellij or tmux session's name.</td></tr>
   <tr><td><code>multiplexer</code></td><td>detected</td><td><code>:zellij</code> or <code>:tmux</code> (<code>zellij</code> or <code>tmux</code> in YAML). See <a href="usage.html#multiplexer">zellij or tmux</a>.</td></tr>
   <tr><td><code>base</code></td><td>origin's default branch</td><td>The branch pinned first in the list. Merged branches are marked against it. See <a href="page.html#base">base branch</a>.</td></tr>
-  <tr><td><code>port</code></td><td><code>8790</code></td><td>The watcher's page and API. Give each project its own to run several at once.</td></tr>
+  <tr><td><code>port</code></td><td><code>27390</code></td><td>The watcher's page and API. Give each project its own to run several at once. The default is out of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</td></tr>
   <tr><td><code>servers</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:, port:, match:]]</code>: what a switch stops and starts again, each in a pane of that name, in this order. See <a href="#servers">servers</a>.</td></tr>
   <tr><td><code>panes</code></td><td><code>[]</code></td><td><code>[name: [command:, cwd:]]</code>: other panes, left running across switches (logs, a database). A pane with no <code>command</code> is an empty shell in its <code>cwd</code> (the repo root by default): <code>shell: []</code>, or <code>shell: {}</code> in YAML. A pane can't be called <code>clawswap</code> or share a server's name.</td></tr>
   <tr><td><code>prepare</code></td><td><code>[]</code></td><td>Steps <code>up</code> runs before it starts a new session. A step with <code>wait_for_port:</code> waits (up to 30 s) for that port to open.</td></tr>
@@ -153,7 +153,7 @@ steps:
 script in the repo: switching to a branch runs that branch's config and steps.</p></div>
 
 <h2 id="editor">Editing the config from the page</h2>
-<p>The watcher has a config editor at <code>http://127.0.0.1:8790/settings</code>. The ⚙ at the top of the
+<p>The watcher has a config editor at <code>http://127.0.0.1:27390/settings</code>. The ⚙ at the top of the
 <a href="page.html">branch page</a> opens it in a new window, so it works from an app's iframe too. It edits the config
 clawswap is running, in that config's own format: the settings above as fields, and a row for each server, pane, step
 and note, which you can add, remove and move up.</p>

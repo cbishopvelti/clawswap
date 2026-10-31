@@ -17,10 +17,17 @@ defmodule Clawswap.Walkthrough.Browser do
   """
 
   @key :clawswap_walkthrough
-  # Where `clawswap browser` opens Chrome's debugging port (not 9222, which editors' debuggers use).
-  @dev_port 9333
+  # Where `clawswap browser` opens Chrome's debugging port: out of the way of 9222, which editors'
+  # debuggers use, and of the ports the projects clawswap runs are likely to want. CLAWSWAP_BROWSER_PORT
+  # names another.
+  @dev_port 27392
 
-  def dev_port, do: @dev_port
+  def dev_port do
+    case Integer.parse(System.get_env("CLAWSWAP_BROWSER_PORT") || "") do
+      {port, ""} -> port
+      _ -> @dev_port
+    end
+  end
 
   @doc """
   Opens Chrome for this process. Options: `headless` (default: when there's no display), `slow` (ms to
@@ -65,7 +72,7 @@ defmodule Clawswap.Walkthrough.Browser do
     case System.get_env("CLAWSWAP_CHROME_DEBUGGER") do
       off when off in ["off", "0", "false"] -> nil
       address when address not in [nil, ""] -> address
-      _ -> if debugger?("127.0.0.1:#{@dev_port}"), do: "127.0.0.1:#{@dev_port}"
+      _ -> if debugger?("127.0.0.1:#{dev_port()}"), do: "127.0.0.1:#{dev_port()}"
     end
   end
 
@@ -81,7 +88,7 @@ defmodule Clawswap.Walkthrough.Browser do
   `{:error, message}`.
   """
   def open_dev_chrome(profile, url) do
-    address = "127.0.0.1:#{@dev_port}"
+    address = "127.0.0.1:#{dev_port()}"
 
     cond do
       debugger?(address) ->
@@ -95,7 +102,7 @@ defmodule Clawswap.Walkthrough.Browser do
             File.mkdir_p!(profile)
 
             args =
-              ["--remote-debugging-port=#{@dev_port}", "--user-data-dir=#{profile}", "--no-first-run", "--no-default-browser-check"] ++
+              ["--remote-debugging-port=#{dev_port()}", "--user-data-dir=#{profile}", "--no-first-run", "--no-default-browser-check"] ++
                 if(root?(), do: ["--no-sandbox"], else: []) ++ [url]
 
             # In the background, so it outlives this command.
@@ -109,7 +116,7 @@ defmodule Clawswap.Walkthrough.Browser do
 
             if started,
               do: {:ok, address},
-              else: {:error, "Chrome started, but its debugging port #{@dev_port} didn't open"}
+              else: {:error, "Chrome started, but its debugging port #{dev_port()} didn't open"}
 
           {:error, %{message: message}} ->
             {:error, message}

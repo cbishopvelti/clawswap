@@ -3,7 +3,7 @@
 [
   name: "bmx",
   base: "claude-main",
-  port: 8790,
+  port: 27390,
   servers: [
     phx: [command: "iex -S mix phx.server", cwd: "backend", port: 4000, match: ~r/phx\.server/],
     vite: [command: "npm run dev", cwd: "frontend", port: 5173, match: ~r/npm run dev|vite/]

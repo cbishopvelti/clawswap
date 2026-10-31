@@ -72,7 +72,7 @@ defmodule Clawswap.Integration.WalkthroughTest do
 
       {out, 0} = Integration.clawswap(project, ["browser"], env)
       assert out =~ "Dev Chrome on 127.0.0.1:#{port}"
-      assert tabs(port) == ["http://localhost:5173/"]
+      assert tabs(port) == ["http://localhost:27391/"]
 
       for _ <- 1..2 do
         {out, 0} = Integration.clawswap(project, ["walk", "branches-menu"], env)
@@ -80,7 +80,7 @@ defmodule Clawswap.Integration.WalkthroughTest do
       end
 
       # The one it opened at the app, and the walkthroughs' tab, used both times.
-      assert tabs(port) == ["http://localhost:5173/", "http://localhost:5173/"]
+      assert tabs(port) == ["http://localhost:27391/", "http://localhost:27391/"]
     end
 
     defp tabs(port) do

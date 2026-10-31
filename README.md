@@ -14,7 +14,7 @@ the servers and steps that were written into it are now a `clawswap.exs` in each
 
 ```
 GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane) ──zellij/tmux── server panes
-                                        ▲ 127.0.0.1:8790
+                                        ▲ 127.0.0.1:27390
               OpenDeck "clawswap branch" keys, the Hologram page at /, clawswap switch
 ```
 
@@ -97,7 +97,7 @@ The session has a pane for each server, one called `clawswap` (the watcher; swit
 one for each of the config's other `panes` (one with no command is an empty shell). Ctrl+Q leaves zellij (in tmux, Ctrl+B then D); `up` again
 comes back.
 
-The watcher serves a page at `http://127.0.0.1:8790` (the config's `port`): the same list as the keys, a
+The watcher serves a page at `http://127.0.0.1:27390` (the config's `port`): the same list as the keys, a
 button on each branch that switches to it, and Pull. It updates as a switch runs, step by step. Your app's
 dev page can embed it in an iframe, or build its own control on the [API](#api);
 [examples/react-embed](examples/react-embed) does both.
@@ -128,7 +128,7 @@ or a list of the program and its arguments. A `cwd` is relative to the repo root
 | `session` | `name` | The zellij or tmux session's name. |
 | `multiplexer` | detected | `:zellij` or `:tmux`; CLAWSWAP_MULTIPLEXER overrides it. See [zellij or tmux](#zellij-or-tmux). |
 | `base` | origin's default branch | The branch listed first. Merged branches are marked against it. |
-| `port` | `8790` | The watcher's page and API. Give each project its own to run several at once. |
+| `port` | `27390` | The watcher's page and API. Give each project its own to run several at once. The default is out of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…) so it doesn't take the one your app wants. |
 | `servers` | `[]` | `[name: [command:, cwd:, port:, match:]]`: what a switch stops and starts again, each in a pane of that name, in this order. With `port`, the switch makes sure the port is free before checking out (a server left running outside the session is sent TERM, then KILL). `match` (a Regex) finds the pane by its command if it has been renamed. |
 | `panes` | `[]` | `[name: [command:, cwd:]]`: other panes, left running across switches (logs, a database). A pane with no `command` is an empty shell in its `cwd` (the repo root by default): `shell: []`, or `shell: {}` in YAML. |
 | `prepare` | `[]` | Steps `up` runs before it starts a new session. A step with `wait_for_port:` waits (up to 30 s) for that port to open. |
@@ -193,7 +193,7 @@ Environment variables override a few keys for one run: `CLAWSWAP_PORT`, `CLAWSWA
 
 ### Editing the config from the page
 
-`http://127.0.0.1:8790/settings` (the ⚙ on the branch page) edits the config clawswap is running, in its
+`http://127.0.0.1:27390/settings` (the ⚙ on the branch page) edits the config clawswap is running, in its
 own format: the settings above as fields, and a row for each server, pane, step and note, which you can add,
 remove and move up. Save checks that clawswap can load the result before writing it, then restarts the
 watcher on it. The file is part of your repo, so commit the change: a switch refuses uncommitted changes.
@@ -268,7 +268,7 @@ the merge status, as the page's list does, in GitHub's colours: ⎇ the base bra
 and the key is tinted green), ◌ a draft PR (grey), ✓ merged into the base (purple, tinted purple), ○
 neither.
 
-Each key has a Watcher setting, empty for `http://127.0.0.1:8790`. Point keys at another project's port to
+Each key has a Watcher setting, empty for `http://127.0.0.1:27390`. Point keys at another project's port to
 drive several projects from one deck; keys on the same watcher share its list.
 
 ## Stream Deck from the page (WebHID)
@@ -330,7 +330,7 @@ or `WAYLAND_DISPLAY`: CI, Claude's cloud sessions) it runs headless. `CLAWSWAP_H
 
 Each walkthrough opens a Chrome window of its own, unless a dev Chrome is open: `clawswap browser` starts
 one at your app, with a profile of its own (kept in `~/.cache/clawswap/chrome`, so logins stay) and a
-debugging port (9333). While it's open, walkthroughs play in a tab of it, the same tab each time, and leave
+debugging port (27392, or `CLAWSWAP_BROWSER_PORT`). While it's open, walkthroughs play in a tab of it, the same tab each time, and leave
 your other tabs alone. Chrome won't open that port on your everyday profile, which is why it's a separate
 window. `CLAWSWAP_CHROME_DEBUGGER` points at another Chrome's debugging address, or `off` ignores the dev
 Chrome.
@@ -355,7 +355,7 @@ The browser tests in `test/integration` are left out of that. They copy
 [examples/react-embed](examples/react-embed) into a repo of its own with a few branches, run `clawswap up` for
 it in zellij and in tmux, and drive Chrome, with the walkthrough commands, through the merge marks, the
 Branches menu, a switch, the config editor, the ▶ buttons and a stand-in Stream Deck. They need Chrome,
-chromedriver, Node.js, tmux and zellij, and ports 8790 and 5173 free:
+chromedriver, Node.js, tmux and zellij, and ports 27390 and 27391 free:
 
 ```bash
 mix test.integration                                        # headless
