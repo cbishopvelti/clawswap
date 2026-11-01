@@ -26,7 +26,8 @@ defmodule Clawswap.Config.Form do
     {:origins, "Origins allowed to call the API", :lines, "one per line; the servers' localhost ports always are"},
     {:restart_when, "Also restart the watcher when these change", :when, "paths or /regexes/, one per line"},
     {:short_name, "Short name for a branch", :code, "drops claude/"},
-    {:walkthroughs, "Walkthroughs folder", :string, "walkthroughs, next to the config"}
+    {:walkthroughs, "Walkthroughs folder", :string, "walkthroughs, next to the config"},
+    {:browser_tests, "Browser tests folder", :string, "browser_tests, next to the config"}
   ]
 
   # {key, label, :named (a keyword list of name: fields) or :list, fields}
