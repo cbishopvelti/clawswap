@@ -107,3 +107,10 @@ li.behind .status { color: var(--behind); }
 .deck-on { color: var(--current); }
 .deck-message { color: var(--failed); }
 @media (max-width: 480px) { .deck { display: none; } }
+
+/* A switch or pull running: shows as soon as it's clicked or its key pressed. */
+.spinner { display: inline-block; width: 0.8em; height: 0.8em; margin-right: 6px; vertical-align: -0.1em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }

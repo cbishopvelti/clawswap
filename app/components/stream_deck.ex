@@ -188,9 +188,10 @@ defmodule ClawswapWeb.StreamDeck do
 
   defp press(component, key) do
     case key_command(component.state.keys, component.state.count, key) do
-      :pull -> put_command(component, :pull)
+      # The page shows the switch or pull at once, as a click on it does.
+      :pull -> component |> put_action(name: :switching, target: "page", params: %{}) |> put_command(:pull)
       {:walk, name} -> put_command(component, :walk, name: name)
-      {:switch, branch} -> put_command(component, :switch, branch: branch)
+      {:switch, branch} -> component |> put_action(name: :switching, target: "page", params: %{branch: branch}) |> put_command(:switch, branch: branch)
       nil -> component
     end
   end

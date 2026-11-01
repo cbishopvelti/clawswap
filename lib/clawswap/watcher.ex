@@ -86,6 +86,8 @@ defmodule Clawswap.Watcher do
       refreshing: nil,
       again: false,
       waiters: [],
+      # The switch a queued one (below) replaced in the view, put back if the queued one is refused unseen.
+      queued_over: nil,
       debounce: nil,
       view: %{
         project: project.name,
@@ -103,7 +105,8 @@ defmodule Clawswap.Watcher do
         # The checkout's branch on origin: how many commits it is ahead of the checkout (nil when the
         # branch isn't on origin).
         upstream: nil,
-        # %{target, pull, phase: "running" | "done" | "failed", step, error, notes, at}
+        # %{target, pull, phase: "running" | "done" | "failed", step, error, notes, at}; queued: true while
+        # a switch asked for waits for the refresh it starts with (step "Fetching").
         switch: nil,
         # The checkout's walkthroughs, %{name, path, new} (Clawswap.Walkthrough.list/1), and the last one run:
         # %{name, phase: "running" | "passed" | "failed", step, error, at}.
@@ -197,7 +200,7 @@ defmodule Clawswap.Watcher do
   end
 
   def handle_call({:after_refresh, what}, from, state) do
-    {:noreply, start_refresh(%{state | waiters: state.waiters ++ [{from, what}]})}
+    {:noreply, start_refresh(%{queue(state, what) | waiters: state.waiters ++ [{from, what}]})}
   end
 
   @impl true
@@ -353,6 +356,31 @@ defmodule Clawswap.Watcher do
     error -> {:error, Exception.message(error), cache}
   end
 
+  # A switch or pull shows as running at once, on "Fetching", while the refresh it waits for looks at
+  # origin, so the key or button that asked for it shows something happening straight away.
+  defp queue(state, {:switch, target}), do: queue_run(state, %{target: target, pull: false})
+  defp queue(state, :pull), do: queue_run(state, %{target: state.view.current && state.view.current.branch, pull: true})
+  defp queue(state, _), do: state
+
+  defp queue_run(state, run) do
+    if running?(state.view) do
+      state
+    else
+      over = if match?(%{queued: true}, state.view.switch), do: state.queued_over, else: state.view.switch
+      run = Map.merge(run, %{phase: "running", step: "Fetching", queued: true, error: nil, notes: [], at: now()})
+      changed(%{put_in(state.view.switch, run) | queued_over: over})
+    end
+  end
+
+  # A queued switch refused without saying so in the view (a branch that isn't listed) puts back the one
+  # it replaced.
+  defp unqueue(state, target) do
+    case state.view.switch do
+      %{queued: true, target: ^target} -> changed(%{put_in(state.view.switch, state.queued_over) | queued_over: nil})
+      _ -> state
+    end
+  end
+
   defp after_refresh(:state, state), do: {state.view, state}
 
   defp after_refresh({:switch, target}, state) do
@@ -360,7 +388,7 @@ defmodule Clawswap.Watcher do
 
     cond do
       running?(view) -> {{:error, 409, "Already switching to #{view.switch.target}"}, state}
-      not Enum.any?(view.branches, &(&1.branch == target)) -> {{:error, 404, "#{target} isn't one of the listed branches"}, state}
+      not Enum.any?(view.branches, &(&1.branch == target)) -> {{:error, 404, "#{target} isn't one of the listed branches"}, unqueue(state, target)}
       view.dirty -> refuse(state, %{target: target, pull: false}, 409, "Uncommitted changes: commit or stash them first")
       true -> start_run(state, %{target: target, pull: false})
     end
@@ -392,7 +420,8 @@ defmodule Clawswap.Watcher do
     end
   end
 
-  defp running?(view), do: match?(%{phase: "running"}, view.switch)
+  # A queued switch isn't running yet: the first one asked for starts when the refresh is done.
+  defp running?(view), do: match?(%{phase: "running"}, view.switch) and not match?(%{queued: true}, view.switch)
   defp now, do: System.system_time(:millisecond)
   defp reply_ok(state), do: {{:ok, state.view}, state}
 
