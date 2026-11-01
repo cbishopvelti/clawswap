@@ -105,9 +105,25 @@ closes), so it keeps following a switch while closed, and adds reload, open-in-a
   <li><strong>Use <code>localhost</code> for both.</strong> Hologram's session cookie is <code>SameSite=Lax</code>.
     <code>localhost:27391</code> and <code>localhost:27390</code> are the same site (ports don't count), so the framed page
     gets its cookie. Mixing <code>localhost</code> and <code>127.0.0.1</code> makes them cross-site.</li>
-  <li><strong>Restarts.</strong> A switch kills your dev server, so your app reloads and its state resets, while the
-    framed page keeps its own connection to the watcher and follows the switch to the end.</li>
+  <li><strong>Restarts.</strong> A switch kills your dev server, while the framed page keeps its own connection to
+    the watcher and follows the switch to the end. Whether your app's page reloads is up to it: see below.</li>
 </ul>
+
+<h3 id="reload">Reloading your app after a switch</h3>
+<p>clawswap doesn't reload your app's page: the framed page is on another port, so another origin, and can't. A
+Vite app reloads by itself when its dev server comes back. Anything else (a Phoenix app, a plain server) stays on
+the old page, so let the framed page tell it. When a switch or pull is done, after the servers listen on their
+<code>port</code>s again, the page in the frame posts its parent this message, whoever started the switch (the page,
+a key or the API):</p>
+<pre><code>{ clawswap: "switched", branch: "claude/fix-login" }</code></pre>
+<p>Reload on it with a listener in your app's dev JavaScript (Phoenix: <code>assets/js/app.js</code>):</p>
+<pre><code>addEventListener("message", (e) =&gt; {
+  if (e.origin === "http://localhost:27390" &amp;&amp; e.data?.clawswap === "switched") location.reload();
+});</code></pre>
+<p>Use the watcher's <code>port</code> if it isn't 27390. The page only posts while it's loaded, so keep the frame
+loaded once opened (hide it rather than remove it when the menu closes), as the example's <code>BranchMenu</code> does.
+A failed switch, or a pull with nothing new, posts nothing. Without a frame, poll the <a href="api.html#state">API</a>
+and reload when <code>switch.doneAt</code> changes.</p>
 
 <h3 id="badge">Your own control on the API</h3>
 <p>The example's <code>BranchBadge</code> shows the checkout's branch as a picker, Pull with how far behind it is, and

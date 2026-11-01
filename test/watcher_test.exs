@@ -22,7 +22,11 @@ defmodule Clawswap.WatcherTest do
     end)
 
     start = fn opts ->
-      servers = %{stop: fn name, _note -> send(me, {:call, "stop #{name}"}) end, start: fn name -> send(me, {:call, "start #{name}"}) end}
+      servers = %{
+        stop: fn name, _note -> send(me, {:call, "stop #{name}"}) end,
+        start: fn name -> send(me, {:call, "start #{name}"}) end,
+        wait_for_port: fn _port, _ms -> :ok end
+      }
 
       start_supervised!(
         {Watcher,
@@ -72,6 +76,39 @@ defmodule Clawswap.WatcherTest do
     File.write!("#{work}/frontend/package.json", "{ }\n")
     assert {:error, 409, "Uncommitted" <> _} = Watcher.switch_to(w, "claude-main")
     assert Watcher.state(w).switch.phase == "failed"
+  end
+
+  test "waits for the servers' ports before a switch is done, and fails one that never opens", %{project: project, start: start} do
+    me = self()
+
+    servers = fn answer ->
+      %{
+        stop: fn _, _ -> :ok end,
+        start: fn name -> send(me, {:call, "start #{name}"}) end,
+        wait_for_port: fn port, _ms -> send(me, {:call, "wait #{port}"}) && answer end
+      }
+    end
+
+    w = start.(servers: servers.(:ok))
+    assert {:ok, _} = Watcher.switch_to(w, "claude/new-thing")
+    TestRepo.until(fn -> finished?(w) end)
+    assert %{phase: "done", doneAt: at} = Watcher.state(w).switch
+    assert is_integer(at)
+
+    assert Enum.filter(calls(), &String.starts_with?(&1, ["start", "wait"])) == [
+             "start phx",
+             "start vite",
+             "wait #{project.servers["phx"].port}",
+             "wait #{project.servers["vite"].port}"
+           ]
+
+    stop_supervised!(Watcher)
+
+    w = start.(servers: servers.(:timeout))
+    assert {:ok, _} = Watcher.switch_to(w, "claude-main")
+    TestRepo.until(fn -> finished?(w) end)
+    assert %{phase: "failed", error: "phx didn't listen on port " <> _} = switch = Watcher.state(w).switch
+    refute Map.has_key?(switch, :doneAt)
   end
 
   test "restarts itself after a switch that changed the config", %{work: work, start: start} do

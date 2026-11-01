@@ -100,7 +100,10 @@ comes back.
 The watcher serves a page at `http://127.0.0.1:27390` (the config's `port`): the same list as the keys, a
 button on each branch that switches to it, and Pull. It updates as a switch runs, step by step. Your app's
 dev page can embed it in an iframe, or build its own control on the [API](#api);
-[examples/react-embed](examples/react-embed) does both.
+[examples/react-embed](examples/react-embed) does both. clawswap doesn't reload your app's page after a switch
+(a Vite app reloads itself); the framed page posts `{clawswap: "switched", branch}` to your app when the switch
+is done and its servers listen again, so a one-line listener can
+([docs/page.html#reload](https://cbishopvelti.github.io/clawswap/page.html#reload)).
 
 The ⚙ at the top of that page opens the config editor (`/settings`) in a new window, so it works from an
 app's iframe too. See [Editing the config from the page](#editing-the-config-from-the-page).
@@ -213,14 +216,16 @@ page (Hologram), the JSON API and the settings editor all from it, on `127.0.0.1
 need one: the watcher connects out to smee.io and reads them as a stream. The default is out of the way of
 the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.
 
-A `port` under `servers` is your app's, not clawswap's: your app picks it, and clawswap only frees it before
-a switch and lets that origin call the API. Two others come up only in particular cases:
+A `port` under `servers` is your app's, not clawswap's: your app picks it, and clawswap frees it before
+a switch, waits for it to listen again before calling the switch done, and lets that origin call the API.
+Others come up only in particular cases:
 
 | Port | What | When |
 | --- | --- | --- |
 | `27390` | The watcher: page, API, settings | Always |
 | `27391` | [examples/react-embed](examples/react-embed)'s Vite server | Running that example, and `mix test.integration` |
 | `27392` | Chrome's debugging port (`CLAWSWAP_BROWSER_PORT`) | While `clawswap browser` has a dev Chrome open for [walkthroughs](#walkthroughs) |
+| `27393` | A plain page that frames the watcher's page | `mix test.integration` (the reload test) |
 
 ### zellij or tmux
 

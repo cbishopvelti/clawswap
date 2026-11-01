@@ -3,7 +3,8 @@ defmodule Clawswap.Watcher do
   The watcher that runs in the session's "clawswap" pane: keeps the branch list fresh (GitHub
   webhook through smee.io), and switches branch when a Stream Deck key or a page asks.
 
-  Options: `project` (from `Clawswap.Config`), `servers` (`%{stop: fn name, note, start: fn name}`:
+  Options: `project` (from `Clawswap.Config`), `servers` (`%{stop: fn name, note, start: fn name}`, and
+  optionally `wait_for_port: fn port, ms` for the wait before a switch is done:
   `Clawswap.Zellij.servers/2` in the session, stand-ins in tests), `run_step` (runs one planned step),
   `smee_url`, `on_change` (called with the public state after every change; the web layer broadcasts it),
   `exit` (restarts the watcher after a switch changed its config), `refresh_git` (false skips git fetch),
@@ -13,7 +14,7 @@ defmodule Clawswap.Watcher do
 
   use GenServer
 
-  alias Clawswap.{Config, Git, GitHub, Plan, Smee, Walkthrough}
+  alias Clawswap.{Config, Git, GitHub, Plan, Ports, Smee, Walkthrough}
 
   # Without webhooks (or if smee drops a delivery), look anyway this often.
   @fallback_ms 15 * 60_000
@@ -472,13 +473,35 @@ defmodule Clawswap.Watcher do
         end
       end)
 
+    # Then wait for each server with a port to listen on it, so "done" means the app answers again (and a
+    # page that reloads on it gets the new branch, not a connection error).
+    start_failure = start_failure || (phase == :done && wait_for_ports(project, servers, step))
+
     cond do
       phase == :failed -> :ok
       start_failure -> update.(%{phase: "failed", error: start_failure, at: System.system_time(:millisecond)})
-      true -> update.(%{phase: "done"})
+      true -> update.(%{phase: "done", doneAt: System.system_time(:millisecond)})
     end
 
     GenServer.cast(watcher, {:run_finished, changed_paths})
+  end
+
+  @port_wait_ms 180_000
+
+  # The first server that didn't open its port in time, as an error; nil when they all did.
+  defp wait_for_ports(project, servers, step) do
+    wait = Map.get(servers, :wait_for_port, &Ports.wait_for_port/2)
+
+    Enum.find_value(project.server_names, fn name ->
+      if port = project.servers[name][:port] do
+        step.("Waiting for #{name} on port #{port}")
+
+        case wait.(port, @port_wait_ms) do
+          :ok -> nil
+          _ -> "#{name} didn't listen on port #{port} within #{div(@port_wait_ms, 60_000)} minutes"
+        end
+      end
+    end)
   end
 
   defp checkout!(root, target) do

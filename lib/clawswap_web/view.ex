@@ -29,6 +29,9 @@ defmodule ClawswapWeb.View do
       webhook: webhook(state),
       webhook_class: if(state.webhook == "connected", do: "ok", else: "off"),
       busy: running,
+      # The switch or pull that finished last (its branch, and when), so a page in an app's iframe can tell
+      # the app to reload when it changes; nil until one has.
+      switched: switched(run),
       pull_label: pull_label(run, current, behind),
       pull_class:
         cond do
@@ -58,6 +61,9 @@ defmodule ClawswapWeb.View do
       pull: Clawswap.Deck.branch_image(Clawswap.Deck.pull_look(json))
     }
   end
+
+  defp switched(%{phase: "done", doneAt: at, target: branch}), do: %{branch: branch, at: at}
+  defp switched(_run), do: nil
 
   defp on(_state, nil), do: nil
 

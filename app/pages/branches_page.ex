@@ -6,6 +6,7 @@ defmodule ClawswapWeb.BranchesPage do
   """
 
   use Hologram.Page
+  use Hologram.JS
 
   alias Clawswap.Watcher
   alias ClawswapWeb.{StreamDeck, View}
@@ -57,6 +58,9 @@ defmodule ClawswapWeb.BranchesPage do
   end
 
   def action(:state_changed, params, component) do
+    switched = params.view.switched
+    if switched && switched != component.state.view.switched, do: tell_parent(switched)
+
     component
     |> put_state(:view, params.view)
     |> put_action(name: :draw, target: "stream_deck", params: %{keys: params.view.keys})
@@ -67,6 +71,15 @@ defmodule ClawswapWeb.BranchesPage do
   def command(:switch, params, server), do: answer(server, Watcher.switch_to(params.branch))
   def command(:pull, _params, server), do: answer(server, Watcher.pull())
   def command(:walk, params, server), do: answer(server, Watcher.walk(params.name))
+
+  # When this page is in an app's iframe: a switch or pull finished (its servers are listening again), so
+  # the app can reload. It's another origin (another port), so it can't reload the app itself; the app
+  # listens for this instead (docs/page.html#reload). Outside a frame, parent is the page itself, and
+  # nothing listens.
+  defp tell_parent(switched) do
+    # `:parent`, the global, rather than JS.get(:window, :parent): boxing another origin's window fails.
+    JS.call(:parent, :postMessage, [%{clawswap: "switched", branch: switched.branch}, "*"])
+  end
 
   defp answer(server, {:ok, _state}), do: put_action(server, :show_message, message: nil)
   defp answer(server, {:error, _status, message}), do: put_action(server, :show_message, message: message)
