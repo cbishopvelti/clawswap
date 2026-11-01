@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser tests · clawswap</title>
+  <meta name="description" content="clawswap runs a project's dev servers in one zellij or tmux session and switches branches from a Stream Deck key, a web page or the command line.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side" aria-label="Docs">
+    <a class="brand" href="index.html">clawswap</a>
+    <p class="tag">Branch switching for dev servers</p>
+      <h4>Start</h4>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install</a></li>
+        <li><a href="usage.html">Use</a></li>
+      </ul>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="switching.html">Switching</a></li>
+        <li><a href="page.html">Branch page</a></li>
+        <li><a href="api.html">API</a></li>
+        <li><a href="opendeck.html">Stream Deck</a></li>
+        <li><a href="walkthroughs.html">Walkthroughs</a></li>
+        <li><a href="testing.html" aria-current="page">Browser tests</a></li>
+      </ul>
+    <h4>Elsewhere</h4>
+    <ul>
+      <li><a href="https://github.com/cbishopvelti/clawswap">GitHub</a></li>
+    </ul>
+  </nav>
+  <main>
+<h1>Browser tests</h1>
+<p class="lede">A suite of Wallaby tests in your project that drive Chrome against the servers the session runs, with as many browsers at once as a test needs.</p>
+
+<p>Walkthroughs show one branch's change while you watch. Browser tests are the suite you keep: ExUnit files in the
+project's <code>browser_tests/</code> folder, written with <a href="https://hexdocs.pm/wallaby">Wallaby</a>, that
+<code>clawswap test</code> runs against the app as <code>clawswap up</code> runs it. clawswap brings Wallaby,
+chromedriver and the Chrome setup, so the project's own build needs nothing added: a Phoenix app and a Vite one
+get the same suite.</p>
+
+<pre><code># browser_tests/chat_test.exs
+defmodule ChatTest do
+  use Clawswap.Feature, async: true
+
+  feature "the home page opens", %{session: session} do
+    session
+    |&gt; visit(url(:web))
+    |&gt; assert_has(css("h1", text: "Welcome"))
+  end
+
+  # Two people at once: each session is a Chrome of its own, with its own cookies and login.
+  @sessions 2
+  feature "a message reaches the other person", %{sessions: [alice, bob]} do
+    alice |&gt; visit(url("/chat")) |&gt; fill_in(text_field("Message"), with: "hi bob") |&gt; click(button("Send"))
+    bob |&gt; visit(url("/chat")) |&gt; assert_has(css(".message", text: "hi bob"))
+  end
+end</code></pre>
+
+<h2 id="running">Running them</h2>
+<p>In your project's repo, with the session up:</p>
+<pre><code>clawswap test                              # every *_test.exs in browser_tests/
+clawswap test browser_tests/chat_test.exs  # files or folders, from where you are
+clawswap test --only wip                   # by tag (@tag :wip), or --exclude slow
+clawswap test --watch                      # with windows, to watch them</code></pre>
+<p>It prints ExUnit's report and exits 1 when a test fails. A failure saves a screenshot of each of the test's
+browsers in the temp folder (<code>clawswap-screenshots</code>) and prints their paths. <code>--seed</code> and
+<code>--max-cases</code> are ExUnit's. A <code>browser_tests/test_helper.exs</code>, if you add one, runs first:
+for helpers the tests share.</p>
+<p>Chrome runs headless unless you pass <code>--watch</code> or set <code>CLAWSWAP_HEADLESS=0</code>. Each session
+gets a window of its own and a fresh profile; tests never use the <a href="walkthroughs.html#dev-chrome">dev Chrome</a>.
+They need what walkthroughs need: <a href="walkthroughs.html#setup">Chrome and chromedriver</a> of the same major
+version (<code>CLAWSWAP_CHROME</code>, <code>CLAWSWAP_CHROMEDRIVER</code>) and the servers running.</p>
+
+<h2 id="writing">Writing them</h2>
+<p><code>use Clawswap.Feature</code> makes the module an ExUnit case with <code>use Wallaby.Feature</code>, so
+everything in <a href="https://hexdocs.pm/wallaby/Wallaby.Browser.html">Wallaby.Browser</a> is there:
+<code>visit</code>, <code>click</code>, <code>fill_in</code>, <code>assert_has</code>, <code>refute_has</code>,
+<code>focus_frame</code>, <code>execute_script</code>, <code>take_screenshot</code> and the rest. Its options go to
+<code>ExUnit.Case</code>: <code>async: true</code> runs the module alongside others, each with its own browsers.</p>
+<table>
+  <tr><th>What</th><th>Does</th></tr>
+  <tr><td><code>feature "name", %{session: s} do … end</code></td><td>A test with one browser session.</td></tr>
+  <tr><td><code>@sessions 2</code> then <code>%{sessions: [a, b]}</code></td><td>That many sessions, each its own Chrome: two users, an admin and a customer, a buyer and a seller.</td></tr>
+  <tr><td><code>@sessions [[window_size: [width: 390, height: 844]], []]</code></td><td>Options for each session: a phone-sized one next to a desktop one.</td></tr>
+  <tr><td><code>url(:web, "/path")</code></td><td>A server's address by its name in the config (<code>url("/path")</code>: the first with a port; <code>url(:clawswap)</code>: the branch page). It follows the ports in your config, so the tests don't hard-code them.</td></tr>
+  <tr><td><code>css/2</code>, <code>xpath/2</code>, <code>button/2</code>, <code>link/2</code>, <code>text_field/2</code>, <code>fillable_field/2</code>, <code>checkbox/2</code>, <code>radio_button/2</code>, <code>select/2</code>, <code>option/2</code>, <code>file_field/2</code></td><td>Wallaby's queries, imported. <code>Query.text("…")</code> for text anywhere on the page.</td></tr>
+</table>
+<p><a href="https://github.com/cbishopvelti/clawswap/blob/main/examples/react-embed/browser_tests/app_test.exs">examples/react-embed/browser_tests/app_test.exs</a>
+has three, one with two sessions.</p>
+
+<h2 id="phoenix">Phoenix apps</h2>
+<p>The tests drive the dev server the session runs, with its dev database, so they're end-to-end checks of the
+app as you run it: give the users and records a test makes names of their own (<code>"alice-#{System.unique_integer([:positive])}"</code>),
+so runs don't trip over each other or over what you made by hand. They can't use Ecto's SQL sandbox, which needs the
+tests and the server in one BEAM. For tests that each start from an empty database, use Wallaby inside the app's own
+<code>mix test</code> as its docs describe (<code>{:wallaby, only: :test}</code>, <code>Phoenix.Ecto.SQL.Sandbox</code>
+in the endpoint, <code>config :wallaby, otp_app: :your_app</code>). The tests themselves read the same:
+<code>feature</code>, <code>@sessions</code> and the queries are Wallaby's either way.</p>
+
+<h2 id="claude">Asking Claude for them</h2>
+<p>In your repo's <code>CLAUDE.md</code>:</p>
+<pre><code>Browser tests are Wallaby features in browser_tests/ (https://cbishopvelti.github.io/clawswap/testing.html),
+run with `clawswap test` against the running servers. Add or update one with each change to what the app
+does, using @sessions when more than one user is involved, and check they pass before pushing.</code></pre>
+<p>The folder is <code>browser_tests</code> next to the config; set <code>browser_tests:</code> in the
+<a href="configuration.html">config</a> for another.</p>
+<div class="pager"><span><a href="walkthroughs.html">← Walkthroughs</a></span><span></span></div>
+<footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
+  </main>
+</div>
+</body>
+</html>

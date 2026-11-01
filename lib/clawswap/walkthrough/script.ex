@@ -51,20 +51,7 @@ defmodule Clawswap.Walkthrough.Script do
 
   def url(server, path) do
     project = B.state().project || raise "url/2 needs the project's config: run the walkthrough with clawswap walk"
-
-    port =
-      cond do
-        server in [:clawswap, "clawswap"] ->
-          project.port
-
-        server == nil ->
-          Enum.find_value(project.server_names, &project.servers[&1].port) || raise "None of the servers has a port"
-
-        true ->
-          (project.servers[to_string(server)] || raise("No server called #{server}")).port || raise "Server #{server} has no port"
-      end
-
-    "http://localhost:#{port}#{path}"
+    Clawswap.Config.url(project, server, path)
   end
 
   @doc "Opens a page: a full URL, or a path on the first server with a port (`url/1`)."
