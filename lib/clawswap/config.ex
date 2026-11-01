@@ -64,8 +64,30 @@ defmodule Clawswap.Config do
       restart: Plan.matcher([file | List.wrap(config[:restart_when])]),
       # Walkthrough scripts, relative to the config's folder (see Clawswap.Walkthrough).
       walkthroughs: config[:walkthroughs] || "walkthroughs",
+      # Browser tests (`clawswap test`), relative to the config's folder (see Clawswap.BrowserTests).
+      browser_tests: config[:browser_tests] || "browser_tests",
       short_name: config[:short_name] || (&String.replace_prefix(&1, "claude/", ""))
     }
+  end
+
+  @doc """
+  The address of one of the project's servers by its name (the first with a port when it's nil), or of
+  clawswap's own page with `:clawswap`, plus `path`. Walkthroughs' and browser tests' `url/2`.
+  """
+  def url(project, server, path) do
+    port =
+      cond do
+        server in [:clawswap, "clawswap"] ->
+          project.port
+
+        server == nil ->
+          Enum.find_value(project.server_names, &project.servers[&1].port) || raise "None of the servers has a port"
+
+        true ->
+          (project.servers[to_string(server)] || raise("No server called #{server}")).port || raise "Server #{server} has no port"
+      end
+
+    "http://localhost:#{port}#{path}"
   end
 
   defp env(name), do: System.get_env(name) |> then(&if(&1 == "", do: nil, else: &1))

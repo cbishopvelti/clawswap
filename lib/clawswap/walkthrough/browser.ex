@@ -36,11 +36,7 @@ defmodule Clawswap.Walkthrough.Browser do
   Returns `{:ok, %{session, headless, slow}}` or `{:error, message}`.
   """
   def start(opts \\ []) do
-    headless =
-      case env_flag("CLAWSWAP_HEADLESS") do
-        nil -> Keyword.get_lazy(opts, :headless, &no_display?/0)
-        flag -> flag
-      end
+    headless = headless?(opts)
 
     slow = env_int("CLAWSWAP_SLOW") || Keyword.get(opts, :slow) || if(headless, do: 0, else: 600)
     {width, height} = Keyword.get(opts, :size, {1280, 900})
@@ -52,6 +48,8 @@ defmodule Clawswap.Walkthrough.Browser do
         do: %{javascriptEnabled: true, takesScreenshot: true, unhandledPromptBehavior: "accept", chromeOptions: %{debuggerAddress: dev, args: []}},
         else: capabilities(headless, width, height)
 
+    configure()
+
     with :ok <- start_wallaby(),
          {:ok, session} <- Wallaby.start_session(capabilities: capabilities),
          :ok <- if(dev, do: use_tab(session, dev), else: :ok) do
@@ -62,6 +60,33 @@ defmodule Clawswap.Walkthrough.Browser do
       {:error, %{message: message}} -> {:error, message}
       {:error, reason} -> {:error, "Couldn't start Chrome: #{inspect(reason)}"}
     end
+  end
+
+  @doc """
+  Whether Chrome runs without a window: CLAWSWAP_HEADLESS when it's set, else the `headless` option, else
+  when there's no display.
+  """
+  def headless?(opts \\ []) do
+    case env_flag("CLAWSWAP_HEADLESS") do
+      nil -> Keyword.get_lazy(opts, :headless, &no_display?/0)
+      flag -> flag
+    end
+  end
+
+  @doc """
+  Sets Wallaby up for browser tests (`Clawswap.BrowserTests`), which start their own sessions, as many as
+  a feature asks for, each in a window of its own (never the dev Chrome): the same Chrome and chromedriver,
+  version check and options as a walkthrough's, failures' screenshots in `screenshots`. Options:
+  `headless`, `size`. Returns `:ok` or `{:error, message}`.
+  """
+  def setup_tests(opts \\ []) do
+    {width, height} = Keyword.get(opts, :size, {1280, 900})
+    configure()
+    chromedriver = Application.get_env(:wallaby, :chromedriver)
+    Application.put_env(:wallaby, :chromedriver, Keyword.put(chromedriver, :capabilities, capabilities(headless?(opts), width, height)))
+    Application.put_env(:wallaby, :screenshot_on_failure, true)
+    Application.put_env(:wallaby, :screenshot_dir, Keyword.get(opts, :screenshots, Path.join(System.tmp_dir!(), "clawswap-screenshots")))
+    start_wallaby()
   end
 
   @doc """
@@ -211,8 +236,6 @@ defmodule Clawswap.Walkthrough.Browser do
   def element_arg(%Wallaby.Element{id: id}), do: %{"ELEMENT" => id, "element-6066-11e4-a23f-4f8b7e1fe0a6" => id}
 
   defp start_wallaby do
-    configure()
-
     case Application.ensure_all_started(:wallaby) do
       {:ok, _} ->
         :ok
