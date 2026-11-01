@@ -30,6 +30,7 @@ defmodule Clawswap.CLI.Completion do
         switch) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "$(#{@branches})" -- "$cur")) ;;
         update) COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
         walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
+        test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
         completion) COMPREPLY=($(compgen -W "#{Enum.join(@shells, " ")}" -- "$cur")) ;;
       esac
     }
@@ -57,6 +58,7 @@ defmodule Clawswap.CLI.Completion do
         switch) (( CURRENT == 3 )) && compadd -- ${(f)"$(#{@branches})"} ;;
         update) compadd -- --all ;;
         walk) compadd -- --headless ;;
+        test) compadd -- --watch --headless --only --exclude --seed ;;
         completion) compadd -- #{Enum.join(@shells, " ")} ;;
       esac
     }
@@ -77,6 +79,7 @@ defmodule Clawswap.CLI.Completion do
     complete -c clawswap -n '__fish_seen_subcommand_from switch' -a '(#{String.replace(@branches, "'", "\\'")})'
     complete -c clawswap -n '__fish_seen_subcommand_from update' -a --all
     complete -c clawswap -n '__fish_seen_subcommand_from walk' -a --headless
+    complete -c clawswap -n '__fish_seen_subcommand_from test' -a '--watch --headless --only --exclude --seed'
     complete -c clawswap -n '__fish_seen_subcommand_from completion' -a '#{Enum.join(@shells, " ")}'
     """
   end

@@ -86,6 +86,7 @@ clawswap update            # the steps for what changed since they last ran (aft
 clawswap update --all      # every step
 clawswap walk [name...]    # play walkthroughs in Chrome (default: the ones this branch added)
 clawswap browser           # open a dev Chrome at your app, that walkthroughs play in
+clawswap test [path...]    # run the browser tests (Wallaby) against the servers; --watch, --only tag
 clawswap layout            # the zellij layout up opens, to start your own from (tmux: its commands)
 clawswap completion bash   # shell completion (bash, zsh or fish); see docs/usage.html#completion
 ```
@@ -143,6 +144,7 @@ or a list of the program and its arguments. A `cwd` is relative to the repo root
 | `restart_when` | | More paths that restart the watcher after a switch (it always restarts when the config changes). |
 | `short_name` | drops `claude/` | `fn branch -> name end`: the name shown for a branch without a PR. |
 | `walkthroughs` | `walkthroughs` | The folder of [walkthroughs](#walkthroughs), relative to the config's folder. |
+| `browser_tests` | `browser_tests` | The folder of [browser tests](#browser-tests), relative to the config's folder. |
 
 `when` is a Regex, a path (`"mix.lock"` is that file at the root, `"migrations/"` anything under that
 folder), a function of the path, or a list of those.
@@ -366,6 +368,38 @@ walkthrough (https://cbishopvelti.github.io/clawswap/walkthroughs.html) that sho
 ```
 
 A walkthrough is code run on your machine, as a branch's config and steps are.
+
+## Browser tests
+
+A suite you keep, alongside the walkthroughs: [Wallaby](https://hexdocs.pm/wallaby) features in the project's
+`browser_tests/` folder, run by `clawswap test` against the servers the session runs. clawswap brings Wallaby and
+the Chrome setup, so the project's build needs nothing added. `@sessions 2` gives a test two browsers at once,
+each with its own cookies: two users of a chat, a buyer and a seller.
+
+```elixir
+# browser_tests/chat_test.exs
+defmodule ChatTest do
+  use Clawswap.Feature, async: true
+
+  @sessions 2
+  feature "a message reaches the other person", %{sessions: [alice, bob]} do
+    alice |> visit(url("/chat")) |> fill_in(text_field("Message"), with: "hi bob") |> click(button("Send"))
+    bob |> visit(url("/chat")) |> assert_has(css(".message", text: "hi bob"))
+  end
+end
+```
+
+```bash
+clawswap test                  # every *_test.exs in browser_tests/, headless
+clawswap test --watch          # in windows
+clawswap test --only wip       # by tag; or name files and folders
+```
+
+`url(:web, "/path")` is a server's address from the config. A failure saves a screenshot of each of the test's
+browsers. They hit the dev server and its database, so a Phoenix app's tests can't use Ecto's SQL sandbox;
+for that, use Wallaby in the app's own `mix test`. See
+[the docs](https://cbishopvelti.github.io/clawswap/testing.html), and
+[examples/react-embed/browser_tests](examples/react-embed/browser_tests) for three, one with two sessions.
 
 ## Tests
 

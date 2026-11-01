@@ -1,7 +1,7 @@
 defmodule Clawswap.CLI do
   @moduledoc "clawswap's commands. See README.md."
 
-  alias Clawswap.{Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
+  alias Clawswap.{BrowserTests, Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
 
   # Each command: its name, the arguments it takes (as usage shows them), how many it takes at least and at
   # most (:any for no limit), and what it does.
@@ -15,6 +15,7 @@ defmodule Clawswap.CLI do
     {"smee", "[url]", 0, 1, "Set up the smee.io channel for the GitHub webhook"},
     {"walk", "[name...]", 0, :any, "Run walkthroughs in Chrome (default: the ones this branch added); --headless"},
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
+    {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
     {"layout", "", 0, 0, "Print the layout up opens (zellij's layout, or tmux's commands)"},
     {"watch", "", 0, 0, "The watcher, with its page and API (runs in the session's clawswap pane)"},
     {"completion", "<shell>", 1, 1, "Print shell completion for bash, zsh or fish"},
@@ -55,6 +56,7 @@ defmodule Clawswap.CLI do
   defp dispatch("smee", rest), do: smee(List.first(rest))
   defp dispatch("walk", rest), do: walk(rest)
   defp dispatch("browser", []), do: browser()
+  defp dispatch("test", rest), do: browser_tests(rest)
   defp dispatch("layout", []), do: layout()
   defp dispatch("completion", [shell]), do: completion(shell)
 
@@ -298,6 +300,47 @@ defmodule Clawswap.CLI do
       end)
 
     if failed != [], do: System.halt(1)
+  end
+
+  # Runs the project's browser tests (Clawswap.BrowserTests) with ExUnit, headless unless --watch, and exits
+  # 1 when one fails. Paths are relative to where you ran it.
+  defp browser_tests(args) do
+    {flags, names, invalid} =
+      OptionParser.parse(args, strict: [watch: :boolean, headless: :boolean, only: :keep, exclude: :keep, seed: :integer, max_cases: :integer])
+
+    if invalid != [], do: fail("Unknown option #{elem(hd(invalid), 0)}\n" <> @usage)
+    project = project!()
+
+    files =
+      case BrowserTests.files(project, names, repo_dir()) do
+        {:ok, files} -> files
+        {:error, message} -> fail(message <> ". See README.md's Browser tests.")
+      end
+
+    first = Enum.find_value(project.server_names, &project.servers[&1].port)
+
+    if first && not Ports.port_open?(first) do
+      IO.puts(:stderr, "Nothing is listening on #{first} yet: the tests drive the servers `clawswap up` runs.")
+    end
+
+    headless =
+      cond do
+        flags[:watch] -> false
+        flags[:headless] -> true
+        true -> nil
+      end
+
+    opts =
+      [headless: headless, include: Keyword.get_values(flags, :only), exclude: Keyword.get_values(flags, :exclude)] ++
+        Keyword.take(flags, [:seed, :max_cases])
+
+    opts = Enum.reject(opts, fn {_, v} -> is_nil(v) end)
+
+    case BrowserTests.run(project, files, opts) do
+      {:ok, 0} -> :ok
+      {:ok, _} -> System.halt(1)
+      {:error, message} -> fail(message)
+    end
   end
 
   # Opens the dev Chrome (its own profile, kept between runs, with a debugging port) at the first server, so
