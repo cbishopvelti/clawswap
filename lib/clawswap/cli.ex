@@ -3,38 +3,82 @@ defmodule Clawswap.CLI do
 
   alias Clawswap.{Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
 
-  @usage """
-  Usage: clawswap <command>
-    init             Write a starter clawswap.exs in this repo
-    up               Start (or attach to) the zellij or tmux session with every server
-    status           The branches the keys show, and the last switch
-    switch <branch>  Switch branch: stop the servers, check out, update, start them again
-    pull             Pull the current branch the same way (nothing happens if it's up to date)
-    update [rev]     Run the steps for what changed since they last ran (or since rev), or --all
-    smee [url]       Set up the smee.io channel for the GitHub webhook
-    walk [name...]   Run walkthroughs in Chrome (default: the ones this branch added); --headless
-    browser          Open a dev Chrome that walkthroughs play in, at your app
-    layout           Print the layout up opens (zellij's layout, or tmux's commands)
-    watch            The watcher, with its page and API (runs in the session's clawswap pane)
-  """
+  # Each command: its name, the arguments it takes (as usage shows them), how many it takes at least and at
+  # most (:any for no limit), and what it does.
+  @commands [
+    {"init", "", 0, 0, "Write a starter clawswap.exs in this repo"},
+    {"up", "", 0, 0, "Start (or attach to) the zellij or tmux session with every server"},
+    {"status", "", 0, 0, "The branches the keys show, and the last switch"},
+    {"switch", "<branch>", 1, 1, "Switch branch (its name, part of it, or its PR number), restarting the servers"},
+    {"pull", "", 0, 0, "Pull the current branch the same way (nothing happens if it's up to date)"},
+    {"update", "[rev]", 0, 1, "Run the steps for what changed since they last ran (or since rev), or --all"},
+    {"smee", "[url]", 0, 1, "Set up the smee.io channel for the GitHub webhook"},
+    {"walk", "[name...]", 0, :any, "Run walkthroughs in Chrome (default: the ones this branch added); --headless"},
+    {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
+    {"layout", "", 0, 0, "Print the layout up opens (zellij's layout, or tmux's commands)"},
+    {"watch", "", 0, 0, "The watcher, with its page and API (runs in the session's clawswap pane)"},
+    {"completion", "<shell>", 1, 1, "Print shell completion for bash, zsh or fish"},
+    {"help", "", 0, 0, "This list"}
+  ]
+
+  @usage "Usage: clawswap <command>\n" <>
+           Enum.map_join(@commands, fn {name, args, _, _, summary} ->
+             "  " <> String.pad_trailing(String.trim("#{name} #{args}"), 20) <> summary <> "\n"
+           end)
+
+  @doc "The commands, as `{name, summary}`."
+  def commands, do: for({name, _, _, _, summary} <- @commands, do: {name, summary})
 
   def main(args) do
     case args do
-      ["init"] -> init()
-      ["up"] -> up()
-      ["watch"] -> watch()
-      ["status"] -> status()
-      ["switch", branch] -> switch(branch)
-      ["pull"] -> pull()
-      ["update" | rest] -> update(List.first(rest))
-      ["smee" | rest] -> smee(List.first(rest))
-      ["walk" | rest] -> walk(rest)
-      ["browser"] -> browser()
-      ["layout"] -> layout()
-      [help] when help in ["help", "--help", "-h"] -> IO.write(@usage)
       [] -> IO.write(@usage)
-      _ -> fail(@usage)
+      [help | _] when help in ["help", "--help", "-h"] -> IO.write(@usage)
+      [command | rest] -> run(command, rest)
     end
+  end
+
+  defp run(command, rest) do
+    case List.keyfind(@commands, command, 0) do
+      nil -> unknown(command, rest)
+      {_, usage, min, max, _} when length(rest) < min or (max != :any and length(rest) > max) -> wrong_arguments(command, usage, rest)
+      _ -> dispatch(command, rest)
+    end
+  end
+
+  defp dispatch("init", []), do: init()
+  defp dispatch("up", []), do: up()
+  defp dispatch("watch", []), do: watch()
+  defp dispatch("status", []), do: status()
+  defp dispatch("switch", [branch]), do: switch(branch)
+  defp dispatch("pull", []), do: pull()
+  defp dispatch("update", rest), do: update(List.first(rest))
+  defp dispatch("smee", rest), do: smee(List.first(rest))
+  defp dispatch("walk", rest), do: walk(rest)
+  defp dispatch("browser", []), do: browser()
+  defp dispatch("layout", []), do: layout()
+  defp dispatch("completion", [shell]), do: completion(shell)
+
+  defp unknown(command, rest) do
+    names = Enum.map(@commands, &elem(&1, 0))
+
+    hint =
+      case Clawswap.CLI.Forgive.closest(command, names) do
+        nil -> "Run clawswap help for the commands."
+        name -> "Did you mean clawswap #{Enum.join([name | rest], " ")}? (clawswap help lists the commands)"
+      end
+
+    fail("clawswap: there's no command #{inspect(command)}. #{hint}")
+  end
+
+  defp wrong_arguments(command, usage, rest) do
+    what =
+      case usage do
+        "" -> "#{command} takes no arguments (got #{Enum.join(rest, " ")})"
+        _ when rest == [] -> "#{command} needs #{usage}"
+        _ -> "#{command} takes #{usage}, not #{Enum.join(rest, " ")}"
+      end
+
+    fail("clawswap: #{what}. Usage: clawswap #{String.trim("#{command} #{usage}")}")
   end
 
   defp repo_dir, do: System.get_env("CLAWSWAP_REPO") || File.cwd!()
@@ -168,9 +212,34 @@ defmodule Clawswap.CLI do
     end
   end
 
-  defp switch(branch) do
+  # Takes the branch's name, part of it or its PR number, and says which it picked.
+  defp switch(input) do
+    branches = api("/state")["branches"]
+
+    branch =
+      case Clawswap.CLI.Forgive.branch(input, branches) do
+        {:ok, branch} ->
+          branch
+
+        {:ambiguous, many} ->
+          fail("#{input} could be any of #{Enum.join(many, ", ")}; say which (clawswap status lists them)")
+
+        {:none, nil} ->
+          fail("#{input} isn't a listed branch or an open PR's number; clawswap status lists them")
+
+        {:none, close} ->
+          fail("#{input} isn't a listed branch. Did you mean clawswap switch #{close}?")
+      end
+
     api("/switch", %{branch: branch})
-    IO.puts("Switching to #{branch}; follow it in the clawswap pane")
+    IO.puts("Switching to #{branch}#{if branch != input, do: " (from #{input})"}; follow it in the clawswap pane")
+  end
+
+  defp completion(shell) do
+    case Clawswap.CLI.Completion.script(shell, commands()) do
+      nil -> fail("clawswap: no completion for #{shell}; it has #{Enum.join(Clawswap.CLI.Completion.shells(), ", ")}")
+      script -> IO.write(script)
+    end
   end
 
   defp pull do
