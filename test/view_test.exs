@@ -42,6 +42,10 @@ defmodule ClawswapWeb.ViewTest do
     failed = View.page(%{@state | switch: %{target: "claude/a", pull: false, phase: "failed", step: nil, error: "Uncommitted changes"}})
     assert failed.error == "claude/a: Uncommitted changes"
     assert Enum.at(failed.branches, 1).class == "failed"
+    assert view.switched == nil and failed.switched == nil
+    # A finished one says so, for the app framing the page.
+    done = View.page(%{@state | switch: %{target: "claude/a", pull: false, phase: "done", step: nil, error: nil, doneAt: 7}})
+    assert done.switched == %{branch: "claude/a", at: 7}
   end
 
   test "draws the OpenDeck plugin's key images for a deck the page drives" do

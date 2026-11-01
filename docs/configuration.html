@@ -95,7 +95,7 @@ YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <
   <tr><th>Field</th><th>What it is</th></tr>
   <tr><td><code>command</code></td><td>Required. What the pane runs.</td></tr>
   <tr><td><code>cwd</code></td><td>Where, relative to the repo root. Default <code>"."</code>.</td></tr>
-  <tr><td><code>port</code></td><td>The port it listens on. A switch makes sure it's free before checking out (a server left running outside the session is sent TERM, then KILL), and its <code>localhost</code> origin may call the API.</td></tr>
+  <tr><td><code>port</code></td><td>The port it listens on. A switch makes sure it's free before checking out (a server left running outside the session is sent TERM, then KILL), waits (up to 3 minutes) for it to listen again before it calls the switch done, and its <code>localhost</code> origin may call the API.</td></tr>
   <tr><td><code>match</code></td><td>A Regex that finds the pane by its command, if the pane has been renamed.</td></tr>
 </table>
 
@@ -181,8 +181,8 @@ that points its own name at 127.0.0.1 gets 403.</p></div>
 Phoenix serves the page (Hologram), the JSON API and the settings editor all from it, on <code>127.0.0.1</code> only.
 GitHub's events don't need one: the watcher connects out to smee.io and reads them as a stream. The default is out
 of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</p>
-<p>A <code>port</code> under <code>servers</code> is your app's, not clawswap's: your app picks it, and clawswap only
-frees it before a switch and lets that origin call the API. Two others come up only in particular cases:</p>
+<p>A <code>port</code> under <code>servers</code> is your app's, not clawswap's: your app picks it, and clawswap
+frees it before a switch, waits for it to listen again before calling the switch done, and lets that origin call the API. Two others come up only in particular cases:</p>
 <table>
   <tr><th>Port</th><th>What</th><th>When</th></tr>
   <tr><td><code>27390</code></td><td>The watcher: page, API, settings</td><td>Always</td></tr>

@@ -10,6 +10,15 @@ export default function BranchMenu() {
   const [frameKey, setFrameKey] = useState(0);
   const ref = useRef(null);
 
+  // When a switch is done (its servers listen again), the framed page says so, and the app reloads. Vite
+  // would reload anyway when its server comes back; an app without that (Phoenix, say) needs this.
+  useEffect(() => {
+    const onMessage = (e) =>
+      e.origin === new URL(CLAWSWAP_URL).origin && e.data?.clawswap === "switched" && location.reload();
+    addEventListener("message", onMessage);
+    return () => removeEventListener("message", onMessage);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);

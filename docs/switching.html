@@ -47,10 +47,15 @@
   <li>Runs the <a href="configuration.html#steps">steps</a> whose <code>when</code> matches a file that changed, in the
     config's order.</li>
   <li>Starts the servers again, even after a failed step, so you're never left without them.</li>
+  <li>Waits (up to 3 minutes) for each server with a <code>port</code> to listen on it, so "done" means your app
+    answers again. One that doesn't fails the switch.</li>
   <li>Says the config's <code>notes</code> for what changed.</li>
 </ol>
 <p>The <code>clawswap</code> pane shows the output; the page and keys show the step it's on. If the switch changed the
 config (or a <code>restart_when</code> path), the watcher restarts itself to load the new one.</p>
+<p>clawswap doesn't reload your app's page itself. A Vite app reloads when its dev server comes back; for
+anything else (a Phoenix app, say), have the page <a href="page.html#reload">reload when the framed page says the
+switch is done</a>.</p>
 
 <h2 id="pull">Pull</h2>
 <p>A pull is a switch to the same branch: fast-forward, the steps it needs, servers restarted. When there's nothing

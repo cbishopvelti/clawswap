@@ -52,4 +52,7 @@ the watcher's page, or run `clawswap walk branches-menu`, to watch Chrome open t
 - **Restarts.** A switch kills this dev server, so the app reloads and its state resets, while the
   framed page (kept loaded while the menu is closed) keeps its own connection to the watcher and follows
   the switch to the end.
+- **Reload.** When the switch is done the framed page posts `{clawswap: "switched", branch}` to the app,
+  and `BranchMenu` reloads on it. Vite reloads by itself too; the listener is what an app without that
+  (Phoenix, say) needs. See [docs/page.html#reload](../../docs/page.html#reload).
 - **Another port.** Set `VITE_CLAWSWAP_URL` (in `.env.local`) when `clawswap.exs`'s `port` isn't 27390.
