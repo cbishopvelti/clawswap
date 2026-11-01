@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ELIXIR_VERSION: "1.19"
+  OTP_VERSION: "28"
+
+jobs:
+  test:
+    name: mix test and format
+    runs-on: ubuntu-24.04
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-test-${{ runner.os }}-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: mix-test-${{ runner.os }}-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix compile --warnings-as-errors
+      - run: mix test
+
+  integration:
+    name: browser tests (mix test.integration)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MIX_ENV: test
+      CLAWSWAP_HEADLESS: "1"
+      ZELLIJ_VERSION: "0.45.1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-integration-${{ runner.os }}-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: mix-integration-${{ runner.os }}-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
+
+      # The tests run `clawswap up` in tmux and zellij, and npm ci for examples/react-embed.
+      - name: Install tmux and zellij
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+          curl -fsSL "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin zellij
+          tmux -V
+          zellij --version
+
+      # The runner image ships Google Chrome with the chromedriver built for it (same major version, which
+      # is all Clawswap.Walkthrough.Driver asks for). Ubuntu 24.04's AppArmor can stop Chrome's sandbox
+      # starting; let it.
+      - name: Chrome and chromedriver
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "CLAWSWAP_CHROME=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "CLAWSWAP_CHROMEDRIVER=${CHROMEWEBDRIVER}/chromedriver" >> "$GITHUB_ENV"
+          google-chrome --version
+          "${CHROMEWEBDRIVER}/chromedriver" --version
+
+      - run: mix deps.get
+      - run: mix test.integration
