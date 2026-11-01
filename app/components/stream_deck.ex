@@ -6,6 +6,10 @@ defmodule ClawswapWeb.StreamDeck do
   second opens the Claude Code thread that made its branch (the checkout's, on Pull). Chrome remembers
   the deck, so the page opens it again by itself next time, and when it's plugged back in.
 
+  With several projects' watchers running, one page has the deck at a time (`Clawswap.DeckOwner`): the
+  one Connect (or "Use here") was last pressed on. The others let it go, say which project has it, and
+  offer "Use here" to take it back, so one key press never switches two projects.
+
   It's all browser APIs (navigator.hid, OffscreenCanvas) called through Hologram's JS interop, so this
   runs on the client. The key images are the OpenDeck plugin's SVGs (`ClawswapWeb.View.keys/1`), turned
   into the JPEG the deck wants on a canvas.
@@ -17,9 +21,11 @@ defmodule ClawswapWeb.StreamDeck do
   use Hologram.Component
   use Hologram.JS
 
-  alias Clawswap.Watcher
+  alias Clawswap.{DeckOwner, Watcher}
 
   prop(:keys, :map)
+  # Who has the deck (Clawswap.DeckOwner.status/1): owner "mine", "free" or "other" (with its name).
+  prop(:deck, :map)
 
   @vendor 0x0FD9
   # Product id => {name, number of keys, key size in pixels}.
@@ -39,7 +45,7 @@ defmodule ClawswapWeb.StreamDeck do
 
   def init(props, component, _server) do
     component
-    |> put_state(keys: props.keys, model: nil, count: 0, size: 0, sent: %{}, pressed: [], holds: %{}, presses: 0, message: nil)
+    |> put_state(keys: props.keys, deck: props.deck, model: nil, count: 0, size: 0, sent: %{}, pressed: [], holds: %{}, presses: 0, message: nil)
     |> put_action(:reconnect)
   end
 
@@ -49,21 +55,27 @@ defmodule ClawswapWeb.StreamDeck do
       {%if @model}
         <span class="deck-on" title="Its keys show these branches; the last one pulls">{@model}</span>
       {%else}
-        <button class="pull" $click="connect">Connect Stream Deck</button>
+        {%if @deck.owner == "other"}
+          <span class="deck-elsewhere" title="Another project's page drives the Stream Deck">Stream Deck on {@deck.name}</span>
+          <button class="pull" $click="connect">Use here</button>
+        {%else}
+          <button class="pull" $click="connect">Connect Stream Deck</button>
+        {/if}
       {/if}
       {%if @message}<span class="deck-message">{@message}</span>{/if}
     </span>
     """
   end
 
-  # On load, and when a deck is plugged in: open one Chrome already let this page use.
+  # On load, and when a deck is plugged in: open one Chrome already let this page use, unless another
+  # project's page has it.
   def action(:reconnect, _params, component) do
-    if supported?() and component.state.model == nil do
+    if supported?() and component.state.model == nil and component.state.deck.owner != "other" do
       listen_for_plugging()
 
-      case hid() |> JS.call(:getDevices, []) |> Task.await() |> Enum.find(&known?/1) do
+      case granted() do
         nil -> component
-        device -> open(component, device)
+        device -> component |> open(device) |> claim()
       end
     else
       component
@@ -81,20 +93,25 @@ defmodule ClawswapWeb.StreamDeck do
 
       true ->
         listen_for_plugging()
-        filters = Enum.map(Map.keys(@models), &%{vendorId: @vendor, productId: &1})
 
-        # Cancelling the browser's chooser gives no devices.
-        case hid() |> JS.call(:requestDevice, [%{filters: filters}]) |> Task.await() do
-          [device | _] -> open(component, device)
-          [] -> component
+        # A deck Chrome already let this page use ("Use here"), else the browser's chooser.
+        case granted_or_chosen() do
+          nil -> component
+          device -> component |> open(device) |> put_state(:deck, %{owner: "mine", name: nil}) |> put_command(:claim)
         end
     end
   end
 
-  # The page's branches changed.
+  # The page's branches changed, or who has the deck did.
   def action(:draw, params, component) do
-    component = put_state(component, :keys, params.keys)
-    if component.state.model, do: draw(component), else: component
+    component = put_state(component, keys: params.keys, deck: params.deck)
+
+    cond do
+      component.state.model == nil -> component
+      # Another project's page took the deck: let it go.
+      params.deck.owner == "other" -> release(component)
+      true -> draw(component)
+    end
   end
 
   # An input report: which keys are down now, 1 or 0 each. A key does its thing when it's let go, unless
@@ -154,6 +171,13 @@ defmodule ClawswapWeb.StreamDeck do
   def command(:walk, params, server), do: answer(server, Watcher.walk(params.name))
   def command(:claude, params, server), do: answer(server, Watcher.open_claude(params.branch))
 
+  # This page has the deck now: the other projects' watchers see it and tell their pages.
+  def command(:claim, _params, server) do
+    project = Clawswap.Application.project()
+    DeckOwner.claim(project.port, project.name)
+    server
+  end
+
   defp answer(server, {:ok, _state}), do: put_action(server, name: :show_message, target: "page", params: %{message: nil})
   defp answer(server, {:error, _status, message}), do: put_action(server, name: :show_message, target: "page", params: %{message: message})
 
@@ -173,6 +197,40 @@ defmodule ClawswapWeb.StreamDeck do
       key == count - 2 -> keys.walk.name && {:walk, keys.walk.name}
       entry = Enum.at(keys.branches, key) -> {:switch, entry.branch}
       true -> nil
+    end
+  end
+
+  # Opened by itself (on load or plug-in): say so, unless this page had it already.
+  defp claim(component) do
+    if component.state.deck.owner == "mine",
+      do: component,
+      else: component |> put_state(:deck, %{owner: "mine", name: nil}) |> put_command(:claim)
+  end
+
+  defp release(component) do
+    device = deck()
+    if opened?(device), do: device |> JS.call(:close, []) |> Task.await()
+    JS.set(:window, :clawswapDeck, nil)
+    put_state(component, model: nil, sent: %{}, pressed: [], holds: %{})
+  end
+
+  # A deck Chrome already let this page use, plugged in now; nil if none.
+  defp granted, do: hid() |> JS.call(:getDevices, []) |> Task.await() |> Enum.find(&known?/1)
+
+  defp granted_or_chosen do
+    case granted() do
+      nil -> choose()
+      device -> device
+    end
+  end
+
+  # The browser's chooser: it lists the decks it can see and the user picks one (cancelling gives none).
+  defp choose do
+    filters = Enum.map(Map.keys(@models), &%{vendorId: @vendor, productId: &1})
+
+    case hid() |> JS.call(:requestDevice, [%{filters: filters}]) |> Task.await() do
+      [device | _] -> device
+      [] -> nil
     end
   end
 

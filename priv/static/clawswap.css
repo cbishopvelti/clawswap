@@ -106,4 +106,5 @@ li.behind .status { color: var(--behind); }
 .deck { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .deck-on { color: var(--current); }
 .deck-message { color: var(--failed); }
+.deck-elsewhere { color: var(--muted); }
 @media (max-width: 480px) { .deck { display: none; } }
