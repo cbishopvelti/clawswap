@@ -42,6 +42,7 @@
 <h2 id="commands">Commands</h2>
 <table>
   <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config and webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
   <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap up</code></td><td>Opens the zellij or tmux session, or re-attaches to it.</td></tr>
   <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
