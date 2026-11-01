@@ -9,6 +9,7 @@ defmodule ClawswapWeb.Api do
       POST /claude  {"branch": ...}  open the Claude Code thread that made the branch (the checkout's
                                      without one) in the browser; 200 {"url": ...} or 404
       POST /walk    {"name": ...}    202, then follow /state's walk
+      POST /smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
 
   It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
   the browser send a JSON POST here without a preflight, which only those origins pass. The Host check
@@ -21,7 +22,7 @@ defmodule ClawswapWeb.Api do
 
   alias Clawswap.Watcher
 
-  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk"]
+  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee"]
 
   @impl true
   def init(opts), do: opts
@@ -82,6 +83,13 @@ defmodule ClawswapWeb.Api do
       end
 
     answer(conn, Watcher.walk(name))
+  end
+
+  defp post(conn, "/smee", body) do
+    case JSON.decode(if(body == "", do: "{}", else: body)) do
+      {:ok, %{"url" => "http" <> _ = url}} -> answer(conn, Watcher.set_smee(url))
+      _ -> json(conn, 400, %{error: "Expected {\"url\": \"https://smee.io/...\"}"})
+    end
   end
 
   defp branch_of(body) do
