@@ -117,10 +117,20 @@ defmodule Clawswap.Integration do
     rescue
       error ->
         IO.puts(panes())
+        IO.puts(listeners())
         reraise error, __STACKTRACE__
     end
 
     Map.put(project, :multiplexer, multiplexer)
+  end
+
+  # Who listens where, and what the app's port answers, for a failure to come up.
+  defp listeners do
+    {ss, _} = System.cmd("sh", ["-c", "ss -ltnp 2>&1 | grep -E '2739[0-9]'; curl -sS -o /dev/null -w '%{http_code}' -m 5 http://localhost:27391/ 2>&1"])
+    v4 = :httpc.request(:get, {~c"http://127.0.0.1:27391/", []}, [timeout: 5000], [])
+    v6 = :httpc.request(:get, {~c"http://[::1]:27391/", []}, [timeout: 5000], [])
+
+    "[integration] listeners and curl:\n#{ss}\n[integration] httpc v4: #{inspect(v4, limit: 8, printable_limit: 200)}\n[integration] httpc v6: #{inspect(v6, limit: 8, printable_limit: 200)}"
   end
 
   # What every pane of the tests' tmux server shows (`clawswap up`'s, and the session it builds), with scrollback.
