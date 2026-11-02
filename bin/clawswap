@@ -6,14 +6,46 @@ set -u
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 tool=$(cd "$(dirname "$self")/.." && pwd)
 export CLAWSWAP_REPO="$PWD"
+# Your PATH as it is here, in your project. clawswap runs on its own Elixir (below), and gives this back to
+# everything it starts in your repo (Clawswap.HostEnv), so your project keeps its own Elixir too.
+export CLAWSWAP_HOST_PATH="$PATH"
 cd "$tool" || exit 1
+
+# Runs a command on clawswap's own Elixir, the one its .tool-versions pins, whatever your project pins:
+# CLAWSWAP_ELIXIR_PATH's folders first when it's set, else mise's or asdf's install of those versions, else
+# the Elixir on your PATH. Only that command gets the change; this script's PATH stays yours.
+own() {
+  if [ -n "${CLAWSWAP_ELIXIR_PATH:-}" ]; then
+    PATH="$CLAWSWAP_ELIXIR_PATH:$PATH" "$@"
+  elif command -v mise >/dev/null 2>&1 && pinned mise; then
+    mise exec -- "$@"
+  else
+    # asdf's shims read the .tool-versions of the folder they run in, which is clawswap's, so they need
+    # nothing more (pinned just says how to install it when it's missing).
+    command -v asdf >/dev/null 2>&1 && ! command -v mise >/dev/null 2>&1 && pinned asdf
+    "$@"
+  fi
+}
+
+# Whether mise or asdf has the pinned Erlang and Elixir installed. If not, it says how to install them, once
+# a run: mise and asdf aren't left to install them on their own.
+pinned() {
+  "$1" where erlang >/dev/null 2>&1 && "$1" where elixir >/dev/null 2>&1 && return 0
+  if [ -z "${CLAWSWAP_PIN_WARNED:-}" ]; then
+    echo "clawswap: $1 hasn't installed the Erlang and Elixir that $tool/.tool-versions pins." >&2
+    echo "clawswap: Run \`(cd $tool && $1 install)\`, or set CLAWSWAP_ELIXIR_PATH to an Elixir 1.19 install's bin folder." >&2
+    [ "$1" = mise ] && echo "clawswap: Using the Elixir on your PATH meanwhile." >&2
+    export CLAWSWAP_PIN_WARNED=1
+  fi
+  return 1
+}
 
 case "${1:-}" in
   up)
     # mix gets the session ready; zellij or tmux then needs this terminal, so it runs from here.
     CLAWSWAP_EXEC=$(mktemp)
     export CLAWSWAP_EXEC
-    mix clawswap up || { rm -f "$CLAWSWAP_EXEC"; exit 1; }
+    own mix clawswap up || { rm -f "$CLAWSWAP_EXEC"; exit 1; }
     set --
     while IFS= read -r line; do set -- "$@" "$line"; done < "$CLAWSWAP_EXEC"
     rm -f "$CLAWSWAP_EXEC"
@@ -21,23 +53,24 @@ case "${1:-}" in
     ;;
   doctor)
     # Runs with plain elixir, so it works before clawswap's deps are fetched or compiled.
-    command -v elixir >/dev/null 2>&1 || {
+    own sh -c 'command -v elixir' >/dev/null || {
       echo "  MISSING   Elixir: Install Elixir 1.19 or newer: https://elixir-lang.org/install.html" >&2
       exit 1
     }
-    exec elixir -r lib/clawswap/doctor.ex -e 'Clawswap.Doctor.main()'
+    own elixir -r lib/clawswap/doctor.ex -e 'Clawswap.Doctor.main()'
+    exit
     ;;
   watch)
     # Hologram serves its pages only with this set in dev.
     export HOLOGRAM_START=1
     # The watcher exits with 75 after a switch that changed its config, so the new one takes over.
     while :; do
-      mix clawswap watch
+      own mix clawswap watch
       code=$?
       [ "$code" -eq 75 ] || exit "$code"
     done
     ;;
   *)
-    exec mix clawswap "$@"
+    own mix clawswap "$@"
     ;;
 esac

@@ -40,6 +40,11 @@ pages in `docs/` directly.
    cd <path-to-your-project>
    <path-to-clawswap>/bin/clawswap status
    ```
+   clawswap runs on its own Elixir, not your project's: `bin/clawswap` runs it on the versions its
+   `.tool-versions` pins (through `mise exec`, or asdf's shims), and gives everything it runs in your
+   repo your own `PATH` back. Install those once with `mise install` or `asdf install` in the clone, or
+   point `CLAWSWAP_ELIXIR_PATH` at an Elixir 1.19's and its Erlang's `bin` folders (`:`-separated). See
+   [docs/install.html#own-elixir](https://cbishopvelti.github.io/clawswap/install.html#own-elixir).
    To type just `clawswap`, link it into a folder on your `PATH`. Run this from the clone's root, so
    `$PWD` gives the link the full path:
    ```bash

@@ -8,6 +8,8 @@ defmodule Clawswap.Application do
 
   @impl true
   def start(_type, _args) do
+    # clawswap may run on another Elixir than your project: what it starts in your repo gets yours back.
+    Clawswap.HostEnv.restore()
     Supervisor.start_link([{Task.Supervisor, name: Clawswap.TaskSupervisor}], strategy: :one_for_one, name: Clawswap.Supervisor)
   end
 
