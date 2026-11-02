@@ -55,5 +55,10 @@ defmodule Clawswap.Integration.DebugTest do
     say "Close Chrome closes it"
     click button("Close Chrome")
     see css("aside.debug .browser.closed")
+
+    say "/panel is the panel alone, for an app's sidebar: the app folds it, so it has no 🐞"
+    visit url(:clawswap, "/panel")
+    see css("body.panel-only aside.debug .browser.closed")
+    refute_see css("aside.debug .fold")
   end
 end

@@ -158,3 +158,10 @@ aside.debug h1 { font-size: 16px; }
 .debug .log li.console, .debug .log li.info { color: var(--muted); }
 /* Narrow, as in an app's dropdown menu: no room for it. */
 @media (max-width: 700px) { aside.debug { display: none; } }
+/* /panel (ClawswapWeb.PanelPage): the debug panel alone, as an app's sidebar frames it. */
+body.panel-only { background: var(--card); }
+.panel-only aside.debug, .panel-only aside.debug.open { display: block; position: static; width: auto; height: auto; min-height: 100vh; border-left: 0; }
+/* A sidebar is often 480px or less, where the branch page's compact rules above would apply: not here. */
+.panel-only aside.debug header { flex-wrap: wrap; margin: 0 0 8px; }
+.panel-only aside.debug h1 { flex: 1; font-size: 16px; font-weight: 600; color: var(--fg); }
+.panel-only aside.debug button { white-space: nowrap; }

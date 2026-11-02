@@ -4,13 +4,16 @@ defmodule ClawswapWeb.DebugPanel do
   through chromedriver that stays open while you work (`Clawswap.Walkthrough.Debugger`). Open it, run the project's walkthroughs (▶ to the end, ⏯ a caption
   at a time, with Step, Continue and Stop at each pause), type walkthrough commands into it, switch
   between its tabs, and see a screenshot after each thing it does. 🐞 folds it away and back; it's hidden
-  on narrow pages (the branch page in an app's dropdown).
+  on narrow pages (the branch page in an app's dropdown). `ClawswapWeb.PanelPage` (/panel) shows it on its
+  own, for an app to frame in a sidebar of its own (`foldable` false: the app folds its sidebar).
   """
 
   use Hologram.Component
 
   alias Clawswap.Walkthrough.{Browser, Debugger}
   alias ClawswapWeb.DebugView
+
+  prop(:foldable, :boolean, default: true)
 
   @placeholder ~s|click "Ping"  ·  see "pong"  ·  visit url(:web)  ·  js "return document.title"|
 
@@ -23,7 +26,9 @@ defmodule ClawswapWeb.DebugPanel do
   def template do
     ~HOLO"""
     <aside class="debug {if @open do "open" else "folded" end}">
-      <button class="fold" title={if @open do "Fold the debug panel away" else "Open the debug panel" end} $click="fold">🐞</button>
+      {%if @foldable}
+        <button class="fold" title={if @open do "Fold the debug panel away" else "Open the debug panel" end} $click="fold">🐞</button>
+      {/if}
       {%if @open}
       <header>
         <h1>Chrome</h1>
