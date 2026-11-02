@@ -26,6 +26,7 @@
         <li><a href="api.html">API</a></li>
         <li><a href="opendeck.html">Stream Deck</a></li>
         <li><a href="walkthroughs.html">Walkthroughs</a></li>
+        <li><a href="testing.html">Browser tests</a></li>
       </ul>
     <h4>Elsewhere</h4>
     <ul>
@@ -81,10 +82,14 @@ so <code>$PWD</code> gives the link the full path:</p>
     YAML? Write a <code>clawswap.yml</code> instead.</li>
   <li><strong>The webhook</strong>, so new branches show up straight away:
     <pre><code>clawswap smee</code></pre>
-    makes a smee.io channel, saves it for this checkout (in <code>.git/clawswap.json</code>, never committed) and prints
-    what to put in GitHub's <em>Settings &gt; Webhooks &gt; Add webhook</em>: the channel as Payload URL, content type
-    <code>application/json</code>, and the events <em>Branch or tag creation</em>, <em>Branch or tag deletion</em>,
-    <em>Pull requests</em> and <em>Pushes</em>. Pass a URL (<code>clawswap smee &lt;url&gt;</code>) to reuse a channel you
+    makes a smee.io channel, saves it for this checkout (in <code>.git/clawswap.json</code>, never committed), adds the
+    webhook on GitHub and tells a running watcher to follow the channel, so there's nothing to restart. It uses the same
+    token as the PR titles (<code>GITHUB_TOKEN</code>, else <code>gh auth token</code>), which needs admin on the repo:
+    <code>gh auth login</code>'s default token has it if you do, and a fine-grained token needs <em>Webhooks: read and
+    write</em>. If GitHub says no, it prints what to put in <em>Settings &gt; Webhooks &gt; Add webhook</em> instead: the
+    channel as Payload URL, content type <code>application/json</code>, and the events <em>Branch or tag creation</em>,
+    <em>Branch or tag deletion</em>, <em>Pull requests</em> and <em>Pushes</em>. Run again, it leaves the webhook alone;
+    with a new channel, it offers to remove the old channel's webhook. Pass a URL (<code>clawswap smee &lt;url&gt;</code>) to reuse a channel you
     already have. Without a webhook the watcher still looks every 15 minutes, and whenever you press a key.</li>
   <li><strong>PR titles</strong> (optional). If the <code>gh</code> CLI is logged in, or <code>GITHUB_TOKEN</code> is set,
     the list shows the base branch and then the branches with an open pull request, labelled by PR title. Without a

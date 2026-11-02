@@ -174,4 +174,36 @@ defmodule Clawswap.WatcherTest do
     assert {:error, 404, _} = Watcher.open_claude(w, nil)
     assert {:error, 404, _} = Watcher.open_claude(w, "claude/new-thing")
   end
+
+  # A smee-style stream that says it's ready and stays open; tells the test when a GET arrives.
+  defp fake_channel(name) do
+    {:ok, listen} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
+    {:ok, port} = :inet.port(listen)
+    test = self()
+
+    spawn_link(fn ->
+      {:ok, socket} = :gen_tcp.accept(listen)
+      {:ok, _request} = :gen_tcp.recv(socket, 0)
+      send(test, {:channel, name})
+      :gen_tcp.send(socket, "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\nevent: ready\ndata: {}\n\n")
+      receive do: (:never -> :ok)
+    end)
+
+    "http://127.0.0.1:#{port}/#{name}"
+  end
+
+  test "follows a new smee channel without restarting", %{start: start} do
+    w = start.(smee_url: fake_channel("old"))
+    assert_receive {:channel, "old"}, 3000
+
+    new = fake_channel("new")
+    assert {:ok, %{webhook: "connecting"}} = Watcher.set_smee(w, new)
+    assert_receive {:channel, "new"}, 3000
+    Process.sleep(200)
+    assert Watcher.state(w).webhook == "connected"
+
+    # The same channel again changes nothing.
+    assert {:ok, %{webhook: "connected"}} = Watcher.set_smee(w, new)
+    refute_received {:exit, _}
+  end
 end

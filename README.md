@@ -61,10 +61,16 @@ pages in `docs/` directly.
    ```bash
    clawswap smee
    ```
-   makes a smee.io channel, saves it for this checkout (in `.git/clawswap.json`, never committed) and
-   prints what to put in GitHub's repo Settings > Webhooks > Add webhook: the channel as Payload URL,
-   content type `application/json`, and the events Branch or tag creation, Branch or tag deletion, Pull
-   requests and Pushes. Without it the watcher still looks every 15 minutes, and whenever you press a key.
+   makes a smee.io channel, saves it for this checkout (in `.git/clawswap.json`, never committed), adds
+   the webhook on GitHub and tells a running watcher to follow the channel, so there's nothing to restart.
+   It adds the webhook with the same token as the PR titles (`GITHUB_TOKEN`, else `gh auth token`), which
+   needs admin on the repo: `gh auth login`'s default token has it if you do, and a fine-grained token
+   needs Webhooks: read and write. If GitHub says no, it prints what to put in the repo's Settings >
+   Webhooks > Add webhook instead: the channel as Payload URL, content type `application/json`, and the
+   events Branch or tag creation, Branch or tag deletion, Pull requests and Pushes. Run again, it leaves
+   the webhook alone; with a new channel, it offers to remove the old channel's webhook. Pass a URL
+   (`clawswap smee <url>`) to reuse a channel you already have. Without a webhook the watcher still looks
+   every 15 minutes, and whenever you press a key.
 6. Optional: PR titles. If the `gh` CLI is logged in (or `GITHUB_TOKEN` is set), the list shows the base
    branch and then the branches with an open pull request, newest commit first, labelled by PR title. Without a
    token it shows every branch by newest commit.
@@ -87,6 +93,7 @@ clawswap update            # the steps for what changed since they last ran (aft
 clawswap update --all      # every step
 clawswap walk [name...]    # play walkthroughs in Chrome (default: the ones this branch added)
 clawswap browser           # open a dev Chrome at your app, that walkthroughs play in
+clawswap test [path...]    # run the browser tests (Wallaby) against the servers; --watch, --only tag
 clawswap layout            # the zellij layout up opens, to start your own from (tmux: its commands)
 ```
 
@@ -143,6 +150,7 @@ or a list of the program and its arguments. A `cwd` is relative to the repo root
 | `restart_when` | | More paths that restart the watcher after a switch (it always restarts when the config changes). |
 | `short_name` | drops `claude/` | `fn branch -> name end`: the name shown for a branch without a PR. |
 | `walkthroughs` | `walkthroughs` | The folder of [walkthroughs](#walkthroughs), relative to the config's folder. |
+| `browser_tests` | `browser_tests` | The folder of [browser tests](#browser-tests), relative to the config's folder. |
 
 `when` is a Regex, a path (`"mix.lock"` is that file at the root, `"migrations/"` anything under that
 folder), a function of the path, or a list of those.
@@ -261,6 +269,7 @@ POST /pull                     the checkout's branch; 202 (switch.pull), or "Alr
 POST /refresh                  look at GitHub now
 POST /claude  { branch }       open the Claude Code thread that made the branch (the checkout's without one)
 POST /walk    { name }         run a walkthrough here; 202, then follow /state's walk
+POST /smee    { url }          follow this smee.io channel from now on (clawswap smee sends it)
 ```
 
 Webhook deliveries are only taken as a hint to look again; the watcher never acts on their contents, since
@@ -366,6 +375,38 @@ walkthrough (https://cbishopvelti.github.io/clawswap/walkthroughs.html) that sho
 ```
 
 A walkthrough is code run on your machine, as a branch's config and steps are.
+
+## Browser tests
+
+A suite you keep, alongside the walkthroughs: [Wallaby](https://hexdocs.pm/wallaby) features in the project's
+`browser_tests/` folder, run by `clawswap test` against the servers the session runs. clawswap brings Wallaby and
+the Chrome setup, so the project's build needs nothing added. `@sessions 2` gives a test two browsers at once,
+each with its own cookies: two users of a chat, a buyer and a seller.
+
+```elixir
+# browser_tests/chat_test.exs
+defmodule ChatTest do
+  use Clawswap.Feature, async: true
+
+  @sessions 2
+  feature "a message reaches the other person", %{sessions: [alice, bob]} do
+    alice |> visit(url("/chat")) |> fill_in(text_field("Message"), with: "hi bob") |> click(button("Send"))
+    bob |> visit(url("/chat")) |> assert_has(css(".message", text: "hi bob"))
+  end
+end
+```
+
+```bash
+clawswap test                  # every *_test.exs in browser_tests/, headless
+clawswap test --watch          # in windows
+clawswap test --only wip       # by tag; or name files and folders
+```
+
+`url(:web, "/path")` is a server's address from the config. A failure saves a screenshot of each of the test's
+browsers. They hit the dev server and its database, so a Phoenix app's tests can't use Ecto's SQL sandbox;
+for that, use Wallaby in the app's own `mix test`. See
+[the docs](https://cbishopvelti.github.io/clawswap/testing.html), and
+[examples/react-embed/browser_tests](examples/react-embed/browser_tests) for three, one with two sessions.
 
 ## Tests
 
