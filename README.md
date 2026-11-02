@@ -61,10 +61,16 @@ pages in `docs/` directly.
    ```bash
    clawswap smee
    ```
-   makes a smee.io channel, saves it for this checkout (in `.git/clawswap.json`, never committed) and
-   prints what to put in GitHub's repo Settings > Webhooks > Add webhook: the channel as Payload URL,
-   content type `application/json`, and the events Branch or tag creation, Branch or tag deletion, Pull
-   requests and Pushes. Without it the watcher still looks every 15 minutes, and whenever you press a key.
+   makes a smee.io channel, saves it for this checkout (in `.git/clawswap.json`, never committed), adds
+   the webhook on GitHub and tells a running watcher to follow the channel, so there's nothing to restart.
+   It adds the webhook with the same token as the PR titles (`GITHUB_TOKEN`, else `gh auth token`), which
+   needs admin on the repo: `gh auth login`'s default token has it if you do, and a fine-grained token
+   needs Webhooks: read and write. If GitHub says no, it prints what to put in the repo's Settings >
+   Webhooks > Add webhook instead: the channel as Payload URL, content type `application/json`, and the
+   events Branch or tag creation, Branch or tag deletion, Pull requests and Pushes. Run again, it leaves
+   the webhook alone; with a new channel, it offers to remove the old channel's webhook. Pass a URL
+   (`clawswap smee <url>`) to reuse a channel you already have. Without a webhook the watcher still looks
+   every 15 minutes, and whenever you press a key.
 6. Optional: PR titles. If the `gh` CLI is logged in (or `GITHUB_TOKEN` is set), the list shows the base
    branch and then the branches with an open pull request, newest commit first, labelled by PR title. Without a
    token it shows every branch by newest commit.
@@ -262,6 +268,7 @@ POST /pull                     the checkout's branch; 202 (switch.pull), or "Alr
 POST /refresh                  look at GitHub now
 POST /claude  { branch }       open the Claude Code thread that made the branch (the checkout's without one)
 POST /walk    { name }         run a walkthrough here; 202, then follow /state's walk
+POST /smee    { url }          follow this smee.io channel from now on (clawswap smee sends it)
 ```
 
 Webhook deliveries are only taken as a hint to look again; the watcher never acts on their contents, since

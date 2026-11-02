@@ -51,6 +51,9 @@ defmodule Clawswap.Watcher do
   """
   def open_claude(server \\ __MODULE__, branch), do: GenServer.call(server, {:open_claude, branch}, 30_000)
 
+  @doc "Follows the smee.io channel at `url` from now on, in place of the one it followed (`clawswap smee` saved a new one)."
+  def set_smee(server \\ __MODULE__, url), do: GenServer.call(server, {:set_smee, url}, 30_000)
+
   @doc "Opens `url` in the default browser, on the machine the watcher runs on."
   def open_url(url) do
     opener = if match?({:unix, :darwin}, :os.type()), do: "open", else: "xdg-open"
@@ -88,6 +91,8 @@ defmodule Clawswap.Watcher do
       again: false,
       waiters: [],
       debounce: nil,
+      smee: nil,
+      smee_url: smee_url,
       view: %{
         project: project.name,
         base: project.base,
@@ -113,11 +118,13 @@ defmodule Clawswap.Watcher do
       }
     }
 
-    if smee_url do
-      {:ok, _} = Smee.start_link(url: smee_url, owner: self(), log: &log/1)
-    else
-      if opts[:quiet] != true, do: log("No smee.io channel set (clawswap smee); looking for new branches every 15 minutes")
-    end
+    state =
+      if smee_url do
+        follow_smee(state, smee_url)
+      else
+        if opts[:quiet] != true, do: log("No smee.io channel set (clawswap smee); looking for new branches every 15 minutes")
+        state
+      end
 
     :timer.send_interval(@fallback_ms, :refresh_now)
     {:ok, start_refresh(state)}
@@ -125,6 +132,14 @@ defmodule Clawswap.Watcher do
 
   @impl true
   def handle_call(:state, _from, state), do: {:reply, state.view, state}
+
+  def handle_call({:set_smee, url}, _from, %{smee_url: url} = state), do: {:reply, {:ok, state.view}, state}
+
+  def handle_call({:set_smee, url}, _from, state) do
+    log("Following the new smee.io channel #{url}")
+    state = state |> stop_smee() |> follow_smee(url) |> changed()
+    {:reply, {:ok, state.view}, state}
+  end
 
   def handle_call({:open_claude, branch}, _from, state) do
     branch = if branch in [nil, ""], do: state.view.current && state.view.current.branch, else: branch
@@ -221,6 +236,28 @@ defmodule Clawswap.Watcher do
     end
 
     {:noreply, start_refresh(state)}
+  end
+
+  defp follow_smee(state, url) do
+    {:ok, pid} = Smee.start_link(url: url, owner: self(), log: &log/1)
+    %{state | smee: pid, smee_url: url, view: %{state.view | webhook: "connecting", webhookError: nil}}
+  end
+
+  defp stop_smee(%{smee: nil} = state), do: state
+
+  defp stop_smee(state) do
+    GenServer.stop(state.smee)
+    flush_smee()
+    %{state | smee: nil}
+  end
+
+  # What the old listener sent before it stopped isn't about the new channel.
+  defp flush_smee do
+    receive do
+      {:smee, _} -> flush_smee()
+    after
+      0 -> :ok
+    end
   end
 
   @impl true
