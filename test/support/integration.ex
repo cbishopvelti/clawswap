@@ -106,10 +106,42 @@ defmodule Clawswap.Integration do
     command = "#{Path.join(@tool, "bin/clawswap")} up"
     tmux!(["new-session", "-d", "-s", "up-" <> project.session, "-x", "200", "-y", "50", "-c", project.work, command], env)
 
+    # Keep the pane if `clawswap up` exits, so a failure to start can be read from it.
+    tmux!(["set-option", "-t", "up-" <> project.session, "remain-on-exit", "on"], env)
+
     IO.puts("[integration] #{multiplexer} session #{project.session}: tmux -L #{@socket} attach")
-    wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
-    wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
+
+    try do
+      wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
+      wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
+    rescue
+      error ->
+        IO.puts(panes())
+        IO.puts(listeners())
+        reraise error, __STACKTRACE__
+    end
+
     Map.put(project, :multiplexer, multiplexer)
+  end
+
+  # Who listens where, and what the app's port answers, for a failure to come up.
+  defp listeners do
+    {ss, _} = System.cmd("sh", ["-c", "ss -ltnp 2>&1 | grep -E '2739[0-9]'; curl -sS -o /dev/null -w '%{http_code}' -m 5 http://localhost:27391/ 2>&1"])
+    v4 = :httpc.request(:get, {~c"http://127.0.0.1:27391/", []}, [timeout: 5000], [])
+    v6 = :httpc.request(:get, {~c"http://[::1]:27391/", []}, [timeout: 5000], [])
+
+    "[integration] listeners and curl:\n#{ss}\n[integration] httpc v4: #{inspect(v4, limit: 8, printable_limit: 200)}\n[integration] httpc v6: #{inspect(v6, limit: 8, printable_limit: 200)}"
+  end
+
+  # What every pane of the tests' tmux server shows (`clawswap up`'s, and the session it builds), with scrollback.
+  defp panes do
+    {list, _} = System.cmd("tmux", ["-L", @socket, "list-panes", "-a", "-F", "\#{pane_id} \#{session_name}:\#{window_name} \#{pane_start_command}"])
+
+    for line <- String.split(list, "\n", trim: true), into: "" do
+      [id | _] = String.split(line, " ")
+      {out, _} = System.cmd("tmux", ["-L", @socket, "capture-pane", "-p", "-J", "-S", "-200", "-t", id], stderr_to_stdout: true)
+      "[integration] pane #{line}:\n" <> String.trim(out) <> "\n"
+    end
   end
 
   @doc "Ends the sessions, and whatever still holds the ports."
@@ -188,6 +220,8 @@ defmodule Clawswap.Integration do
 
   defp http_ok?(url) do
     :inets.start()
+    # Vite binds localhost, which can be ::1 alone (as on GitHub's runners); asked by its IP, it answers 403.
+    :httpc.set_options(ipfamily: :inet6fb4)
     match?({:ok, {{_, 200, _}, _, _}}, :httpc.request(:get, {String.to_charlist(url), []}, [timeout: 5000], []))
   end
 

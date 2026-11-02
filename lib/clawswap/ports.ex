@@ -3,8 +3,14 @@ defmodule Clawswap.Ports do
 
   alias Clawswap.Run
 
-  def port_open?(port) do
-    case :gen_tcp.connect(~c"127.0.0.1", port, [], 500) do
+  @doc """
+  Whether something listens on the port, on IPv4 or IPv6 loopback: a dev server that binds `localhost` can
+  get either (Vite takes ::1 where localhost resolves to it first, as on macOS and GitHub's Ubuntu runners).
+  """
+  def port_open?(port), do: Enum.any?([{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}], &listening?(&1, port))
+
+  defp listening?(address, port) do
+    case :gen_tcp.connect(address, port, [], 500) do
       {:ok, socket} ->
         :gen_tcp.close(socket)
         true

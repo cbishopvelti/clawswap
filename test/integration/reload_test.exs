@@ -56,7 +56,7 @@ defmodule Clawswap.Integration.ReloadTest do
     refute js(~s{return document.getElementById("heard").textContent}) =~ "Switched"
 
     say "A switch from anywhere (the API here): the frame posts when the app's server is back"
-    {200, _} = Integration.post!("/switch", %{branch: "claude/new-heading"})
+    {202, _} = Integration.post!("/switch", %{branch: "claude/new-heading"})
     see "Switched to claude/new-heading", timeout: 120_000
     assert {:ok, %{"switch" => %{"phase" => "done", "doneAt" => at}}} = Integration.state()
     assert is_integer(at)
