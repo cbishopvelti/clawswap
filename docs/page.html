@@ -127,6 +127,14 @@ loaded once opened (hide it rather than remove it when the menu closes), as the 
 A failed switch, or a pull with nothing new, posts nothing. Without a frame, poll the <a href="api.html#state">API</a>
 and reload when <code>switch.doneAt</code> changes.</p>
 
+<h3 id="panel">The debug panel in a sidebar</h3>
+<p>The <a href="walkthroughs.html#debug">debug panel</a> is on its own at <code>/panel</code>, filling the page at any
+width and without its 🐞 (your app opens and closes its sidebar). Frame it in a sidebar on the right of your app:</p>
+<pre><code>&lt;iframe src="http://localhost:27390/panel" title="clawswap debug panel"&gt;&lt;/iframe&gt;</code></pre>
+<p>The same framing notes apply. A page served cross-origin isolated (<code>Cross-Origin-Embedder-Policy:
+require-corp</code>) needs the frame <code>credentialless</code> (Chromium). Leave the sidebar out when
+<code>navigator.webdriver</code> is true, so a Chrome the panel or a walkthrough drives shows your app without it.</p>
+
 <h3 id="badge">Your own control on the API</h3>
 <p>The example's <code>BranchBadge</code> shows the checkout's branch as a picker, Pull with how far behind it is, and
 the step a switch is on, from <code>GET /state</code>, <code>POST /switch</code> and <code>POST /pull</code>. Its
