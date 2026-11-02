@@ -56,3 +56,9 @@ the watcher's page, or run `clawswap walk branches-menu`, to watch Chrome open t
   and `BranchMenu` reloads on it. Vite reloads by itself too; the listener is what an app without that
   (Phoenix, say) needs. See [docs/page.html#reload](../../docs/page.html#reload).
 - **Another port.** Set `VITE_CLAWSWAP_URL` (in `.env.local`) when `clawswap.exs`'s `port` isn't 27390.
+
+## Browser tests
+
+`browser_tests/app_test.exs` has three [Wallaby](https://hexdocs.pm/wallaby) features, one with two browser
+sessions at once. With the session up, `clawswap test` runs them (`--watch` to see them). See clawswap's
+[Browser tests](https://cbishopvelti.github.io/clawswap/testing.html).
