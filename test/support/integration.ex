@@ -106,10 +106,27 @@ defmodule Clawswap.Integration do
     command = "#{Path.join(@tool, "bin/clawswap")} up"
     tmux!(["new-session", "-d", "-s", "up-" <> project.session, "-x", "200", "-y", "50", "-c", project.work, command], env)
 
+    # Keep the pane if `clawswap up` exits, so a failure to start can be read from it.
+    tmux!(["set-option", "-t", "up-" <> project.session, "remain-on-exit", "on"], env)
+
     IO.puts("[integration] #{multiplexer} session #{project.session}: tmux -L #{@socket} attach")
-    wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
-    wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
+
+    try do
+      wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
+      wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
+    rescue
+      error ->
+        IO.puts("[integration] `clawswap up` pane:\n" <> pane("up-" <> project.session))
+        reraise error, __STACKTRACE__
+    end
+
     Map.put(project, :multiplexer, multiplexer)
+  end
+
+  # What a pane of the tests' tmux server shows, with its scrollback.
+  defp pane(target) do
+    {out, _} = System.cmd("tmux", ["-L", @socket, "capture-pane", "-p", "-J", "-S", "-200", "-t", target], stderr_to_stdout: true)
+    out
   end
 
   @doc "Ends the sessions, and whatever still holds the ports."
