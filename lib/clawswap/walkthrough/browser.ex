@@ -193,6 +193,9 @@ defmodule Clawswap.Walkthrough.Browser do
     _, _ -> :ok
   end
 
+  @doc "This process's browser state, or nil when it has none."
+  def current, do: Process.get(@key)
+
   def state, do: Process.get(@key) || raise("No browser: start one with Clawswap.Walkthrough.Browser.start/1")
   def update(changes), do: Process.put(@key, Map.merge(state(), Map.new(changes)))
   def session, do: state().session

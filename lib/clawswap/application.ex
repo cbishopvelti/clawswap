@@ -34,6 +34,9 @@ defmodule Clawswap.Application do
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, watcher)
     # Another project's page taking the Stream Deck: tell this one's pages, so they let it go.
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, {Clawswap.DeckOwner, on_change: fn -> ClawswapWeb.View.broadcast(Clawswap.Watcher.state()) end})
+    # The debug page's Chrome (/debug).
+    debugger = {Clawswap.Walkthrough.Debugger, project: project, on_change: &ClawswapWeb.DebugView.broadcast/1}
+    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, debugger)
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, ClawswapWeb.Endpoint)
     Clawswap.Watcher.log("API and page on http://127.0.0.1:#{project.port} (#{project.name}, base branch #{project.base})")
     :ok

@@ -1,7 +1,7 @@
 defmodule ClawswapWeb.BranchesPage do
   @moduledoc """
   The watcher's page: the branches the keys show, a button for each that switches to it, Pull, the
-  checkout's walkthroughs (▶ runs one in a browser on this machine), and a link to the settings page (in a new window, as this page is often in an app's iframe). The watcher
+  checkout's walkthroughs (▶ runs one in a browser on this machine), links to the debug page and the settings page (each in a new window, as this page is often in an app's iframe). The watcher
   broadcasts each change, so the page follows a switch step by step.
   """
 
@@ -27,6 +27,7 @@ defmodule ClawswapWeb.BranchesPage do
         {%if @view.on}<span class="on" title="The branch checked out now">On <strong>{@view.on}</strong></span>{/if}
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
         <button class="pull {@view.pull_class}" $click={command: :pull}>{@view.pull_label}</button>
+        <a class="settings-link" href="/debug" target="_blank" rel="noopener" title="Drive a Chrome by hand, and step through walkthroughs, in a new window">🐞</a>
         <a class="settings-link" href="/settings" target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
         <StreamDeck cid="stream_deck" keys={@view.keys} deck={@view.deck} />
       </header>

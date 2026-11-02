@@ -49,6 +49,7 @@ the React example all use this API.</p>
   <tr><td><code>POST /claude</code></td><td><code>{"branch": "..."}</code></td><td>Opens the Claude Code thread that made the branch (the checkout's branch without one) in the browser, on the watcher's machine: the project thread its PR's description links to, else the <code>Claude-Session:</code> in its commits. 200 and <code>{"url": "..."}</code>, or 404 when it has neither.</td></tr>
   <tr><td><code>POST /refresh</code></td><td><code>{}</code></td><td>Looks at git and GitHub now; 200 and the state when done.</td></tr>
   <tr><td><code>POST /walk</code></td><td><code>{"name": "…"}</code></td><td>Runs a <a href="walkthroughs.html">walkthrough</a> in a browser on this machine; 202, then follow the state's <code>walk</code>. 409 while one or a switch is running.</td></tr>
+  <tr><td><code>GET /debug/screenshot.png</code></td><td></td><td>The <a href="walkthroughs.html#debug">debug page</a>'s last screenshot of its Chrome; 404 before the first.</td></tr>
   <tr><td><code>POST /smee</code></td><td><code>{"url": "…"}</code></td><td>Follows this smee.io channel from now on, in place of the one it followed; <code>clawswap smee</code> sends it after saving a new channel.</td></tr>
 </table>
 <p>POSTs need <code>Content-Type: application/json</code>.</p>
