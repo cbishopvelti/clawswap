@@ -115,6 +115,11 @@ page opens it again when it loads and when the deck is plugged back in.</p>
   <li><strong>Decks.</strong> It knows the Stream Deck (v2), MK.2 and XL. The Mini, Neo and + aren't supported yet.</li>
   <li><strong>Linux permissions.</strong> Your user needs access to the deck's hidraw device. The udev rule OpenDeck
     installs should cover that; otherwise add one for vendor <code>0fd9</code>.</li>
+  <li><strong>Several projects.</strong> One page has the deck at a time: the one where you last pressed Connect. The
+    other projects' pages let it go and show <strong>Stream Deck on</strong> <em>that project</em> with a
+    <strong>Use here</strong> button to take it back, so one key press never switches two projects. The watchers share
+    a note of the owner in <code>~/.local/state/clawswap/stream-deck</code>; when its watcher stops, the next page to
+    load opens the deck again by itself.</li>
   <li><strong>Not in the embed.</strong> An iframe needs <code>allow="hid"</code> for WebHID, so press Connect on the page
     itself; the narrow <a href="page.html#embed">embed menu</a> leaves the button out.</li>
 </ul>

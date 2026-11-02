@@ -28,7 +28,7 @@ defmodule ClawswapWeb.BranchesPage do
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
         <button class="pull {@view.pull_class}" $click={command: :pull}>{@view.pull_label}</button>
         <a class="settings-link" href="/settings" target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
-        <StreamDeck cid="stream_deck" keys={@view.keys} />
+        <StreamDeck cid="stream_deck" keys={@view.keys} deck={@view.deck} />
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
       {%if @view.error}<p class="message">{@view.error}</p>{/if}
@@ -63,7 +63,7 @@ defmodule ClawswapWeb.BranchesPage do
 
     component
     |> put_state(:view, params.view)
-    |> put_action(name: :draw, target: "stream_deck", params: %{keys: params.view.keys})
+    |> put_action(name: :draw, target: "stream_deck", params: %{keys: params.view.keys, deck: params.view.deck})
   end
 
   def action(:show_message, params, component), do: put_state(component, :message, params.message)

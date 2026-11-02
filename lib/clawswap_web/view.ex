@@ -43,8 +43,20 @@ defmodule ClawswapWeb.View do
       branches: Enum.map(state.branches, &branch(&1, state, run, current)),
       walkthroughs: Enum.map(Map.get(state, :walkthroughs, []), &walkthrough(&1, Map.get(state, :walk))),
       walk: walk_status(Map.get(state, :walk)),
-      keys: keys(state)
+      keys: keys(state),
+      deck: deck()
     }
+  end
+
+  @doc """
+  Who has the Stream Deck that pages drive over WebHID (`Clawswap.DeckOwner.status/1`), as this
+  watcher sees it. Outside a running watcher (no project), nobody.
+  """
+  def deck do
+    case :persistent_term.get({Clawswap.Application, :project}, nil) do
+      nil -> %{owner: "free", name: nil}
+      project -> Clawswap.DeckOwner.status(project.port)
+    end
   end
 
   @doc """

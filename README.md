@@ -316,6 +316,12 @@ Linux your user needs access to the deck's hidraw device: the udev rule OpenDeck
 add one for vendor `0fd9`. An iframe needs `allow="hid"` for it, so press Connect on the page itself (the
 narrow embed menu leaves the button out).
 
+With several projects' watchers running, one page has the deck at a time: the one where you last pressed
+Connect. The other projects' pages let it go and show **Stream Deck on** *that project* with a **Use here**
+button that takes it back (no chooser the second time), so one key press never switches two projects. The
+watchers share a note of the owner in `~/.local/state/clawswap/stream-deck` (`$XDG_STATE_HOME` if set);
+when the owner's watcher stops, the next page to load opens the deck again by itself.
+
 It's Elixir too: `app/components/stream_deck.ex` calls `navigator.hid` and a canvas through Hologram's JS
 interop.
 
