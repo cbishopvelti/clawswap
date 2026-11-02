@@ -184,12 +184,13 @@ Phoenix serves the page (Hologram), the JSON API and the settings editor all fro
 GitHub's events don't need one: the watcher connects out to smee.io and reads them as a stream. The default is out
 of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</p>
 <p>A <code>port</code> under <code>servers</code> is your app's, not clawswap's: your app picks it, and clawswap
-frees it before a switch, waits for it to listen again before calling the switch done, and lets that origin call the API. Two others come up only in particular cases:</p>
+frees it before a switch, waits for it to listen again before calling the switch done, and lets that origin call the API. Others come up only in particular cases:</p>
 <table>
   <tr><th>Port</th><th>What</th><th>When</th></tr>
   <tr><td><code>27390</code></td><td>The watcher: page, API, settings</td><td>Always</td></tr>
   <tr><td><code>27391</code></td><td>The <a href="page.html">react-embed example</a>'s Vite server</td><td>Running that example, and <code>mix test.integration</code></td></tr>
   <tr><td><code>27392</code></td><td>Chrome's debugging port (<code>CLAWSWAP_BROWSER_PORT</code>)</td><td>While <code>clawswap browser</code> has a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> open</td></tr>
+  <tr><td><code>27393</code></td><td>A plain page that frames the watcher's page</td><td><code>mix test.integration</code> (the reload test)</td></tr>
 </table>
 
 <h2 id="env">Environment variables</h2>
