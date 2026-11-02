@@ -53,22 +53,35 @@ defmodule Clawswap.Walkthrough do
     with {:ok, path} <- find(project, name),
          {:ok, browser} <- Browser.start(Keyword.put(opts, :project, project)) do
       try do
-        source = File.read!(path)
-        # Line 0, so the import doesn't shift the script's line numbers in errors.
-        Code.eval_string("import Clawswap.Walkthrough.Script\n" <> source, [], file: path, line: 0)
-        Process.sleep(Keyword.get(opts, :linger, if(browser.headless, do: 0, else: 3000)))
-        :ok
-      rescue
-        error -> {:error, failure(error, __STACKTRACE__, path)}
-      catch
-        kind, reason -> {:error, Exception.format_banner(kind, reason)}
+        with :ok <- eval_file(path) do
+          Process.sleep(Keyword.get(opts, :linger, if(browser.headless, do: 0, else: 3000)))
+          :ok
+        end
       after
         Browser.stop()
       end
     end
   end
 
-  defp find(project, name) do
+  @doc """
+  Runs a walkthrough script at `path` in this process's browser (`Browser.start/1`), and leaves the
+  browser open: `:ok`, or `{:error, message}` as for `run/3`. A throw of `:clawswap_abort` (the debug
+  page's Stop) passes through.
+  """
+  def eval_file(path) do
+    source = File.read!(path)
+    # Line 0, so the import doesn't shift the script's line numbers in errors.
+    Code.eval_string("import Clawswap.Walkthrough.Script\n" <> source, [], file: path, line: 0)
+    :ok
+  rescue
+    error -> {:error, failure(error, __STACKTRACE__, path)}
+  catch
+    :throw, :clawswap_abort -> throw(:clawswap_abort)
+    kind, reason -> {:error, Exception.format_banner(kind, reason)}
+  end
+
+  @doc "The path of the walkthrough called `name` (or at a path): `{:ok, path}` or `{:error, message}`."
+  def find(project, name) do
     cond do
       String.ends_with?(name, ".exs") and File.exists?(Path.expand(name, project.root)) ->
         {:ok, Path.expand(name, project.root)}

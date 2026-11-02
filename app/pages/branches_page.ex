@@ -1,7 +1,7 @@
 defmodule ClawswapWeb.BranchesPage do
   @moduledoc """
   The watcher's page: the branches the keys show, a button for each that switches to it, Pull, the
-  checkout's walkthroughs (▶ runs one in a browser on this machine), and a link to the settings page (in a new window, as this page is often in an app's iframe). The watcher
+  checkout's walkthroughs (▶ runs one in a browser on this machine), a link to the settings page (in a new window, as this page is often in an app's iframe). The watcher
   broadcasts each change, so the page follows a switch step by step.
   """
 

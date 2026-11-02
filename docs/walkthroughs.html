@@ -86,6 +86,27 @@ open a debugging port on your everyday profile, so it can't be your usual window
 <p>A failure names the line, the caption it was showing and what it couldn't find, and saves a screenshot of that
 moment in the temp folder (its path is in the message).</p>
 
+<h3 id="debug">Stepping through one, and driving Chrome by hand</h3>
+<p>Every clawswap page (the branch page, settings) has a debug panel on the right; <strong>🐞</strong> folds it away
+and back, and it's hidden on narrow pages, such as the branch page in your app's dropdown. It keeps a Chrome
+open while you work, through chromedriver like a walkthrough's, and shows a screenshot after each thing it does, so it
+works headless too (tick <em>Headless</em> before <em>Open Chrome</em>; it's ticked when there's no display).</p>
+<ul>
+  <li><strong>▶</strong> runs a walkthrough to the end; <strong>⏯</strong> runs it a caption at a time. At each
+    <code>say</code> it pauses before what follows: <em>Step</em> goes on to the next caption, <em>Continue</em> to the end,
+    <em>Stop</em> ends it there. <em>Pause</em> stops a running one at its next caption. When it ends or fails, Chrome stays
+    open on the page it reached.</li>
+  <li><strong>Commands.</strong> The box runs one walkthrough command at a time in that Chrome, at a pause or any time
+    no walkthrough is running: <code>visit url(:web)</code>, <code>click "Ping"</code>,
+    <code>see css(".log", text: "pong")</code>, <code>fill_in "Name", with: "x"</code>, <code>press :enter</code>,
+    <code>js "return document.title"</code> (its value shows in the log). Only those commands are run, with plain
+    values and the query helpers as arguments, never other Elixir. Click a command in the log to put it back in the
+    box. <em>Visit</em> has a button for each of the project's servers.</li>
+  <li><strong>Tabs.</strong> The browser's tabs (a walkthrough that opens windows, say) are listed above the screenshot:
+    click one to switch to it, <strong>+</strong> opens a new one and <strong>✕</strong> closes the one in front.</li>
+</ul>
+<p>With a <a href="#dev-chrome">dev Chrome</a> open and <em>Headless</em> unticked, it uses a tab of that one.</p>
+
 <h2 id="setup">What it needs</h2>
 <ul>
   <li><strong>Chrome and chromedriver of the same major version.</strong> chromedriver is a small program from Google

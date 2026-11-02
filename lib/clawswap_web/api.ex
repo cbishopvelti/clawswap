@@ -10,6 +10,7 @@ defmodule ClawswapWeb.Api do
                                      without one) in the browser; 200 {"url": ...} or 404
       POST /walk    {"name": ...}    202, then follow /state's walk
       POST /smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
+      GET  /debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
 
   It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
   the browser send a JSON POST here without a preflight, which only those origins pass. The Host check
@@ -22,7 +23,7 @@ defmodule ClawswapWeb.Api do
 
   alias Clawswap.Watcher
 
-  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee"]
+  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee", "/debug/screenshot.png"]
 
   @impl true
   def init(opts), do: opts
@@ -50,6 +51,12 @@ defmodule ClawswapWeb.Api do
 
       conn.method == "GET" and path == "/state" ->
         json(conn, 200, Watcher.state())
+
+      conn.method == "GET" and path == "/debug/screenshot.png" ->
+        case Clawswap.Walkthrough.Debugger.screenshot() do
+          nil -> json(conn, 404, %{error: "No screenshot yet"})
+          png -> conn |> put_resp_header("content-type", "image/png") |> put_resp_header("cache-control", "no-store") |> send_resp(200, png) |> halt()
+        end
 
       conn.method != "POST" or not String.starts_with?(conn |> get_req_header("content-type") |> List.first() || "", "application/json") ->
         json(conn, 404, %{error: "Not found"})
