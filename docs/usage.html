@@ -52,6 +52,9 @@
   <tr><td><code>clawswap update</code></td><td>Runs the steps for what changed since they last ran (after a <code>git pull</code> by hand, say).</td></tr>
   <tr><td><code>clawswap update &lt;rev&gt;</code></td><td>The steps for what changed since <code>rev</code>.</td></tr>
   <tr><td><code>clawswap update --all</code></td><td>Every step.</td></tr>
+  <tr><td><code>clawswap walk [name...]</code></td><td>Plays <a href="walkthroughs.html">walkthroughs</a> in Chrome: the ones named, else the ones this branch added or changed. <code>--headless</code> runs them without a window and exits 1 if one fails.</td></tr>
+  <tr><td><code>clawswap test [path...]</code></td><td>Runs the project's <a href="testing.html">browser tests</a> (Wallaby) against the session's servers. <code>--watch</code> shows the windows, <code>--only tag</code> picks by tag.</td></tr>
+  <tr><td><code>clawswap browser</code></td><td>Opens a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> at your app, that walkthroughs then play in.</td></tr>
   <tr><td><code>clawswap smee [url]</code></td><td>Sets up the smee.io channel and the GitHub webhook for it, and points a running watcher at it (see <a href="install.html#project">Install</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap completion &lt;shell&gt;</code></td><td>Prints shell completion for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
