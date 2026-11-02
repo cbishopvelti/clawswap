@@ -109,36 +109,52 @@ li.behind .status { color: var(--behind); }
 .deck-elsewhere { color: var(--muted); }
 @media (max-width: 480px) { .deck { display: none; } }
 
-/* The debug page (ClawswapWeb.DebugPage): a Chrome driven by hand. */
-main.debug { max-width: 1280px; }
+/* The debug panel (ClawswapWeb.DebugPanel), on the right of every page: a Chrome driven by hand. */
+.with-panel { display: flex; align-items: flex-start; min-height: 100vh; }
+.with-panel > .page { flex: 1; min-width: 0; }
+aside.debug { position: sticky; top: 0; flex: 0 0 auto; height: 100vh; overflow: auto; box-sizing: border-box;
+  border-left: 1px solid var(--line); background: var(--card); padding: 10px 12px; font-size: 14px; }
+aside.debug.open { width: clamp(360px, 38vw, 560px); }
+aside.debug.folded { width: 44px; padding: 8px 4px; }
+aside.debug .fold { float: right; border: 0; background: none; font-size: 18px; padding: 2px 4px; }
+aside.debug.folded .fold { float: none; }
+aside.debug header { margin-bottom: 8px; gap: 8px; }
+aside.debug h1 { font-size: 16px; }
 .debug button { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; }
+.debug button.fold { border: 0; }
 .debug button.primary { background: var(--behind); border-color: var(--behind); color: #fff; }
-.debug .browser { font-size: 13px; color: var(--muted); }
+.debug .browser { font-size: 12px; color: var(--muted); flex-basis: 100%; }
 .debug .browser.open { color: var(--current); }
 .debug .browser.opening { color: var(--running); }
 .debug .headless { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
-.debug .walk { padding: 2px 10px; border-radius: 999px; }
-.debug .walk-pair { display: inline-flex; gap: 2px; }
-.debug .walk.step { padding: 2px 6px; }
+.debug .dwalks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; font-size: 13px; }
+.debug .dwalk { padding: 1px 8px; border-radius: 999px; }
+.debug .walk-pair { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 2px 1px 8px; }
+.debug .walk-pair .dwalk { border: 0; }
+.debug .dwalk-status { flex-basis: 100%; color: var(--muted); overflow-wrap: anywhere; }
+.debug .dwalk-status.running { color: var(--running); }
+.debug .dwalk-status.passed { color: var(--current); }
+.debug .dwalk-status.failed { color: var(--failed); }
 .debug .controls { display: inline-flex; gap: 4px; }
 .debug .command { display: flex; gap: 6px; margin: 0 0 10px; }
-.debug .command input { flex: 1; min-width: 0; font: 14px ui-monospace, monospace; color: inherit; background: var(--card);
+.debug .command input { flex: 1; min-width: 0; font: 13px ui-monospace, monospace; color: inherit; background: var(--bg);
   border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 .debug .visit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; font-size: 13px; }
 .debug .url { color: var(--muted); font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
-.debug .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; font-size: 13px; }
-.debug .tab { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px 6px 0 0; }
+.debug .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; font-size: 13px; }
+.debug .tab { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 6px 6px 0 0; }
 .debug .tab.current { border-color: var(--behind); color: var(--behind); }
-.debug-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
-.debug .shot { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 4px; min-height: 120px; }
+.debug-body { display: grid; gap: 10px; }
+.debug .shot { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
 .debug .shot img { display: block; width: 100%; height: auto; border-radius: 4px; }
-.debug .shot .about { color: var(--muted); padding: 12px; margin: 0; }
-.debug .log { list-style: none; margin: 0; padding: 0; max-height: 80vh; overflow: auto; display: block;
-  font: 12px/1.4 ui-monospace, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+.debug .shot .about { color: var(--muted); padding: 8px; margin: 0; font-size: 13px; }
+.debug .log { list-style: none; margin: 0; padding: 0; max-height: 45vh; overflow: auto; display: block;
+  font: 12px/1.4 ui-monospace, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
 .debug .log li { padding: 3px 8px; border-bottom: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
 .debug .log li.command { color: var(--behind); cursor: pointer; }
 .debug .log li.command::before { content: "› "; }
 .debug .log li.error { color: var(--failed); }
 .debug .log li.step { color: var(--running); }
 .debug .log li.console, .debug .log li.info { color: var(--muted); }
-@media (max-width: 800px) { .debug-body { grid-template-columns: 1fr; } }
+/* Narrow, as in an app's dropdown menu: no room for it. */
+@media (max-width: 700px) { aside.debug { display: none; } }

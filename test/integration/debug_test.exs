@@ -1,5 +1,5 @@
 defmodule Clawswap.Integration.DebugTest do
-  # The debug page (/debug): a Chrome of its own that stays open, driven by hand and a caption at a time.
+  # The debug panel, on the right of every page: a Chrome of its own that stays open, driven by hand and a caption at a time.
   use ExUnit.Case, async: false
 
   import Clawswap.Walkthrough.Script
@@ -16,19 +16,19 @@ defmodule Clawswap.Integration.DebugTest do
     %{project: project}
   end
 
-  test "the debug page steps through a walkthrough and runs commands at a pause" do
-    say "The debug page opens a Chrome that stays open"
-    visit url(:clawswap, "/debug")
+  test "the debug panel steps through a walkthrough and runs commands at a pause" do
+    say "The branch page's debug panel opens a Chrome that stays open"
+    visit url(:clawswap)
     click button("Open Chrome")
-    see css(".browser.open"), timeout: 60_000
+    see css("aside.debug .browser.open"), timeout: 60_000
 
     say "⏯ runs a walkthrough a caption at a time"
-    click css(".walk.step")
-    see css(".walk-status", text: "paused before: The example app"), timeout: 30_000
+    click css("aside.debug .dwalk.step")
+    see css("aside.debug .dwalk-status", text: "paused before: The example app"), timeout: 30_000
 
     say "Step goes on to the next caption"
     click button("Step")
-    see css(".walk-status", text: "paused before: The Branches menu"), timeout: 30_000
+    see css("aside.debug .dwalk-status", text: "paused before: The Branches menu"), timeout: 30_000
 
     say "At a pause, a command runs in the same browser, and the page shows what it returned"
     fill_in text_field("code"), with: ~s(js "return document.title")
@@ -39,16 +39,21 @@ defmodule Clawswap.Integration.DebugTest do
     say "Anything but a walkthrough command is refused"
     fill_in text_field("code"), with: ~s|File.rm_rf!("/tmp/x")|
     click button("Run")
-    see css(".message", text: "Not a command")
+    see css("aside.debug .dmessage", text: "Not a command")
 
     say "Continue runs it to the end, and Chrome stays open with a screenshot of how it ended"
     click button("Continue")
-    see css(".walk-status.passed", text: "branches-menu ran to the end"), timeout: 60_000
+    see css("aside.debug .dwalk-status.passed", text: "branches-menu ran to the end"), timeout: 60_000
     see css(".shot img")
     see css(".tabs .tab.current")
 
+    say "🐞 folds the panel away and back"
+    click button("🐞")
+    see css("aside.debug.folded")
+    click button("🐞")
+
     say "Close Chrome closes it"
     click button("Close Chrome")
-    see css(".browser.closed")
+    see css("aside.debug .browser.closed")
   end
 end

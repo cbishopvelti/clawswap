@@ -10,7 +10,7 @@ defmodule ClawswapWeb.Api do
                                      without one) in the browser; 200 {"url": ...} or 404
       POST /walk    {"name": ...}    202, then follow /state's walk
       POST /smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
-      GET  /debug/screenshot.png     the debug page's last screenshot of its Chrome (404 when none)
+      GET  /debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
 
   It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
   the browser send a JSON POST here without a preflight, which only those origins pass. The Host check

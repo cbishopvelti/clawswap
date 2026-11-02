@@ -1,6 +1,6 @@
 defmodule Clawswap.Walkthrough.Debugger do
   @moduledoc """
-  The debug page's Chrome (`/debug`, `ClawswapWeb.DebugPage`): one browser that stays open between
+  The debug panel's Chrome (`ClawswapWeb.DebugPanel`, on the right of every clawswap page): one browser that stays open between
   commands, so you can drive it by hand with the walkthrough commands (`visit`, `click`, `see`, `js`...),
   step through a walkthrough a caption at a time, and look around when one stops.
 
@@ -338,7 +338,7 @@ defmodule Clawswap.Walkthrough.Debugger do
     id = state.next
     send(state.driver, {:job, id, fun})
     jobs = Map.put(state.jobs, id, kind)
-    %{state | next: id + 1, jobs: jobs} |> put_view(busy: busy(jobs) || label)
+    %{state | next: id + 1, jobs: jobs} |> put_view(busy: busy(jobs) || if(kind != :walk, do: label))
   end
 
   # A walkthrough isn't counted: while it's paused, commands go on.

@@ -1,12 +1,12 @@
 defmodule ClawswapWeb.DebugView do
   @moduledoc """
-  What the debug page (`ClawswapWeb.DebugPage`) shows of `Clawswap.Walkthrough.Debugger`'s state, worked
-  out here so the template only lays it out. `broadcast/1` sends it to the open debug pages.
+  What the debug panel (`ClawswapWeb.DebugPanel`) shows of `Clawswap.Walkthrough.Debugger`'s state, worked
+  out here so the template only lays it out. `broadcast/1` sends it to the open pages' debug panels.
   """
 
   alias Clawswap.Walkthrough
 
-  @doc "Sends the debugger's new state to the open debug pages (its on_change)."
+  @doc "Sends the debugger's new state to the open pages' debug panels (its on_change)."
   def broadcast(state) do
     if Hologram.enabled?(), do: Hologram.Realtime.broadcast_action(:clawswap_debug, :debug_changed, view: page(state))
     :ok

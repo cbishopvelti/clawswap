@@ -1,33 +1,32 @@
-defmodule ClawswapWeb.DebugPage do
+defmodule ClawswapWeb.DebugPanel do
   @moduledoc """
-  The debug page, /debug: a Chrome driven through chromedriver that stays open while you work
-  (`Clawswap.Walkthrough.Debugger`). Open it, run the project's walkthroughs (▶ to the end, ⏯ a caption
+  The debug panel, docked on the right of every clawswap page (`ClawswapWeb.MainLayout`): a Chrome driven
+  through chromedriver that stays open while you work (`Clawswap.Walkthrough.Debugger`). Open it, run the project's walkthroughs (▶ to the end, ⏯ a caption
   at a time, with Step, Continue and Stop at each pause), type walkthrough commands into it, switch
-  between its tabs, and see a screenshot after each thing it does. Opened from the branch page's 🐞.
+  between its tabs, and see a screenshot after each thing it does. 🐞 folds it away and back; it's hidden
+  on narrow pages (the branch page in an app's dropdown).
   """
 
-  use Hologram.Page
+  use Hologram.Component
 
   alias Clawswap.Walkthrough.{Browser, Debugger}
   alias ClawswapWeb.DebugView
 
-  route("/debug")
-
   @placeholder ~s|click "Ping"  ·  see "pong"  ·  visit url(:web)  ·  js "return document.title"|
 
-  layout(ClawswapWeb.MainLayout)
-
-  def init(_params, component, server) do
+  def init(_props, component, server) do
     view = DebugView.page(Debugger.state())
-    component = put_state(component, view: view, message: nil, code: "", headless: Browser.headless?(), placeholder: @placeholder)
+    component = put_state(component, view: view, message: nil, code: "", headless: Browser.headless?(), placeholder: @placeholder, open: true)
     {component, put_subscription(server, :clawswap_debug)}
   end
 
   def template do
     ~HOLO"""
-    <main class="debug">
+    <aside class="debug {if @open do "open" else "folded" end}">
+      <button class="fold" title={if @open do "Fold the debug panel away" else "Open the debug panel" end} $click="fold">🐞</button>
+      {%if @open}
       <header>
-        <h1>Debug Chrome</h1>
+        <h1>Chrome</h1>
         <span class="browser {@view.browser}">{@view.browser_label}</span>
         {%if @view.closed}
           <label class="headless" title="Without a window: you follow it in the screenshots here">
@@ -39,14 +38,15 @@ defmodule ClawswapWeb.DebugPage do
           <button $click={command: :close}>Close Chrome</button>
         {/if}
       </header>
-      {%if @message}<p class="message">{@message}</p>{/if}
+      {%if @message}<p class="message dmessage">{@message}</p>{/if}
       {%if @view.walkthroughs != []}
-        <section class="walks">
+        <section class="dwalks">
           <span class="walks-label" title="▶ runs one to the end; ⏯ pauses at each caption">Walkthroughs</span>
           {%for w <- @view.walkthroughs}
             <span class="walk-pair">
-              <button class="walk" title="Run to the end" $click={command: :walk, params: %{name: w, step: false}}>▶ {w}</button>
-              <button class="walk step" title="Run a caption at a time" $click={command: :walk, params: %{name: w, step: true}}>⏯</button>
+              <span class="name">{w}</span>
+              <button class="dwalk run" title="Run to the end" $click={command: :walk, params: %{name: w, step: false}}>▶</button>
+              <button class="dwalk step" title="Run a caption at a time" $click={command: :walk, params: %{name: w, step: true}}>⏯</button>
             </span>
           {/for}
           {%if @view.paused}
@@ -57,7 +57,7 @@ defmodule ClawswapWeb.DebugPage do
             </span>
           {/if}
           {%if @view.running}<span class="controls"><button $click={command: :pause}>Pause</button></span>{/if}
-          {%if @view.walk.text}<span class="walk-status {@view.walk.class}">{@view.walk.text}</span>{/if}
+          {%if @view.walk.text}<span class="dwalk-status {@view.walk.class}">{@view.walk.text}</span>{/if}
         </section>
       {/if}
       <form class="command" $submit="run">
@@ -69,7 +69,7 @@ defmodule ClawswapWeb.DebugPage do
         <section class="visit">
           <span class="walks-label">Visit</span>
           {%for s <- @view.servers}
-            <button class="walk" $click={command: :run, params: %{code: "visit url(:#{s})"}}>{s}</button>
+            <button class="dwalk" $click={command: :run, params: %{code: "visit url(:#{s})"}}>{s}</button>
           {/for}
           {%if @view.url}<span class="url">{@view.url}</span>{/if}
         </section>
@@ -101,11 +101,14 @@ defmodule ClawswapWeb.DebugPage do
           {/for}
         </ol>
       </div>
-    </main>
+      {/if}
+    </aside>
     """
   end
 
   def action(:debug_changed, params, component), do: put_state(component, :view, params.view)
+
+  def action(:fold, _params, component), do: put_state(component, :open, !component.state.open)
 
   def action(:show_message, params, component), do: put_state(component, :message, params.message)
 
@@ -146,6 +149,6 @@ defmodule ClawswapWeb.DebugPage do
     answer(server, Debugger.tab(which))
   end
 
-  defp answer(server, {:ok, _view}), do: put_action(server, :show_message, message: nil)
-  defp answer(server, {:error, _status, message}), do: put_action(server, :show_message, message: message)
+  defp answer(server, {:ok, _view}), do: put_action(server, name: :show_message, target: "debug_panel", params: %{message: nil})
+  defp answer(server, {:error, _status, message}), do: put_action(server, name: :show_message, target: "debug_panel", params: %{message: message})
 end

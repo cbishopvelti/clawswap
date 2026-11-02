@@ -64,7 +64,7 @@ A minimal `clawswap.exs` (or the same as `clawswap.yml`):
 | [Branch page](https://cbishopvelti.github.io/clawswap/page.html) | The watcher's page, its marks, and embedding it in your app (iframe, reload after a switch) |
 | [API](https://cbishopvelti.github.io/clawswap/api.html) | The JSON API, to build your own control |
 | [Stream Deck](https://cbishopvelti.github.io/clawswap/opendeck.html) | Branch, pull and walkthrough keys, through OpenDeck or from the page over WebHID |
-| [Walkthroughs](https://cbishopvelti.github.io/clawswap/walkthroughs.html) | Scripts on a branch that play its change in Chrome, how to have Claude write them, and the debug page that steps through one or drives Chrome by hand |
+| [Walkthroughs](https://cbishopvelti.github.io/clawswap/walkthroughs.html) | Scripts on a branch that play its change in Chrome, how to have Claude write them, and the debug panel that steps through one or drives Chrome by hand |
 | [Browser tests](https://cbishopvelti.github.io/clawswap/testing.html) | `clawswap test`: your project's Wallaby suite, several browsers at once, against the session's servers |
 
 [examples/](examples) has bmx's config (as [`.exs`](examples/bmx.exs) and [`.yml`](examples/bmx.yml)) and

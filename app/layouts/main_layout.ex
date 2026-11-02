@@ -1,6 +1,7 @@
 defmodule ClawswapWeb.MainLayout do
   use Hologram.Component
 
+  alias ClawswapWeb.DebugPanel
   alias Hologram.UI.Runtime
 
   def template do
@@ -15,7 +16,10 @@ defmodule ClawswapWeb.MainLayout do
         <Runtime />
       </head>
       <body>
-        <slot />
+        <div class="with-panel">
+          <div class="page"><slot /></div>
+          <DebugPanel cid="debug_panel" />
+        </div>
       </body>
     </html>
     """
