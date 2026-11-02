@@ -51,6 +51,9 @@
   <tr><td>inotify-tools</td><td>Linux only</td><td>Hologram's dev server watches its files with it: <code>sudo apt install inotify-tools</code>.</td></tr>
   <tr><td><code>gh</code> or <code>GITHUB_TOKEN</code></td><td>optional</td><td>For pull-request titles, and to list only branches with an open PR.</td></tr>
 </table>
+<p>Once it's cloned, <code>clawswap doctor</code> checks all of these (and Chrome and chromedriver for
+walkthroughs, and your project's config and webhook when you run it in your repo) and prints the fix for
+anything missing. It runs with plain <code>elixir</code>, so it works before <code>mix compile</code> does.</p>
 
 <h2 id="clone">Get clawswap</h2>
 <pre><code>git clone https://github.com/cbishopvelti/clawswap

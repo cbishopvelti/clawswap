@@ -5,6 +5,7 @@ defmodule Clawswap.CLI do
 
   @usage """
   Usage: clawswap <command>
+    doctor           Check what clawswap needs is installed, and print the fix for what isn't
     init             Write a starter clawswap.exs in this repo
     up               Start (or attach to) the zellij or tmux session with every server
     status           The branches the keys show, and the last switch
@@ -21,6 +22,7 @@ defmodule Clawswap.CLI do
 
   def main(args) do
     case args do
+      ["doctor"] -> Clawswap.Doctor.main()
       ["init"] -> init()
       ["up"] -> up()
       ["watch"] -> watch()

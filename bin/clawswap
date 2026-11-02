@@ -19,6 +19,14 @@ case "${1:-}" in
     rm -f "$CLAWSWAP_EXEC"
     cd "$1" && shift && exec "$@"
     ;;
+  doctor)
+    # Runs with plain elixir, so it works before clawswap's deps are fetched or compiled.
+    command -v elixir >/dev/null 2>&1 || {
+      echo "  MISSING   Elixir: Install Elixir 1.19 or newer: https://elixir-lang.org/install.html" >&2
+      exit 1
+    }
+    exec elixir -r lib/clawswap/doctor.ex -e 'Clawswap.Doctor.main()'
+    ;;
   watch)
     # Hologram serves its pages only with this set in dev.
     export HOLOGRAM_START=1

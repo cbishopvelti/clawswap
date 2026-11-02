@@ -84,6 +84,7 @@ Run these from inside your project's repo (not clawswap's clone). `bin/clawswap`
 clawswap's own folder, with your repo passed along.
 
 ```bash
+clawswap doctor            # check what clawswap needs is installed, with the fix for what isn't
 clawswap up                # open (or re-attach to) the session
 clawswap status            # the list the keys show, and the last switch
 clawswap switch <branch>   # what a key press does
