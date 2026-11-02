@@ -113,7 +113,7 @@ defmodule Clawswap.Integration do
 
     try do
       wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
-      wait_for(fn -> http_ok?("http://127.0.0.1:27391/") or http_ok?("http://[::1]:27391/") end, 120_000, "the app on 27391")
+      wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
     rescue
       error ->
         IO.puts(panes())
@@ -220,7 +220,7 @@ defmodule Clawswap.Integration do
 
   defp http_ok?(url) do
     :inets.start()
-    # For http://[::1]:...
+    # Vite binds localhost, which can be ::1 alone (as on GitHub's runners); asked by its IP, it answers 403.
     :httpc.set_options(ipfamily: :inet6fb4)
     match?({:ok, {{_, 200, _}, _, _}}, :httpc.request(:get, {String.to_charlist(url), []}, [timeout: 5000], []))
   end
