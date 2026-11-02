@@ -87,7 +87,7 @@ clawswap's own folder, with your repo passed along.
 clawswap doctor            # check what clawswap needs is installed, with the fix for what isn't
 clawswap up                # open (or re-attach to) the session
 clawswap status            # the list the keys show, and the last switch
-clawswap switch <branch>   # what a key press does
+clawswap switch <branch>   # what a key press does (a PR number or part of the name works too: switch 23)
 clawswap pull              # pull the current branch the same way
 clawswap update            # the steps for what changed since they last ran (after a manual git pull)
 clawswap update --all      # every step
@@ -95,6 +95,7 @@ clawswap walk [name...]    # play walkthroughs in Chrome (default: the ones this
 clawswap browser           # open a dev Chrome at your app, that walkthroughs play in
 clawswap test [path...]    # run the browser tests (Wallaby) against the servers; --watch, --only tag
 clawswap layout            # the zellij layout up opens, to start your own from (tmux: its commands)
+clawswap completion bash   # shell completion (bash, zsh or fish); see docs/usage.html#completion
 ```
 
 Before it opens a new session, `up` runs the config's `prepare` steps (containers, say) and then the steps

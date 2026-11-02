@@ -47,17 +47,27 @@
   <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap up</code></td><td>Opens the zellij or tmux session, or re-attaches to it.</td></tr>
   <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
-  <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane.</td></tr>
+  <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane. The branch can be its full name, its PR number (<code>switch 23</code>), its short name or any part of its name that only one listed branch has.</td></tr>
   <tr><td><code>clawswap pull</code></td><td>Pulls the current branch the same way. Does nothing if it's up to date.</td></tr>
   <tr><td><code>clawswap update</code></td><td>Runs the steps for what changed since they last ran (after a <code>git pull</code> by hand, say).</td></tr>
   <tr><td><code>clawswap update &lt;rev&gt;</code></td><td>The steps for what changed since <code>rev</code>.</td></tr>
   <tr><td><code>clawswap update --all</code></td><td>Every step.</td></tr>
   <tr><td><code>clawswap smee [url]</code></td><td>Sets up the smee.io channel and the GitHub webhook for it, and points a running watcher at it (see <a href="install.html#project">Install</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
+  <tr><td><code>clawswap completion &lt;shell&gt;</code></td><td>Prints shell completion for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
   <tr><td><code>clawswap watch</code></td><td>The watcher, with its page and API. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
 </table>
 <p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the running watcher, so they need
 <code>clawswap up</code> first.</p>
+<p>A mistyped command says which command it thinks you meant (<code>clawswap swich</code>: "Did you mean
+clawswap switch?"), and a command given the wrong arguments says what it takes.</p>
+
+<h2 id="completion">Completion</h2>
+<p><code>clawswap completion</code> prints a script that completes the commands, and for <code>switch</code> the
+branches on origin of the repo you're in (read with git, so pressing Tab doesn't start mix). Save it once:</p>
+<pre><code>clawswap completion bash &gt; ~/.local/share/bash-completion/completions/clawswap
+clawswap completion zsh &gt; ~/.zfunc/_clawswap     # a folder on your $fpath, before compinit
+clawswap completion fish &gt; ~/.config/fish/completions/clawswap.fish</code></pre>
 
 <h2 id="up">clawswap up</h2>
 <p>When no session is running, <code>up</code>:</p>
