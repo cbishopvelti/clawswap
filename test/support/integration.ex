@@ -116,17 +116,22 @@ defmodule Clawswap.Integration do
       wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
     rescue
       error ->
-        IO.puts("[integration] `clawswap up` pane:\n" <> pane("up-" <> project.session))
+        IO.puts(panes())
         reraise error, __STACKTRACE__
     end
 
     Map.put(project, :multiplexer, multiplexer)
   end
 
-  # What a pane of the tests' tmux server shows, with its scrollback.
-  defp pane(target) do
-    {out, _} = System.cmd("tmux", ["-L", @socket, "capture-pane", "-p", "-J", "-S", "-200", "-t", target], stderr_to_stdout: true)
-    out
+  # What every pane of the tests' tmux server shows (`clawswap up`'s, and the session it builds), with scrollback.
+  defp panes do
+    {list, _} = System.cmd("tmux", ["-L", @socket, "list-panes", "-a", "-F", "\#{pane_id} \#{session_name}:\#{window_name} \#{pane_start_command}"])
+
+    for line <- String.split(list, "\n", trim: true), into: "" do
+      [id | _] = String.split(line, " ")
+      {out, _} = System.cmd("tmux", ["-L", @socket, "capture-pane", "-p", "-J", "-S", "-200", "-t", id], stderr_to_stdout: true)
+      "[integration] pane #{line}:\n" <> String.trim(out) <> "\n"
+    end
   end
 
   @doc "Ends the sessions, and whatever still holds the ports."

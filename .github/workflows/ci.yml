@@ -87,4 +87,5 @@ jobs:
           "${CHROMEWEBDRIVER}/chromedriver" --version
 
       - run: mix deps.get
-      - run: mix test.integration
+      # Every test brings clawswap up, so once one can't, the rest won't either.
+      - run: mix test.integration --max-failures 1
