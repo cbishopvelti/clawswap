@@ -1,18 +1,19 @@
 defmodule Clawswap.CLI do
   @moduledoc "clawswap's commands. See README.md."
 
-  alias Clawswap.{BrowserTests, Config, Git, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
+  alias Clawswap.{BrowserTests, Config, Git, GitHub, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
 
   # Each command: its name, the arguments it takes (as usage shows them), how many it takes at least and at
   # most (:any for no limit), and what it does.
   @commands [
+    {"doctor", "", 0, 0, "Check what clawswap needs is installed, and print the fix for what isn't"},
     {"init", "", 0, 0, "Write a starter clawswap.exs in this repo"},
     {"up", "", 0, 0, "Start (or attach to) the zellij or tmux session with every server"},
     {"status", "", 0, 0, "The branches the keys show, and the last switch"},
     {"switch", "<branch>", 1, 1, "Switch branch (its name, part of it, or its PR number), restarting the servers"},
     {"pull", "", 0, 0, "Pull the current branch the same way (nothing happens if it's up to date)"},
     {"update", "[rev]", 0, 1, "Run the steps for what changed since they last ran (or since rev), or --all"},
-    {"smee", "[url]", 0, 1, "Set up the smee.io channel for the GitHub webhook"},
+    {"smee", "[url]", 0, 1, "Set up the smee.io channel and the GitHub webhook for it"},
     {"walk", "[name...]", 0, :any, "Run walkthroughs in Chrome (default: the ones this branch added); --headless"},
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
     {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
@@ -46,6 +47,7 @@ defmodule Clawswap.CLI do
     end
   end
 
+  defp dispatch("doctor", []), do: Clawswap.Doctor.main()
   defp dispatch("init", []), do: init()
   defp dispatch("up", []), do: up()
   defp dispatch("watch", []), do: watch()
@@ -194,6 +196,18 @@ defmodule Clawswap.CLI do
       {:ok, {{_, status, _}, _, answer}} when status in 200..299 -> JSON.decode!(answer)
       {:ok, {_, _, answer}} -> fail(JSON.decode!(answer)["error"])
       {:error, _} -> fail("The watcher isn't running (start the session with clawswap up)")
+    end
+  end
+
+  # Like api/2, but for a watcher that may not be running.
+  defp tell_watcher(path, body) do
+    :inets.start()
+    url = String.to_charlist("http://127.0.0.1:#{api_port()}#{path}")
+
+    case :httpc.request(:post, {url, [], ~c"application/json", JSON.encode!(body)}, [timeout: 30_000], body_format: :binary) do
+      {:ok, {{_, status, _}, _, _}} when status in 200..299 -> :ok
+      {:ok, {{_, status, _}, _, answer}} -> {:error, with({:ok, %{"error" => e}} <- JSON.decode(answer), do: e, else: (_ -> "#{status}"))}
+      {:error, _} -> {:error, :not_running}
     end
   end
 
@@ -358,9 +372,11 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Makes a smee.io channel for the GitHub webhook and saves it for this checkout.
+  # Makes a smee.io channel for the GitHub webhook, saves it for this checkout, adds the webhook on GitHub
+  # when the token may, and tells a running watcher to follow the new channel.
   defp smee(url) do
     project = project!()
+    old = Config.read_local(project)["smee"]
 
     channel =
       url ||
@@ -370,17 +386,50 @@ defmodule Clawswap.CLI do
         end
 
     Config.write_local(project, %{"smee" => channel})
+    IO.puts("Saved #{channel} in #{project.local_file}.")
 
-    IO.puts("""
-    Saved #{channel} in #{project.local_file}.
+    webhook(project, channel, old)
 
-    Now add the webhook on GitHub (repo Settings > Webhooks > Add webhook):
-      Payload URL:  #{channel}
-      Content type: application/json
-      Events:       Let me select individual events > Branch or tag creation, Branch or tag deletion,
-                    Pull requests, Pushes
-    Then restart the watcher (Ctrl+C twice in the clawswap pane, then Up and Enter).\
-    """)
+    case tell_watcher("/smee", %{url: channel}) do
+      :ok -> IO.puts("The watcher is following it now.")
+      {:error, :not_running} -> IO.puts("The watcher follows it when it starts (clawswap up).")
+      {:error, message} -> IO.puts("The watcher didn't take it (#{message}); it follows it when it next starts.")
+    end
+  end
+
+  defp webhook(project, channel, old) do
+    repo = Git.github_repo(project.root)
+    token = GitHub.token()
+
+    result =
+      cond do
+        repo == nil -> {:error, "origin isn't a GitHub repo"}
+        token == nil -> {:error, "no GitHub token (log in with gh auth login, or set GITHUB_TOKEN)"}
+        true -> GitHub.ensure_hook(repo, token, channel, old, &yes?("Remove #{repo}'s webhook for the old channel, #{&1}?"))
+      end
+
+    case result do
+      {:ok, outcome, removed} ->
+        IO.puts(if outcome == :created, do: "Added the webhook on #{repo}.", else: "#{repo} already has the webhook.")
+        if removed, do: IO.puts("Removed the old channel's webhook.")
+
+      {:error, message} ->
+        IO.puts("""
+        Couldn't add the webhook on GitHub: #{message}.
+        Add it by hand (repo Settings > Webhooks > Add webhook):
+          Payload URL:  #{channel}
+          Content type: application/json
+          Events:       Let me select individual events > Branch or tag creation, Branch or tag deletion,
+                        Pull requests, Pushes\
+        """)
+    end
+  end
+
+  defp yes?(question) do
+    case IO.gets("#{question} [Y/n] ") do
+      answer when is_binary(answer) -> String.trim(answer) in ["", "y", "Y", "yes"]
+      _ -> false
+    end
   end
 
   defp init do
