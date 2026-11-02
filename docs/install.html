@@ -63,6 +63,23 @@ project's</em> repo, since that's the repo it acts on; it finds its own folder b
 <pre><code>cd &lt;path-to-your-project&gt;
 &lt;path-to-clawswap&gt;/bin/clawswap status</code></pre>
 
+<h2 id="own-elixir">Its own Elixir</h2>
+<p>clawswap doesn't have to run on your project's Elixir. Its <code>.tool-versions</code> pins the Erlang and
+Elixir it's tested on, and <code>bin/clawswap</code> runs it on those whatever your project pins, so a project
+on Elixir 1.17 works fine. Everything clawswap runs in your repo (the update steps, the servers) still gets
+your own <code>PATH</code>, and so your project's Elixir.</p>
+<ul>
+  <li><strong>mise</strong>: <code>bin/clawswap</code> runs clawswap through <code>mise exec</code> in its own folder.
+    Install the pinned versions once with <code>cd &lt;path-to-clawswap&gt; &amp;&amp; mise install</code>.</li>
+  <li><strong>asdf</strong>: the shims read clawswap's <code>.tool-versions</code> by themselves. Install the versions once
+    with <code>cd &lt;path-to-clawswap&gt; &amp;&amp; asdf install</code>.</li>
+  <li><strong>Anything else</strong>: set <code>CLAWSWAP_ELIXIR_PATH</code> to the <code>bin</code> folders of an
+    Elixir 1.19 and its Erlang, separated by <code>:</code>. clawswap puts them first on its own <code>PATH</code> only.
+    It's also how you pick a version other than the pinned one.</li>
+</ul>
+<p>Without any of these, clawswap uses the <code>elixir</code> on your <code>PATH</code>, which has to be 1.19 or newer.
+When mise or asdf hasn't installed the pinned versions, <code>bin/clawswap</code> says how to.</p>
+
 <h2 id="path">Put <code>clawswap</code> on your PATH</h2>
 <p>To type just <code>clawswap</code>, link it into a folder on your <code>PATH</code>. Run this from the clone's root,
 so <code>$PWD</code> gives the link the full path:</p>

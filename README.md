@@ -25,6 +25,8 @@ and the OpenDeck plugin is an Elixir script.
 
 You need Elixir 1.19+ (OTP 26+), zellij 0.44+ or tmux 3.1+, and Node.js and (on Linux) inotify-tools for Hologram's
 build. [Install](https://cbishopvelti.github.io/clawswap/install.html) has the details.
+clawswap runs on the Elixir its `.tool-versions` pins, not your project's, so their versions don't have to match:
+run `mise install` or `asdf install` in the clone once ([its own Elixir](https://cbishopvelti.github.io/clawswap/install.html#own-elixir)).
 
 ```bash
 git clone https://github.com/cbishopvelti/clawswap
