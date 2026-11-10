@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
-// The watcher's page and API. Override with VITE_CLAWSWAP_URL (in .env.local, say) when the config's
-// port isn't 27390.
-export const CLAWSWAP_URL = import.meta.env.VITE_CLAWSWAP_URL || "http://localhost:27390";
+// This project's page and API on the clawswap daemon: /p/<id>, its id being its session's name (the
+// config's name unless it sets session). Override with VITE_CLAWSWAP_URL (in .env.local, say) when the
+// config's port isn't 27390, or its session isn't react-embed.
+export const CLAWSWAP_URL = import.meta.env.VITE_CLAWSWAP_URL || "http://localhost:27390/p/react-embed";
 
 // Follows GET /state: every 2 s while a switch runs, every 10 s otherwise. A switch restarts this page's
 // own dev server, so failed fetches are expected for a moment and only show as "unreachable".

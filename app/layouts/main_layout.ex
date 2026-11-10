@@ -1,7 +1,8 @@
 defmodule ClawswapWeb.MainLayout do
+  @moduledoc "The pages' document. A project's pages put the debug panel beside themselves (`ClawswapWeb.DebugPanel`)."
+
   use Hologram.Component
 
-  alias ClawswapWeb.DebugPanel
   alias Hologram.UI.Runtime
 
   def template do
@@ -16,10 +17,7 @@ defmodule ClawswapWeb.MainLayout do
         <Runtime />
       </head>
       <body>
-        <div class="with-panel">
-          <div class="page"><slot /></div>
-          <DebugPanel cid="debug_panel" />
-        </div>
+        <slot />
       </body>
     </html>
     """

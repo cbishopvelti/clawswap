@@ -3,7 +3,7 @@
 A Vite + React app to try embedding clawswap in a project's own page. It's a test target, so it's
 JavaScript; clawswap itself isn't. It embeds clawswap two ways:
 
-- **The watcher's page in an iframe** (`http://localhost:27390`), as a dropdown from a Branches button in the
+- **The project's clawswap page in an iframe** (`http://localhost:27390/p/react-embed`), as a dropdown from a Branches button in the
   top bar, like bmx's branch menu. At that width the page lays itself out as a compact list.
 - **`BranchBadge`**, a control of the app's own in the top bar, built on the watcher's JSON API
   (`GET /state`, `POST /switch`, `POST /pull`): the checkout's branch as a picker, Pull with how far
@@ -55,7 +55,8 @@ the watcher's page, or run `clawswap walk branches-menu`, to watch Chrome open t
 - **Reload.** When the switch is done the framed page posts `{clawswap: "switched", branch}` to the app,
   and `BranchMenu` reloads on it. Vite reloads by itself too; the listener is what an app without that
   (Phoenix, say) needs. See [docs/page.html#reload](../../docs/page.html#reload).
-- **Another port.** Set `VITE_CLAWSWAP_URL` (in `.env.local`) when `clawswap.exs`'s `port` isn't 27390.
+- **Another port or id.** Set `VITE_CLAWSWAP_URL` (in `.env.local`) when `clawswap.exs`'s `port` isn't 27390,
+  or its session (the id in `/p/<id>`) isn't `react-embed`.
 
 ## Browser tests
 

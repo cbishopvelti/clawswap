@@ -22,7 +22,10 @@ defmodule Clawswap.Multiplexer do
   inside (so the watcher drives the session it's in), zellij for a config with its own zellij `layout`,
   then zellij if it's installed and new enough, then tmux if it's installed.
   """
-  def pick(project, env \\ System.get_env(), installed \\ &installed?/1) do
+  def pick(project, env \\ nil, installed \\ &installed?/1) do
+    # The shell the project was registered from: inside zellij or tmux there, not in the daemon.
+    env = env || project[:host_env] || System.get_env()
+
     case project[:multiplexer] && to_string(project.multiplexer) do
       "zellij" -> Zellij
       "tmux" -> Tmux

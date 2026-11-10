@@ -58,9 +58,10 @@
   <tr><td><code>clawswap smee [url]</code></td><td>Sets up the smee.io channel and the GitHub webhook for it, and points a running watcher at it (see <a href="install.html#project">Install</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap completion &lt;shell&gt;</code></td><td>Prints shell completion for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
-  <tr><td><code>clawswap watch</code></td><td>The watcher, with its page and API. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
+  <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
+  <tr><td><code>clawswap daemon</code></td><td>The daemon itself, which runs every project's watcher, page and API. <code>up</code> starts it in the background; you rarely run it yourself.</td></tr>
 </table>
-<p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the running watcher, so they need
+<p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the project in the daemon, so they need
 <code>clawswap up</code> first.</p>
 <p>A mistyped command says which command it thinks you meant (<code>clawswap swich</code>: "Did you mean
 clawswap switch?"), and a command given the wrong arguments says what it takes.</p>
@@ -113,11 +114,33 @@ soon as the command exits.</p>
 <h3 id="own-layout">Your own layout (zellij)</h3>
 <p>Start from <code>clawswap layout &gt; my-layout.kdl</code>, edit it, and set <code>layout: "my-layout.kdl"</code>
 in the config. Keep the server panes named as in <code>servers</code> (the watcher finds them by name), and run
-<code>clawswap watch</code> in one pane.</p>
+<code>clawswap watch</code> in one pane: it runs the project in the daemon, and shows its log.</p>
 
 <h2 id="several">Several projects at once</h2>
-<p>Give each project its own <code>port</code> (and, if two share a folder name, its own <code>session</code>).
-Each project then has its own session, watcher and page, and Stream Deck keys can point at either.</p>
+<p>Run <code>clawswap up</code> in each project. They share one daemon on <code>127.0.0.1:27390</code>: the first
+<code>up</code> starts it in the background (its output goes to <code>~/.local/state/clawswap/daemon-27390.log</code>),
+and each project comes into it with a watcher of its own.</p>
+<ul>
+  <li><strong>Its page</strong> is <code>http://127.0.0.1:27390/p/&lt;id&gt;</code>, its id being its
+    <code>session</code>'s name (the config's <code>name</code>, else the folder's), in lower case. Two checkouts of
+    one repo (worktrees) need a <code>session</code> each. <code>http://127.0.0.1:27390</code> lists every project,
+    with the branch it's on and how its last switch went.</li>
+  <li><strong>Its log</strong> is in its session's <code>clawswap</code> pane, as before: the pane's
+    <code>clawswap watch</code> follows it from the daemon.</li>
+  <li><strong>Its environment.</strong> A project's steps run with the environment of the shell you ran
+    <code>clawswap up</code> in (its <code>PATH</code>, its direnv), not the daemon's or another project's.</li>
+  <li><strong>The selected project</strong> is the one the Stream Deck keys follow, unless they're pinned to a project
+    (<a href="opendeck.html#projects">Stream Deck</a>), and the one the API's paths without <code>/p/&lt;id&gt;</code>
+    answer for. It's the first project to start, until you press Select on the front page, use a project's page, or
+    press the deck's project key.</li>
+  <li><strong>A config change</strong> (a switch that changes it, or a save on the settings page) starts that one
+    project again on the new config; the others carry on.</li>
+  <li><strong>When a session ends</strong>, its project leaves the daemon about 30 seconds later. The daemon stops by
+    itself ten minutes after its last project has gone. If the daemon stops while a session runs, the session's
+    <code>clawswap</code> pane starts it again and carries on.</li>
+</ul>
+<p>A project with a <code>port</code> of its own gets a daemon of its own on that port, apart from the others: give
+it one when you'd rather it didn't share.</p>
 
 <h2 id="state">What clawswap keeps per checkout</h2>
 <p><code>.git/clawswap.json</code> holds the smee.io channel and the commit the steps last ran for. It lives

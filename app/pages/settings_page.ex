@@ -10,18 +10,25 @@ defmodule ClawswapWeb.SettingsPage do
   alias Clawswap.Config.Form
   alias Clawswap.Watcher
 
-  route("/settings")
+  route("/p/:project/settings")
+  param(:project, :string)
 
   layout(ClawswapWeb.MainLayout)
 
-  def init(_params, component, _server) do
-    put_state(component, Map.merge(%{schema: Form.schema(), message: nil, error: nil, saving: false}, form()))
+  def init(params, component, _server) do
+    put_state(component, Map.merge(%{id: params.project, schema: Form.schema(), message: nil, error: nil, saving: false}, form(params.project)))
   end
 
-  defp form do
-    case Form.load(Clawswap.Application.project()) do
-      {:ok, form} -> Map.put(form, :load_error, nil)
-      {:error, message} -> %{file: Clawswap.Application.project().file, format: "", values: %{}, code: %{}, rows: %{}, next: 1, load_error: message}
+  defp form(id) do
+    case Clawswap.Projects.get(id) do
+      nil ->
+        %{file: "", format: "", values: %{}, code: %{}, rows: %{}, next: 1, load_error: "No project #{id} (clawswap up starts it)"}
+
+      project ->
+        case Form.load(project) do
+          {:ok, form} -> Map.put(form, :load_error, nil)
+          {:error, message} -> %{file: project.file, format: "", values: %{}, code: %{}, rows: %{}, next: 1, load_error: message}
+        end
     end
   end
 
@@ -150,17 +157,19 @@ defmodule ClawswapWeb.SettingsPage do
 
     component
     |> put_state(saving: true, message: nil, error: nil)
-    |> put_command(:save, values: values, code: code, rows: rows)
+    |> put_command(:save, values: values, code: code, rows: rows, project: component.state.id)
   end
 
   def action(:saved, params, component), do: put_state(component, Map.put(params, :saving, false))
 
   def command(:save, params, server) do
-    project = Clawswap.Application.project()
+    project = Clawswap.Projects.get(params.project)
+    save = fn -> Form.save(project, Map.drop(params, [:project])) end
 
-    case Watcher.save_config(fn -> Form.save(project, params) end) do
+    case project && Watcher.save_config(Clawswap.Project.via(project.id, :watcher), save) do
+      nil -> put_action(server, :saved, message: nil, error: "No project #{params.project} (clawswap up starts it)")
       # The rows now stand for what's in the file, for the next save.
-      {:ok, :saved} -> put_action(server, :saved, Map.merge(form(), %{message: "Saved. The watcher is restarting with it.", error: nil}))
+      {:ok, :saved} -> put_action(server, :saved, Map.merge(form(project.id), %{message: "Saved. The project is restarting with it.", error: nil}))
       {:ok, :unchanged} -> put_action(server, :saved, message: "Nothing has changed.", error: nil)
       {:error, message} -> put_action(server, :saved, message: nil, error: message)
     end

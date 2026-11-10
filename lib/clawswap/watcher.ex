@@ -9,7 +9,8 @@ defmodule Clawswap.Watcher do
   `smee_url`, `on_change` (called with the public state after every change; the web layer broadcasts it),
   `exit` (restarts the watcher after a switch changed its config), `refresh_git` (false skips git fetch),
   `open_url` (opens a link in the browser; `open_url/1` by default).
-  `run_walk` (runs a walkthrough: `Clawswap.Walkthrough.run/3`, or a stand-in in tests).
+  `run_walk` (runs a walkthrough: `Clawswap.Walkthrough.run/3`, or a stand-in in tests),
+  `group_leader` (`{:log, id}`: the project's `Clawswap.ProjectLog`, in the daemon).
   """
 
   use GenServer
@@ -74,6 +75,11 @@ defmodule Clawswap.Watcher do
 
   @impl true
   def init(opts) do
+    # In the daemon, what this watcher prints goes to its project's log (and pane), not the daemon's.
+    with {:log, id} <- opts[:group_leader], log when is_pid(log) <- Clawswap.Project.whereis(id, :log) do
+      Process.group_leader(self(), log)
+    end
+
     project = Keyword.fetch!(opts, :project)
     smee_url = opts[:smee_url]
 
@@ -95,6 +101,8 @@ defmodule Clawswap.Watcher do
       smee_url: smee_url,
       view: %{
         project: project.name,
+        # Its id in the daemon's URLs (/p/<id>/).
+        id: project[:id],
         base: project.base,
         current: nil,
         dirty: false,
@@ -194,19 +202,22 @@ defmodule Clawswap.Watcher do
         %{project: project, run_walk: run_walk} = state
         update = fn changes -> GenServer.cast(watcher, {:walk, changes}) end
 
-        Task.Supervisor.start_child(Clawswap.TaskSupervisor, fn ->
-          log("Walkthrough #{name}")
+        Task.Supervisor.start_child(
+          Clawswap.TaskSupervisor,
+          Clawswap.ProjectLog.wrap(fn ->
+            log("Walkthrough #{name}")
 
-          case run_walk.(project, name, on_step: &update.(%{step: &1})) do
-            :ok ->
-              log("Walkthrough #{name} passed")
-              update.(%{phase: "passed", step: nil, at: now()})
+            case run_walk.(project, name, on_step: &update.(%{step: &1})) do
+              :ok ->
+                log("Walkthrough #{name} passed")
+                update.(%{phase: "passed", step: nil, at: now()})
 
-            {:error, message} ->
-              log("Walkthrough #{name} failed: #{message}")
-              update.(%{phase: "failed", error: message, at: now()})
-          end
-        end)
+              {:error, message} ->
+                log("Walkthrough #{name} failed: #{message}")
+                update.(%{phase: "failed", error: message, at: now()})
+            end
+          end)
+        )
 
         {:reply, {:ok, state.view}, state}
     end
@@ -306,7 +317,7 @@ defmodule Clawswap.Watcher do
   # One refresh at a time; asking during one means another runs right after it.
   defp start_refresh(%{refreshing: nil} = state) do
     %{project: project, refresh_git: refresh_git, pr_cache: cache} = state
-    task = Task.Supervisor.async_nolink(Clawswap.TaskSupervisor, fn -> snapshot(project, refresh_git, cache) end)
+    task = Task.Supervisor.async_nolink(Clawswap.TaskSupervisor, Clawswap.ProjectLog.wrap(fn -> snapshot(project, refresh_git, cache) end))
     %{state | refreshing: task.ref, again: false}
   end
 
@@ -446,7 +457,7 @@ defmodule Clawswap.Watcher do
     watcher = self()
     %{project: project, servers: servers, run_step: run_step} = state
     before = state.view.current && state.view.current.sha
-    Task.Supervisor.start_child(Clawswap.TaskSupervisor, fn -> do_switch(watcher, project, servers, run_step, run, before) end)
+    Task.Supervisor.start_child(Clawswap.TaskSupervisor, Clawswap.ProjectLog.wrap(fn -> do_switch(watcher, project, servers, run_step, run, before) end))
     reply_ok(state)
   end
 
@@ -554,6 +565,7 @@ defmodule Clawswap.Watcher do
 
   @doc "The real step runner: output goes to the watcher's pane (or the terminal, for `up` and `update`)."
   def step_runner(project) do
-    fn step -> Clawswap.Run.stream(step.cmd, step.args, cwd: Path.expand(step.cwd, project.root), prefix: "  #{step.name} | ") end
+    env = Clawswap.HostEnv.for_project(project[:host_env])
+    fn step -> Clawswap.Run.stream(step.cmd, step.args, cwd: Path.expand(step.cwd, project.root), prefix: "  #{step.name} | ", env: env) end
   end
 end

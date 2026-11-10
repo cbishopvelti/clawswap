@@ -18,7 +18,8 @@ defmodule Clawswap.CLI do
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
     {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
     {"layout", "", 0, 0, "Print the layout up opens (zellij's layout, or tmux's commands)"},
-    {"watch", "", 0, 0, "The watcher, with its page and API (runs in the session's clawswap pane)"},
+    {"watch", "", 0, 0, "Run this project in the daemon and follow its log (the session's clawswap pane does)"},
+    {"daemon", "", 0, 0, "The daemon that runs every project's watcher, page and API (clawswap up starts it)"},
     {"completion", "<shell>", 1, 1, "Print shell completion for bash, zsh or fish"},
     {"help", "", 0, 0, "This list"}
   ]
@@ -51,6 +52,7 @@ defmodule Clawswap.CLI do
   defp dispatch("init", []), do: init()
   defp dispatch("up", []), do: up()
   defp dispatch("watch", []), do: watch()
+  defp dispatch("daemon", []), do: daemon()
   defp dispatch("status", []), do: status()
   defp dispatch("switch", [branch]), do: switch(branch)
   defp dispatch("pull", []), do: pull()
@@ -148,6 +150,9 @@ defmodule Clawswap.CLI do
       {:error, message} -> fail(message)
     end
 
+    # The project's page is up while the session starts (its pane's clawswap watch registers it too).
+    ensure_daemon(project)
+    register!(project)
     command = mux.up(project, fn -> catch_up(project) end)
 
     case System.get_env("CLAWSWAP_EXEC") do
@@ -161,31 +166,187 @@ defmodule Clawswap.CLI do
     IO.write(Multiplexer.pick(project).layout(project))
   end
 
+  # The session's clawswap pane: runs the project in the daemon (starting the daemon if it isn't running),
+  # and shows the project's log. If the daemon goes away, it starts it again and carries on.
   defp watch do
     project = project!()
+    :inets.start()
+    # The VM shrugs off the SIGHUP a closed pane sends, so it looks for its pane's shell going instead:
+    # once the session has ended, it mustn't keep the project (or a daemon) going.
+    parent = parent_pid()
+    spawn(fn -> exit_with(parent) end)
+    watch_loop(project, 0, parent)
+  end
 
+  defp parent_pid do
+    case System.cmd("ps", ["-o", "ppid=", "-p", System.pid()], stderr_to_stdout: true) do
+      {out, 0} -> String.trim(out)
+      _ -> nil
+    end
+  end
+
+  defp exit_with(parent) do
+    Process.sleep(2000)
+    if parent_pid() != parent, do: System.halt(0), else: exit_with(parent)
+  end
+
+  defp watch_loop(project, failures, parent) do
+    if parent_pid() != parent, do: System.halt(0)
+    ensure_daemon(project)
+
+    case register(project) do
+      {:ok, info} ->
+        IO.puts("\e[36m[clawswap]\e[0m #{project.name}: #{info["url"]} (all projects: http://127.0.0.1:#{project.port}/)")
+        follow_log(project)
+        IO.puts("\e[36m[clawswap]\e[0m Lost the daemon; starting it again")
+        Process.sleep(1000)
+        watch_loop(project, 0, parent)
+
+      {:error, message} when failures < 5 ->
+        IO.puts(:stderr, "clawswap: #{message}")
+        Process.sleep(2000 * (failures + 1))
+        watch_loop(project, failures + 1, parent)
+
+      {:error, message} ->
+        fail("clawswap: #{message}")
+    end
+  end
+
+  # Prints the project's log as the daemon sends it, until the daemon closes it.
+  defp follow_log(project) do
+    url = String.to_charlist("http://127.0.0.1:#{project.port}/p/#{project.id}/log")
+
+    case :httpc.request(:get, {url, []}, [timeout: :infinity], sync: false, stream: :self) do
+      {:ok, ref} -> log_loop(ref)
+      {:error, _} -> :ok
+    end
+  end
+
+  defp log_loop(ref) do
+    receive do
+      {:http, {^ref, :stream_start, _headers}} -> log_loop(ref)
+      {:http, {^ref, :stream, text}} -> IO.write(text) && log_loop(ref)
+      {:http, {^ref, :stream_end, _headers}} -> :ok
+      {:http, {^ref, {{_, status, _}, _, body}}} -> IO.puts(:stderr, "clawswap: the daemon answered #{status}: #{body}")
+      {:http, {^ref, {:error, _reason}}} -> :ok
+    end
+  end
+
+  # The daemon on the project's port: there already, or started now, in the background (it outlives this
+  # terminal; its output goes to daemon_log/1).
+  defp ensure_daemon(project) do
+    case daemon_info(project.port) do
+      :daemon ->
+        :ok
+
+      :other ->
+        fail("Something that isn't clawswap's daemon listens on port #{project.port}; stop it, or give the project another port: in its config")
+
+      :none ->
+        log = daemon_log(project.port)
+        IO.puts("Starting the clawswap daemon on port #{project.port} (its log: #{log})")
+        start_daemon(project.port, log)
+
+        unless wait_for_daemon(project.port, 240),
+          do: fail("The clawswap daemon didn't start on port #{project.port}; see #{log}")
+    end
+  end
+
+  @doc false
+  def daemon_log(port) do
+    state = System.get_env("XDG_STATE_HOME") || Path.expand("~/.local/state")
+    Path.join([state, "clawswap", "daemon-#{port}.log"])
+  end
+
+  defp start_daemon(port, log) do
+    File.mkdir_p!(Path.dirname(log))
+
+    # In a session of its own (setsid, where there is one), ignoring the terminal's signals, so closing
+    # this terminal or pressing Ctrl-C in it leaves the daemon running for the other projects.
+    script = """
+    if command -v setsid >/dev/null 2>&1; then
+      (trap '' INT QUIT HUP; exec setsid "$1" daemon) >>"$2" 2>&1 </dev/null &
+    else
+      (trap '' INT QUIT HUP; exec "$1" daemon) >>"$2" 2>&1 </dev/null &
+    fi
+    """
+
+    {_, 0} = System.cmd("sh", ["-c", script, "sh", Multiplexer.cli(), log], env: [{"CLAWSWAP_PORT", to_string(port)}], cd: repo_dir())
+    :ok
+  end
+
+  defp wait_for_daemon(_port, 0), do: false
+
+  defp wait_for_daemon(port, tries) do
+    if daemon_info(port) == :daemon do
+      true
+    else
+      Process.sleep(500)
+      wait_for_daemon(port, tries - 1)
+    end
+  end
+
+  # :daemon, :other (something else listens there) or :none.
+  defp daemon_info(port) do
+    :inets.start()
+
+    case :httpc.request(:get, {String.to_charlist("http://127.0.0.1:#{port}/daemon"), []}, [timeout: 5000, connect_timeout: 2000], body_format: :binary) do
+      {:ok, {{_, 200, _}, _, body}} ->
+        if match?({:ok, %{"clawswap" => "daemon"}}, JSON.decode(body)), do: :daemon, else: :other
+
+      {:ok, _} ->
+        :other
+
+      {:error, _} ->
+        if Ports.port_open?(port), do: :other, else: :none
+    end
+  end
+
+  # Runs the project in the daemon, with this shell's environment for its commands.
+  defp register(project) do
+    body = %{cwd: repo_dir(), env: System.get_env()}
+    url = String.to_charlist("http://127.0.0.1:#{project.port}/daemon/projects")
+
+    case :httpc.request(:post, {url, [], ~c"application/json", JSON.encode!(body)}, [timeout: 120_000], body_format: :binary) do
+      {:ok, {{_, 200, _}, _, answer}} -> {:ok, JSON.decode!(answer)}
+      {:ok, {{_, status, _}, _, answer}} -> {:error, with({:ok, %{"error" => e}} <- JSON.decode(answer), do: e, else: (_ -> "the daemon answered #{status}"))}
+      {:error, reason} -> {:error, "couldn't reach the daemon: #{inspect(reason)}"}
+    end
+  end
+
+  defp register!(project) do
+    case register(project) do
+      {:ok, info} -> IO.puts("#{project.name}'s page: #{info["url"]}")
+      {:error, message} -> fail("clawswap: #{message}")
+    end
+  end
+
+  # The daemon itself (bin/clawswap daemon; clawswap up starts it in the background). It stops on its own
+  # after a while with no projects.
+  defp daemon do
     # Hologram's dev server watches its source with inotifywait on Linux, and won't start without it.
     if match?({:unix, :linux}, :os.type()) and !System.find_executable("inotifywait"),
       do: fail("The page needs inotify-tools (sudo apt install inotify-tools)")
 
+    port = String.to_integer(System.get_env("CLAWSWAP_PORT") || "27390")
+    if Ports.port_open?(port), do: fail("Port #{port} is taken already")
     {:ok, _} = Application.ensure_all_started(:clawswap)
-    smee = System.get_env("CLAWSWAP_SMEE") || Config.read_local(project)["smee"]
-    :ok = Clawswap.Application.start_watcher(project, smee)
+    :ok = Clawswap.Application.start_daemon(port, idle_ms: 10 * 60_000)
     Process.sleep(:infinity)
   end
 
-  # The watcher's port, from the config when there is one (status, switch and pull also work from a
-  # checkout without it, with CLAWSWAP_PORT or the default).
-  defp api_port do
+  # Where the API is for this checkout: its project's paths on its daemon (/p/<id>), from the config; or
+  # the selected project's on the default daemon (CLAWSWAP_PORT), from a checkout without one.
+  defp api_url(path) do
     case Config.load(repo_dir()) do
-      {:ok, project} -> project.port
-      _ -> String.to_integer(System.get_env("CLAWSWAP_PORT") || "27390")
+      {:ok, project} -> "http://127.0.0.1:#{project.port}/p/#{project.id}#{path}"
+      _ -> "http://127.0.0.1:#{System.get_env("CLAWSWAP_PORT") || "27390"}#{path}"
     end
   end
 
   defp api(path, body \\ nil) do
     :inets.start()
-    url = String.to_charlist("http://127.0.0.1:#{api_port()}#{path}")
+    url = String.to_charlist(api_url(path))
 
     request =
       if body,
@@ -195,17 +356,18 @@ defmodule Clawswap.CLI do
     case request do
       {:ok, {{_, status, _}, _, answer}} when status in 200..299 -> JSON.decode!(answer)
       {:ok, {_, _, answer}} -> fail(JSON.decode!(answer)["error"])
-      {:error, _} -> fail("The watcher isn't running (start the session with clawswap up)")
+      {:error, _} -> fail("clawswap isn't running (start the session with clawswap up)")
     end
   end
 
-  # Like api/2, but for a watcher that may not be running.
+  # Like api/2, but for a project that may not be running.
   defp tell_watcher(path, body) do
     :inets.start()
-    url = String.to_charlist("http://127.0.0.1:#{api_port()}#{path}")
+    url = String.to_charlist(api_url(path))
 
     case :httpc.request(:post, {url, [], ~c"application/json", JSON.encode!(body)}, [timeout: 30_000], body_format: :binary) do
       {:ok, {{_, status, _}, _, _}} when status in 200..299 -> :ok
+      {:ok, {{_, 404, _}, _, _}} -> {:error, :not_running}
       {:ok, {{_, status, _}, _, answer}} -> {:error, with({:ok, %{"error" => e}} <- JSON.decode(answer), do: e, else: (_ -> "#{status}"))}
       {:error, _} -> {:error, :not_running}
     end
@@ -364,7 +526,7 @@ defmodule Clawswap.CLI do
     cache = System.get_env("XDG_CACHE_HOME") || Path.expand("~/.cache")
 
     url =
-      Enum.find_value(project.server_names, "http://localhost:#{project.port}", &(project.servers[&1].port && "http://localhost:#{project.servers[&1].port}"))
+      Enum.find_value(project.server_names, Config.url(project, :clawswap, ""), &(project.servers[&1].port && "http://localhost:#{project.servers[&1].port}"))
 
     case Walkthrough.Browser.open_dev_chrome(Path.join(cache, "clawswap/chrome"), url) do
       {:ok, address} -> IO.puts("Dev Chrome on #{address}: walkthroughs play in a tab of it while it's open")

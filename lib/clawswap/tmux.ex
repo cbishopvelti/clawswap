@@ -120,7 +120,9 @@ defmodule Clawswap.Tmux do
   in place, with a note while the switch runs, then with the server again.
   """
   def servers(project, log \\ &IO.puts/1) do
-    tmux = fn args -> Run.capture!("tmux", Enum.map(args, &arg/1)) end
+    # The tmux server the project was registered from (the daemon may have been started from another).
+    socket = [{"TMUX", (project[:host_env] || %{})["TMUX"]}]
+    tmux = fn args -> Run.capture!("tmux", Enum.map(args, &arg/1), env: socket) end
 
     find_pane = fn name ->
       panes =

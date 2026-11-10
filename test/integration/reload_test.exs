@@ -20,7 +20,7 @@ defmodule Clawswap.Integration.ReloadTest do
     <!doctype html>
     <title>host</title>
     <ul id="heard"></ul>
-    <iframe src="http://localhost:27390" title="clawswap"></iframe>
+    <iframe src="http://localhost:27390/p/#{project.id}" title="clawswap"></iframe>
     <script>
       addEventListener("message", (e) => {
         if (e.origin !== "http://localhost:27390" || e.data?.clawswap !== "switched") return;

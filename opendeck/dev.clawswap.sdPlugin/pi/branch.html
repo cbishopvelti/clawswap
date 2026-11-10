@@ -9,6 +9,8 @@
   label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
   label > span { width: 86px; flex-shrink: 0; color: #a3abb8; }
   input, select { flex: 1; min-width: 0; background: #2a2f38; color: #eef1f5; border: 1px solid #3a404c; border-radius: 4px; padding: 4px 6px; font: inherit; }
+  /* The open list takes the options' colours: without these it is the system's white under light text. */
+  option { background: #2a2f38; color: #eef1f5; }
   p { color: #8b93a3; margin: 4px 0; line-height: 1.4; }
   code { color: #eef1f5; }
 </style>
@@ -22,12 +24,15 @@
     </select>
   </label>
   <label id="pinned" hidden><span>Branch</span><input id="branch" type="text" placeholder="main"></label>
+  <label><span>Project</span><select id="project"><option value="">Follow the selected project</option></select></label>
   <label><span>Watcher</span><input id="url" type="text" placeholder="http://127.0.0.1:27390"></label>
   <p>Keys on "next branch" share their watcher's list in deck order, row by row: the first shows the base
     branch, the rest the newest open pull requests. Pressing one stops the servers, checks the branch out,
     runs the steps it needs and starts them again.</p>
   <p>Watcher is the project's <code>port</code> from its <code>clawswap.exs</code>; leave it empty for
     the default. Needs <code>clawswap up</code> running in that project.</p>
+  <p>Project lists the daemon's projects: pick one and the key serves only it. "Follow the selected project"
+    changes with the "clawswap project" key and the clawswap page.</p>
 
 <script>
   let socket;
@@ -35,11 +40,23 @@
   let settings = {};
   const $ = (id) => document.getElementById(id);
 
+  // The daemon's projects, from the plugin when this page opens (null until then, or when it isn't running).
+  let projects = null;
+
+  const projectMenu = () => {
+    const id = settings.project ?? "";
+    const list = (projects ?? []).map((p) => [p.id, p.name && p.name !== p.id ? `${p.name} (${p.id})` : p.id]);
+    if (id && !list.some(([value]) => value === id)) list.push([id, `${id} (not running)`]);
+    $("project").replaceChildren(new Option("Follow the selected project", ""), ...list.map(([value, text]) => new Option(text, value)));
+    $("project").value = id;
+  };
+
   const show = () => {
     $("mode").value = settings.branch ? "pinned" : "next";
     $("pinned").hidden = !settings.branch && $("mode").value !== "pinned";
     $("branch").value = settings.branch ?? "";
     $("url").value = settings.url ?? "";
+    projectMenu();
   };
 
   const save = () => {
@@ -48,12 +65,14 @@
     settings = {};
     if (pinned && $("branch").value.trim()) settings.branch = $("branch").value.trim();
     if ($("url").value.trim()) settings.url = $("url").value.trim();
+    if ($("project").value.trim()) settings.project = $("project").value.trim();
     socket?.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
   };
 
   $("mode").addEventListener("change", save);
   $("branch").addEventListener("change", save);
   $("url").addEventListener("change", save);
+  $("project").addEventListener("change", save);
 
   // Called by OpenDeck (and the Stream Deck app) once the page has loaded.
   window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
@@ -67,6 +86,9 @@
       if (message.event === "didReceiveSettings") {
         settings = message.payload?.settings ?? {};
         show();
+      } else if (message.event === "sendToPropertyInspector") {
+        projects = message.payload?.projects ?? null;
+        projectMenu();
       }
     };
   };

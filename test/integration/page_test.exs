@@ -20,7 +20,7 @@ defmodule Clawswap.Integration.PageTest do
     :ok
   end
 
-  test "lists the branches with the base pinned first and merge marks" do
+  test "lists the branches with the base pinned first and merge marks", %{project: project} do
     say "The watcher's page: the base branch first, then the others by newest commit"
     visit url(:clawswap)
     see css("li:first-child .mark.base", text: "⎇")
@@ -33,7 +33,7 @@ defmodule Clawswap.Integration.PageTest do
     assert js(~s{return [...document.querySelectorAll("li")].find(li => li.textContent.includes("new-heading")).querySelector(".mark").textContent}) == "○"
 
     say "The ⚙ opens the config editor, and the page lists the checkout's walkthroughs"
-    see css("a.settings-link[href='/settings']")
+    see css("a.settings-link[href='/p/#{project.id}/settings']")
     see button("▶ branches-menu")
   end
 

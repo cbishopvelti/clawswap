@@ -35,30 +35,45 @@
   </nav>
   <main>
 <h1>API</h1>
-<p class="lede">The watcher's JSON API, for your own control, script or key.</p>
+<p class="lede">The daemon's JSON API, for your own control, script or key.</p>
 
-<p>The watcher listens on <code>127.0.0.1:&lt;port&gt;</code> (27390 by default). The CLI, the Stream Deck keys and
-the React example all use this API.</p>
+<p>The daemon listens on <code>127.0.0.1:&lt;port&gt;</code> (27390 by default). Each project's API is under
+<code>/p/&lt;id&gt;</code>, its id being its session's name (<a href="usage.html#several">Several projects</a>):
+<code>GET /p/shop/state</code>. The same paths without <code>/p/&lt;id&gt;</code> answer for the
+<a href="#projects">selected project</a>, so a script or key that names no project follows it. The CLI, the
+Stream Deck keys and the React example all use this API.</p>
 
 <h2 id="endpoints">Endpoints</h2>
 <table>
   <tr><th>Request</th><th>Body</th><th>Answer</th></tr>
-  <tr><td><code>GET /state</code></td><td></td><td>200 and the <a href="#state">state</a>.</td></tr>
-  <tr><td><code>POST /switch</code></td><td><code>{"branch": "..."}</code></td><td>202 and the state once the switch has started; follow <code>/state</code>'s <code>switch</code>. It looks at origin first, so a branch pushed a moment ago is found. Otherwise <code>{"error": "..."}</code>: 409 for uncommitted changes or a switch already running, 404 for a branch that isn't listed.</td></tr>
-  <tr><td><code>POST /pull</code></td><td><code>{}</code></td><td>The checkout's branch: 202 with <code>switch.pull</code> true, or 202 with <code>"Already up to date"</code> in <code>switch.notes</code>. 409 when not on a branch, 404 when the branch isn't on GitHub.</td></tr>
-  <tr><td><code>POST /claude</code></td><td><code>{"branch": "..."}</code></td><td>Opens the Claude Code thread that made the branch (the checkout's branch without one) in the browser, on the watcher's machine: the project thread its PR's description links to, else the <code>Claude-Session:</code> in its commits. 200 and <code>{"url": "..."}</code>, or 404 when it has neither.</td></tr>
-  <tr><td><code>POST /refresh</code></td><td><code>{}</code></td><td>Looks at git and GitHub now; 200 and the state when done.</td></tr>
-  <tr><td><code>POST /walk</code></td><td><code>{"name": "…"}</code></td><td>Runs a <a href="walkthroughs.html">walkthrough</a> in a browser on this machine; 202, then follow the state's <code>walk</code>. 409 while one or a switch is running.</td></tr>
-  <tr><td><code>GET /debug/screenshot.png</code></td><td></td><td>The <a href="walkthroughs.html#debug">debug panel</a>'s last screenshot of its Chrome; 404 before the first.</td></tr>
-  <tr><td><code>POST /smee</code></td><td><code>{"url": "…"}</code></td><td>Follows this smee.io channel from now on, in place of the one it followed; <code>clawswap smee</code> sends it after saving a new channel.</td></tr>
+  <tr><td><code>GET /p/&lt;id&gt;/state</code></td><td></td><td>200 and the <a href="#state">state</a>.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/switch</code></td><td><code>{"branch": "..."}</code></td><td>202 and the state once the switch has started; follow <code>/state</code>'s <code>switch</code>. It looks at origin first, so a branch pushed a moment ago is found. Otherwise <code>{"error": "..."}</code>: 409 for uncommitted changes or a switch already running, 404 for a branch that isn't listed.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/pull</code></td><td><code>{}</code></td><td>The checkout's branch: 202 with <code>switch.pull</code> true, or 202 with <code>"Already up to date"</code> in <code>switch.notes</code>. 409 when not on a branch, 404 when the branch isn't on GitHub.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/claude</code></td><td><code>{"branch": "..."}</code></td><td>Opens the Claude Code thread that made the branch (the checkout's branch without one) in the browser, on the watcher's machine: the project thread its PR's description links to, else the <code>Claude-Session:</code> in its commits. 200 and <code>{"url": "..."}</code>, or 404 when it has neither.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/refresh</code></td><td><code>{}</code></td><td>Looks at git and GitHub now; 200 and the state when done.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/walk</code></td><td><code>{"name": "…"}</code></td><td>Runs a <a href="walkthroughs.html">walkthrough</a> in a browser on this machine; 202, then follow the state's <code>walk</code>. 409 while one or a switch is running.</td></tr>
+  <tr><td><code>GET /p/&lt;id&gt;/debug/screenshot.png</code></td><td></td><td>The <a href="walkthroughs.html#debug">debug panel</a>'s last screenshot of its Chrome; 404 before the first.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/smee</code></td><td><code>{"url": "…"}</code></td><td>Follows this smee.io channel from now on, in place of the one it followed; <code>clawswap smee</code> sends it after saving a new channel.</td></tr>
+  <tr><td><code>GET /p/&lt;id&gt;/log</code></td><td></td><td>The project's log so far, then each new line as it comes, as plain text. The session's <code>clawswap</code> pane follows it; the project stays in the daemon while something does.</td></tr>
+</table>
+
+<h2 id="projects">The daemon's projects</h2>
+<table>
+  <tr><th>Request</th><th>Body</th><th>Answer</th></tr>
+  <tr><td><code>GET /projects</code></td><td></td><td>200 and <code>{"projects": [{"id", "name", "root", "port"}], "selected": "&lt;id&gt;"}</code>, in the order they started.</td></tr>
+  <tr><td><code>POST /select</code></td><td><code>{"project": "&lt;id&gt;"}</code> or <code>{"next": true}</code></td><td>Selects a project, or the one after the selected one; 200 and <code>{"selected": "&lt;id&gt;"}</code>, 404 for no such project.</td></tr>
+  <tr><td><code>GET /daemon</code></td><td></td><td>200 and <code>{"clawswap": "daemon", "port", "pid"}</code>: how <code>clawswap up</code> knows the daemon is running.</td></tr>
+  <tr><td><code>POST /daemon/projects</code></td><td><code>{"cwd": "…", "env": {…}}</code></td><td>Runs the project whose config is found from <code>cwd</code>, with that shell's environment for its commands; 200 and <code>{"id", "name", "root", "url"}</code>, 422 when the config doesn't load or another checkout has its id. <code>clawswap up</code> and <code>clawswap watch</code> send it. No browser may: it runs the config's code.</td></tr>
 </table>
 <p>POSTs need <code>Content-Type: application/json</code>.</p>
-<pre><code>curl -s http://127.0.0.1:27390/state
-curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-login"}' http://127.0.0.1:27390/switch</code></pre>
+<pre><code>curl -s http://127.0.0.1:27390/p/bmx/state
+curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-login"}' http://127.0.0.1:27390/p/bmx/switch
+curl -s -X POST -H 'Content-Type: application/json' -d '{"next":true}' http://127.0.0.1:27390/select</code></pre>
 
 <h2 id="state">The state</h2>
 <pre><code>{
   "project": "bmx",
+  "id": "bmx",
   "base": "main",
   "current": { "branch": "claude/fix-login", "sha": "…" },
   "dirty": false,
@@ -95,8 +110,9 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-lo
 <ul>
   <li>It answers this machine only: the <code>Host</code> header must be <code>localhost</code> or <code>127.0.0.1</code>,
     which also stops DNS rebinding. The same goes for the pages, including the config editor.</li>
-  <li>Browsers only from allowed origins: the watcher's own, the servers' <code>localhost</code> and
-    <code>127.0.0.1</code> ports, and the config's <code>origins</code>. A page elsewhere can't make the browser send a
+  <li>Browsers only from allowed origins, for a project's paths: the daemon's own, that project's servers'
+    <code>localhost</code> and <code>127.0.0.1</code> ports, and its config's <code>origins</code>. One project's app
+    can't call another project's paths. A page elsewhere can't make the browser send a
     JSON POST here without a CORS preflight, which only those origins pass.</li>
   <li>Webhook deliveries are only a hint to look again; the watcher never acts on their contents.</li>
 </ul>

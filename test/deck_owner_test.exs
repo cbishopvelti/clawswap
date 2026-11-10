@@ -6,38 +6,38 @@ defmodule Clawswap.DeckOwnerTest do
   setup do
     dir = Path.join(System.tmp_dir!(), "deck-owner-#{System.unique_integer([:positive])}")
     on_exit(fn -> File.rm_rf!(dir) end)
-    %{path: Path.join([dir, "clawswap", "stream-deck"])}
+    me = self()
+    path = Path.join([dir, "clawswap", "stream-deck.json"])
+    start = fn -> start_supervised!({DeckOwner, name: nil, path: path, on_change: fn -> send(me, :changed) end}, id: make_ref()) end
+    %{path: path, start: start}
   end
 
-  test "nobody has the deck until a page claims it", %{path: path} do
-    assert DeckOwner.status(27390, path, fn _ -> true end) == %{owner: "free", name: nil}
-    :ok = DeckOwner.claim(27390, "shop", path)
-    assert DeckOwner.status(27390, path, fn _ -> true end) == %{owner: "mine", name: nil}
+  test "no tab has the deck until one claims it, and the last claim wins", %{start: start} do
+    deck = start.()
+    assert DeckOwner.status(deck) == %{tab: nil, keys: "follow"}
+    :ok = DeckOwner.claim("tab-a", deck)
+    assert_receive :changed
+    assert DeckOwner.status(deck).tab == "tab-a"
+    # Saying so again changes nothing.
+    :ok = DeckOwner.claim("tab-a", deck)
+    refute_receive :changed, 100
+    :ok = DeckOwner.claim("tab-b", deck)
+    assert_receive :changed
+    assert DeckOwner.status(deck).tab == "tab-b"
   end
 
-  test "another project's watcher has it while it listens", %{path: path} do
-    :ok = DeckOwner.claim(27400, "blog", path)
-    assert DeckOwner.status(27390, path, fn 27400 -> true end) == %{owner: "other", name: "blog"}
-    assert DeckOwner.status(27390, path, fn 27400 -> false end) == %{owner: "free", name: nil}
+  test "pins the keys to a project, and remembers it", %{start: start, path: path} do
+    deck = start.()
+    :ok = DeckOwner.set_keys("shop", deck)
+    assert_receive :changed
+    assert DeckOwner.status(deck).keys == "shop"
+    assert File.read!(path) =~ "shop"
+    assert DeckOwner.status(start.()).keys == "shop"
   end
 
-  test "a claim takes it from the last owner", %{path: path} do
-    :ok = DeckOwner.claim(27400, "blog", path)
-    :ok = DeckOwner.claim(27390, "shop", path)
-    assert DeckOwner.status(27400, path, fn _ -> true end) == %{owner: "other", name: "shop"}
-  end
-
-  test "an unreadable file means nobody", %{path: path} do
+  test "an unreadable file means the keys follow the selected project", %{start: start, path: path} do
     File.mkdir_p!(Path.dirname(path))
-    File.write!(path, "junk")
-    assert DeckOwner.status(27390, path, fn _ -> true end) == %{owner: "free", name: nil}
-  end
-
-  test "tells the watcher when the owner changes", %{path: path} do
-    test = self()
-    start_supervised!({DeckOwner, name: nil, path: path, on_change: fn -> send(test, :changed) end})
-    refute_receive :changed, 1200
-    :ok = DeckOwner.claim(27400, "blog", path)
-    assert_receive :changed, 2500
+    File.write!(path, "nonsense")
+    assert DeckOwner.status(start.()).keys == "follow"
   end
 end

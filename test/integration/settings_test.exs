@@ -25,7 +25,7 @@ defmodule Clawswap.Integration.SettingsTest do
     say "Rename the project and save"
     fill_in "the repo folder's name", with: "renamed-example"
     click button("Save")
-    see "Saved. The watcher is restarting with it.", timeout: 20_000
+    see "Saved. The project is restarting with it.", timeout: 20_000
     assert File.read!(Path.join(project.work, "clawswap.exs")) =~ ~s(name: "renamed-example")
 
     say "The watcher restarts on the new config"

@@ -35,16 +35,19 @@
   </nav>
   <main>
 <h1>The branch page</h1>
-<p class="lede">The watcher's web page, what its marks mean, and embedding it in your own app.</p>
+<p class="lede">A project's web page, what its marks mean, and embedding it in your own app.</p>
 
-<p>The watcher serves a page at <code>http://127.0.0.1:27390</code> (the config's <code>port</code>). It shows the
+<p>The daemon serves each project's page at <code>http://127.0.0.1:27390/p/&lt;id&gt;</code> (its id being its
+session's name; <a href="usage.html#several">Several projects</a>), and a list of every project at
+<code>http://127.0.0.1:27390</code>, with ☰ on a project's page going back to it. A project's page shows the
 same list as the Stream Deck keys, with a button on each branch that switches to it, and a Pull button. It's a
 <a href="https://hologram.page">Hologram</a> page: the watcher pushes every change to it, so it follows a switch step
 by step without reloading.</p>
 
 <h2 id="header">The header</h2>
 <ul>
-  <li><strong>The project's name</strong> (the config's <code>name</code>).</li>
+  <li><strong>☰</strong> goes to the list of every project, and <strong>the project's name</strong> (the config's
+    <code>name</code>).</li>
   <li><strong>On <em>branch</em></strong>: the branch checked out now. Its row in the list is tinted too.</li>
   <li><strong>The webhook's state</strong>: <em>webhook on</em>, <em>webhook connecting</em>, <em>webhook lost</em> (with
     why), or <em>webhook off: run clawswap smee</em> when no channel is set.</li>
@@ -98,7 +101,8 @@ Vite + React app does both. (It's a test target, so it's JavaScript; clawswap it
 
 <h3 id="iframe">The page in an iframe</h3>
 <p>The simplest: a button in your top bar that opens a dropdown with the page in it.</p>
-<pre><code>&lt;iframe src="http://localhost:27390" title="clawswap"&gt;&lt;/iframe&gt;</code></pre>
+<pre><code>&lt;iframe src="http://localhost:27390/p/myapp" title="clawswap"&gt;&lt;/iframe&gt;</code></pre>
+<p>where <code>myapp</code> is the project's id (its session's name, in lower case).</p>
 <p>The example's <code>BranchMenu</code> keeps the frame loaded once it has been opened (it's only hidden when the menu
 closes), so it keeps following a switch while closed, and adds reload, open-in-a-tab and close buttons. Things to know:</p>
 <ul>
@@ -122,22 +126,22 @@ a key or the API):</p>
 <pre><code>addEventListener("message", (e) =&gt; {
   if (e.origin === "http://localhost:27390" &amp;&amp; e.data?.clawswap === "switched") location.reload();
 });</code></pre>
-<p>Use the watcher's <code>port</code> if it isn't 27390. The page only posts while it's loaded, so keep the frame
+<p>The origin is the daemon's, without the <code>/p/&lt;id&gt;</code>; use the config's <code>port</code> if it isn't 27390. The page only posts while it's loaded, so keep the frame
 loaded once opened (hide it rather than remove it when the menu closes), as the example's <code>BranchMenu</code> does.
 A failed switch, or a pull with nothing new, posts nothing. Without a frame, poll the <a href="api.html#state">API</a>
 and reload when <code>switch.doneAt</code> changes.</p>
 
 <h3 id="panel">The debug panel in a sidebar</h3>
-<p>The <a href="walkthroughs.html#debug">debug panel</a> is on its own at <code>/panel</code>, filling the page at any
+<p>The <a href="walkthroughs.html#debug">debug panel</a> is on its own at <code>/p/&lt;id&gt;/panel</code>, filling the page at any
 width and without its 🐞 (your app opens and closes its sidebar). Frame it in a sidebar on the right of your app:</p>
-<pre><code>&lt;iframe src="http://localhost:27390/panel" title="clawswap debug panel"&gt;&lt;/iframe&gt;</code></pre>
+<pre><code>&lt;iframe src="http://localhost:27390/p/myapp/panel" title="clawswap debug panel"&gt;&lt;/iframe&gt;</code></pre>
 <p>The same framing notes apply. A page served cross-origin isolated (<code>Cross-Origin-Embedder-Policy:
 require-corp</code>) needs the frame <code>credentialless</code> (Chromium). Leave the sidebar out when
 <code>navigator.webdriver</code> is true, so a Chrome the panel or a walkthrough drives shows your app without it.</p>
 
 <h3 id="badge">Your own control on the API</h3>
 <p>The example's <code>BranchBadge</code> shows the checkout's branch as a picker, Pull with how far behind it is, and
-the step a switch is on, from <code>GET /state</code>, <code>POST /switch</code> and <code>POST /pull</code>. Its
+the step a switch is on, from the project's <code>GET /p/&lt;id&gt;/state</code>, <code>POST /p/&lt;id&gt;/switch</code> and <code>POST /p/&lt;id&gt;/pull</code>. Its
 <code>useClawswap</code> hook polls <code>/state</code> every 2 s while a switch runs and every 10 s otherwise, and
 treats failed fetches during a switch as expected (its own server is restarting). The browser can call the API
 because a server's own <code>localhost</code> port is an allowed origin; add others with <code>origins</code>.</p>
@@ -150,7 +154,8 @@ gh repo create react-embed --private --source . --push   # or any remote
 clawswap up</code></pre>
 <p>Open <code>http://localhost:27391</code>, push a branch that changes <code>src/App.jsx</code> (or adds a dependency),
 and switch to it from the Branches menu or the badge. Set <code>VITE_CLAWSWAP_URL</code> in <code>.env.local</code> when
-the config's <code>port</code> isn't 27390.</p>
+the config's <code>port</code> isn't 27390, or its session isn't <code>react-embed</code>
+(<code>VITE_CLAWSWAP_URL=http://localhost:27390/p/&lt;id&gt;</code>).</p>
 <div class="pager"><span><a href="switching.html">← Switching</a></span><span><a href="api.html">API →</a></span></div>
 <footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
   </main>

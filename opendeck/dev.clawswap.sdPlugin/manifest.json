@@ -1,8 +1,8 @@
 {
   "Name": "clawswap",
-  "Description": "Switches a dev checkout's branch and restarts its servers, through a clawswap watcher.",
+  "Description": "Switches a dev checkout's branch and restarts its servers, through the clawswap daemon.",
   "Author": "clawswap",
-  "Version": "2.0.0",
+  "Version": "2.1.0",
   "SDKVersion": 2,
   "CodePath": "bin/plugin",
   "Icon": "icons/branch",
@@ -68,6 +68,22 @@
       ],
       "SupportedInMultiActions": false,
       "PropertyInspectorPath": "pi/walk.html"
+    },
+    {
+      "UUID": "dev.clawswap.project",
+      "Name": "clawswap project",
+      "Tooltip": "Shows the project the other keys follow, and selects the next one (needs clawswap up in two projects)",
+      "Icon": "icons/project",
+      "States": [
+        {
+          "Image": "icons/project"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "PropertyInspectorPath": "pi/project.html"
     }
   ],
   "CodePathLin": "bin/plugin",

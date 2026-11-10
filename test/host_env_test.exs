@@ -27,4 +27,18 @@ defmodule Clawswap.HostEnvTest do
     assert HostEnv.changes(%{"PATH" => "/usr/bin", "ROOTDIR" => "/otp"}) == []
     assert HostEnv.changes(%{"CLAWSWAP_HOST_PATH" => "", "ROOTDIR" => "/otp"}) == []
   end
+
+  test "a project's commands get exactly the environment it was registered with" do
+    host = %{"PATH" => "/project/bin", "DATABASE_URL" => "x", "ROOTDIR" => "/otp", "CLAWSWAP_EXEC" => "/tmp/x"}
+    own = %{"PATH" => "/daemon/bin", "OTHER" => "daemon's", "ROOTDIR" => "/otp28"}
+
+    assert HostEnv.for_project(host, own) == [
+             {"DATABASE_URL", "x"},
+             {"PATH", "/project/bin"},
+             {"OTHER", nil},
+             {"ROOTDIR", nil}
+           ]
+
+    assert HostEnv.for_project(nil, own) == []
+  end
 end

@@ -11,12 +11,15 @@ walkthrough, a short script that plays its change in Chrome while you watch, and
 project's own browser tests against the session's servers.
 
 ```
-GitHub ──webhook── smee.io ──SSE── clawswap watch (its own pane) ──zellij/tmux── server panes
-                                        ▲ 127.0.0.1:27390
-              OpenDeck "clawswap branch" keys, the Hologram page at /, clawswap switch
+GitHub ──webhook── smee.io ──SSE── clawswap daemon, a watcher per project ──zellij/tmux── each project's server panes
+                                        ▲ 127.0.0.1:27390 (/, /p/<id>)          │ log
+              OpenDeck keys, the Hologram pages, clawswap switch        clawswap watch (each session's clawswap pane)
 ```
 
-It's all Elixir: the watcher is an OTP app, its page is a [Hologram](https://hologram.page) page served by Phoenix,
+One daemon on 127.0.0.1:27390 runs every project you've started with `clawswap up` (each under `/p/<id>`,
+all of them listed at `/`), and the Stream Deck's keys follow whichever project is selected, or are pinned to one.
+
+It's all Elixir: the daemon is an OTP app, its page is a [Hologram](https://hologram.page) page served by Phoenix,
 and the OpenDeck plugin is an Elixir script.
 
 **Docs: [cbishopvelti.github.io/clawswap](https://cbishopvelti.github.io/clawswap/)**
@@ -37,7 +40,8 @@ cd <path-to-your-project>
 clawswap doctor   # checks what clawswap needs is installed, and prints the fix for what isn't
 clawswap init     # writes a starter clawswap.exs from what it finds; check it and commit it
 clawswap smee     # optional: a webhook (via smee.io), so new branches show up straight away
-clawswap up       # opens the session; the page is at http://127.0.0.1:27390
+clawswap up       # starts the daemon if it isn't running, and opens the session; the page is at
+                  # http://127.0.0.1:27390/p/<project>, and every project's at http://127.0.0.1:27390
 ```
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:

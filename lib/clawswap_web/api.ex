@@ -1,45 +1,79 @@
 defmodule ClawswapWeb.Api do
   @moduledoc """
-  The watcher's JSON API:
+  The daemon's JSON API. Each project's is under /p/<id> (its id: `Clawswap.Config`'s, from its session's
+  name); the same paths without it answer for the selected project (`Clawswap.Projects.selected/0`), so a
+  Stream Deck key or a script that names no project follows whichever is selected.
 
-      GET  /state                    the watcher's state (see README.md)
-      POST /switch  {"branch": ...}  202, then follow /state's switch
-      POST /pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
-      POST /refresh                  look at GitHub now
-      POST /claude  {"branch": ...}  open the Claude Code thread that made the branch (the checkout's
-                                     without one) in the browser; 200 {"url": ...} or 404
-      POST /walk    {"name": ...}    202, then follow /state's walk
-      POST /smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
-      GET  /debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
+      GET  /p/<id>/state                    the watcher's state (see README.md)
+      POST /p/<id>/switch  {"branch": ...}  202, then follow /state's switch
+      POST /p/<id>/pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
+      POST /p/<id>/refresh                  look at GitHub now
+      POST /p/<id>/claude  {"branch": ...}  open the Claude Code thread that made the branch (the checkout's
+                                            without one) in the browser; 200 {"url": ...} or 404
+      POST /p/<id>/walk    {"name": ...}    202, then follow /state's walk
+      POST /p/<id>/smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
+      GET  /p/<id>/debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
+      GET  /p/<id>/log                      the project's log, then each new line as it comes (the
+                                            session's clawswap pane follows it; the project stays while one does)
 
-  It answers this machine only, and browsers only from the project's origins: a page elsewhere can't make
-  the browser send a JSON POST here without a preflight, which only those origins pass. The Host check
-  stops DNS rebinding. Other paths go on to the page.
+      GET  /projects                        {"projects": [{id, name, root, port}], "selected": id}
+      POST /select  {"project": id}         selects a project ({"next": true}: the one after the selected one)
+      GET  /daemon                          {"clawswap": "daemon", "port": ..., "pid": ...}
+      POST /daemon/projects {"cwd", "env"}  registers the project whose config is found from cwd, with the
+                                            shell's environment (`clawswap up` and `clawswap watch` do)
+
+  It answers this machine only, and browsers only from a project's origins (its servers', and any its
+  config adds), for that project's paths: a page elsewhere can't make the browser send a JSON POST here
+  without a preflight, which only those origins pass. Registering takes no browser at all, as it runs the
+  config's code. The Host check stops DNS rebinding. Other paths go on to the pages.
   """
 
   @behaviour Plug
 
   import Plug.Conn
 
-  alias Clawswap.Watcher
+  alias Clawswap.{Project, ProjectLog, Projects, Watcher}
 
-  @paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee", "/debug/screenshot.png"]
+  @project_paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee", "/debug/screenshot.png"]
+  @daemon_paths ["/projects", "/select", "/daemon", "/daemon/projects"]
+  # The log's stream says something this often, so a pane that went away is noticed.
+  @log_beat_ms 15_000
 
   @impl true
   def init(opts), do: opts
 
   @impl true
-  def call(%Plug.Conn{request_path: path} = conn, _opts) when path in @paths do
-    project = Clawswap.Application.project()
+  def call(%Plug.Conn{request_path: path} = conn, _opts) do
+    case route(path) do
+      nil -> conn
+      route -> serve(conn, route)
+    end
+  end
+
+  # {:project, id or "selected", path} | {:daemon, path} | nil (a page's)
+  defp route("/p/" <> rest) do
+    case String.split(rest, "/", parts: 2) do
+      [id, sub] when id != "" -> if(("/" <> sub) in ["/log" | @project_paths], do: {:project, id, "/" <> sub})
+      _ -> nil
+    end
+  end
+
+  defp route(path) when path in @project_paths, do: {:project, "selected", path}
+  defp route(path) when path in @daemon_paths, do: {:daemon, path}
+  defp route(_), do: nil
+
+  defp serve(conn, route) do
+    project = with {:project, id, _} <- route, do: Projects.get(id)
+    port = Clawswap.Application.port() || conn.port
     origin = conn |> get_req_header("origin") |> List.first()
-    own = ["http://localhost:#{project.port}", "http://127.0.0.1:#{project.port}"]
-    allowed = origin && (MapSet.member?(project.origins, origin) or origin in own) && origin
-    host = conn |> get_req_header("host") |> List.first() || ""
+    own = ["http://localhost:#{port}", "http://127.0.0.1:#{port}"]
+    origins = if is_map(project), do: MapSet.union(project.origins, MapSet.new(own)), else: MapSet.new(own)
+    allowed = origin && MapSet.member?(origins, origin) && origin
 
     conn = if allowed, do: conn |> put_resp_header("access-control-allow-origin", allowed) |> put_resp_header("vary", "Origin"), else: conn
 
     cond do
-      not Regex.match?(~r/^(localhost|127\.0\.0\.1)(:\d+)?$/, host) or (origin && !allowed) ->
+      conn.host not in ["localhost", "127.0.0.1"] || (origin && !allowed) || (origin && route == {:daemon, "/daemon/projects"}) ->
         json(conn, 403, %{error: "Forbidden"})
 
       conn.method == "OPTIONS" ->
@@ -49,62 +83,143 @@ defmodule ClawswapWeb.Api do
         |> send_resp(204, "")
         |> halt()
 
-      conn.method == "GET" and path == "/state" ->
-        json(conn, 200, Watcher.state())
-
-      conn.method == "GET" and path == "/debug/screenshot.png" ->
-        case Clawswap.Walkthrough.Debugger.screenshot() do
-          nil -> json(conn, 404, %{error: "No screenshot yet"})
-          png -> conn |> put_resp_header("content-type", "image/png") |> put_resp_header("cache-control", "no-store") |> send_resp(200, png) |> halt()
-        end
-
-      conn.method != "POST" or not String.starts_with?(conn |> get_req_header("content-type") |> List.first() || "", "application/json") ->
-        json(conn, 404, %{error: "Not found"})
+      match?({:project, _, _}, route) and project == nil ->
+        {:project, id, _} = route
+        json(conn, 404, %{error: if(id == "selected", do: "No projects yet (clawswap up starts one)", else: "No project #{id} (clawswap up starts it)")})
 
       true ->
-        {:ok, body, conn} = read_body(conn)
-        post(conn, path, body)
+        dispatch(conn, route, project)
     end
   end
 
-  def call(conn, _opts), do: conn
+  defp dispatch(conn, {:daemon, "/daemon"}, _), do: json(conn, 200, %{clawswap: "daemon", port: Clawswap.Application.port(), pid: System.pid()})
+  defp dispatch(conn, {:daemon, "/projects"}, _), do: json(conn, 200, %{projects: Projects.list(), selected: Projects.selected()})
+  defp dispatch(conn, {:project, _, "/state"}, project) when conn.method == "GET", do: json(conn, 200, Watcher.state(watcher(project)))
 
-  defp post(conn, "/refresh", _body), do: json(conn, 200, Watcher.refresh())
+  defp dispatch(conn, {:project, _, "/debug/screenshot.png"}, project) when conn.method == "GET" do
+    case Clawswap.Walkthrough.Debugger.screenshot(Project.via(project.id, :debugger)) do
+      nil -> json(conn, 404, %{error: "No screenshot yet"})
+      png -> conn |> put_resp_header("content-type", "image/png") |> put_resp_header("cache-control", "no-store") |> send_resp(200, png) |> halt()
+    end
+  end
 
-  defp post(conn, "/switch", body), do: answer(conn, Watcher.switch_to(branch_of(body)))
+  defp dispatch(conn, {:project, _, "/log"}, project) when conn.method == "GET", do: follow_log(conn, project.id)
 
-  defp post(conn, "/pull", _body), do: answer(conn, Watcher.pull())
+  defp dispatch(conn, route, project) do
+    if conn.method != "POST" or not String.starts_with?(conn |> get_req_header("content-type") |> List.first() || "", "application/json") do
+      json(conn, 404, %{error: "Not found"})
+    else
+      {:ok, body, conn} = read_body(conn, length: 4_000_000)
+      post(conn, route, decode(body), project)
+    end
+  end
 
-  defp post(conn, "/claude", body) do
-    case Watcher.open_claude(branch_of(body)) do
+  defp post(conn, {:daemon, "/daemon/projects"}, body, _) do
+    env = for {k, v} <- body["env"] || %{}, is_binary(k) and is_binary(v), into: %{}, do: {k, v}
+
+    case body["cwd"] do
+      cwd when is_binary(cwd) and cwd != "" ->
+        case Projects.register(cwd, env) do
+          {:ok, project} -> json(conn, 200, %{id: project.id, name: project.name, root: project.root, url: Clawswap.Config.url(project, :clawswap, "")})
+          {:error, message} -> json(conn, 422, %{error: message})
+        end
+
+      _ ->
+        json(conn, 400, %{error: ~s(Expected {"cwd": "...", "env": {...}})})
+    end
+  end
+
+  defp post(conn, {:daemon, "/select"}, body, _) do
+    result =
+      if body["next"] == true, do: {:ok, Projects.select_next()}, else: with(:ok <- Projects.select(to_string(body["project"])), do: {:ok, body["project"]})
+
+    case result do
+      {:ok, nil} -> json(conn, 404, %{error: "No projects yet"})
+      {:ok, id} -> json(conn, 200, %{selected: id})
+      {:error, message} -> json(conn, 404, %{error: message})
+    end
+  end
+
+  defp post(conn, {:project, _, "/refresh"}, _body, project), do: json(conn, 200, Watcher.refresh(watcher(project)))
+  defp post(conn, {:project, _, "/switch"}, body, project), do: answer(conn, Watcher.switch_to(watcher(project), string(body["branch"])))
+  defp post(conn, {:project, _, "/pull"}, _body, project), do: answer(conn, Watcher.pull(watcher(project)))
+
+  defp post(conn, {:project, _, "/claude"}, body, project) do
+    case Watcher.open_claude(watcher(project), string(body["branch"])) do
       {:ok, url} -> json(conn, 200, %{url: url})
       {:error, status, message} -> json(conn, status, %{error: message})
     end
   end
 
-  defp post(conn, "/walk", body) do
-    name =
-      case JSON.decode(if(body == "", do: "{}", else: body)) do
-        {:ok, %{"name" => name}} -> to_string(name)
-        _ -> ""
-      end
+  defp post(conn, {:project, _, "/walk"}, body, project), do: answer(conn, Watcher.walk(watcher(project), string(body["name"])))
 
-    answer(conn, Watcher.walk(name))
-  end
-
-  defp post(conn, "/smee", body) do
-    case JSON.decode(if(body == "", do: "{}", else: body)) do
-      {:ok, %{"url" => "http" <> _ = url}} -> answer(conn, Watcher.set_smee(url))
+  defp post(conn, {:project, _, "/smee"}, body, project) do
+    case body["url"] do
+      "http" <> _ = url -> answer(conn, Watcher.set_smee(watcher(project), url))
       _ -> json(conn, 400, %{error: "Expected {\"url\": \"https://smee.io/...\"}"})
     end
   end
 
-  defp branch_of(body) do
+  defp post(conn, _route, _body, _project), do: json(conn, 404, %{error: "Not found"})
+
+  defp decode(body) do
     case JSON.decode(if(body == "", do: "{}", else: body)) do
-      {:ok, %{"branch" => branch}} when branch != nil -> to_string(branch)
-      _ -> ""
+      {:ok, %{} = map} -> map
+      _ -> %{}
     end
   end
+
+  defp watcher(project), do: Project.via(project.id, :watcher)
+  defp string(nil), do: ""
+  defp string(value), do: to_string(value)
+
+  # The log so far, then each write as it comes, until the pane goes. A reload starts the project's log
+  # again; the stream carries on with the new one.
+  defp follow_log(conn, id) do
+    :ok = Projects.attach(id)
+    conn = conn |> put_resp_header("content-type", "text/plain; charset=utf-8") |> put_resp_header("cache-control", "no-store") |> send_chunked(200)
+
+    try do
+      log_loop(conn, id, attach_log(id))
+    after
+      Projects.detach(id)
+    end
+  end
+
+  defp attach_log(id, tries \\ 50) do
+    case Project.whereis(id, :log) do
+      nil when tries > 0 ->
+        Process.sleep(100)
+        attach_log(id, tries - 1)
+
+      nil ->
+        nil
+
+      log ->
+        :ok = ProjectLog.attach(log)
+        Process.monitor(log)
+    end
+  end
+
+  defp log_loop(conn, _id, nil) do
+    chunk(conn, "\e[36m[clawswap]\e[0m The project stopped\n")
+    halt(conn)
+  end
+
+  defp log_loop(conn, id, ref) do
+    receive do
+      {:clawswap_log, text} ->
+        continue(conn, id, ref, chunk(conn, text))
+
+      {:DOWN, ^ref, :process, _, _} ->
+        log_loop(conn, id, attach_log(id))
+    after
+      @log_beat_ms -> continue(conn, id, ref, chunk(conn, "\e[0m"))
+    end
+  end
+
+  defp continue(_conn, id, ref, {:ok, conn}), do: log_loop(conn, id, ref)
+  defp continue(conn, _id, _ref, {:error, _}), do: halt(conn)
 
   defp answer(conn, {:ok, state}), do: json(conn, 202, state)
   defp answer(conn, {:error, status, message}), do: json(conn, status, %{error: message})

@@ -9,15 +9,20 @@
   label { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
   label > span { width: 86px; flex-shrink: 0; color: #a3abb8; }
   input, select { flex: 1; min-width: 0; background: #2a2f38; color: #eef1f5; border: 1px solid #3a404c; border-radius: 4px; padding: 4px 6px; font: inherit; }
+  /* The open list takes the options' colours: without these it is the system's white under light text. */
+  option { background: #2a2f38; color: #eef1f5; }
   p { color: #8b93a3; margin: 4px 0; line-height: 1.4; }
   code { color: #eef1f5; }
 </style>
 </head>
 <body>
   <h2>This key</h2>
+  <label><span>Project</span><select id="project"><option value="">Follow the selected project</option></select></label>
   <label><span>Watcher</span><input id="url" type="text" placeholder="http://127.0.0.1:27390"></label>
   <p>Pulls the branch the checkout is on and restarts the servers if GitHub had anything new. Watcher is the
     project's <code>port</code> from its <code>clawswap.exs</code>; leave it empty for the default.</p>
+  <p>Project lists the daemon's projects: pick one and the key serves only it. "Follow the selected project"
+    changes with the "clawswap project" key and the clawswap page.</p>
 
 <script>
   let socket;
@@ -25,12 +30,31 @@
   let settings = {};
   const $ = (id) => document.getElementById(id);
 
-  const show = () => ($("url").value = settings.url ?? "");
+  // The daemon's projects, from the plugin when this page opens (null until then, or when it isn't running).
+  let projects = null;
 
-  $("url").addEventListener("change", () => {
-    settings = $("url").value.trim() ? { url: $("url").value.trim() } : {};
+  const projectMenu = () => {
+    const id = settings.project ?? "";
+    const list = (projects ?? []).map((p) => [p.id, p.name && p.name !== p.id ? `${p.name} (${p.id})` : p.id]);
+    if (id && !list.some(([value]) => value === id)) list.push([id, `${id} (not running)`]);
+    $("project").replaceChildren(new Option("Follow the selected project", ""), ...list.map(([value, text]) => new Option(text, value)));
+    $("project").value = id;
+  };
+
+  const show = () => {
+    $("url").value = settings.url ?? "";
+    projectMenu();
+  };
+
+  const save = () => {
+    settings = {};
+    if ($("url").value.trim()) settings.url = $("url").value.trim();
+    if ($("project").value.trim()) settings.project = $("project").value.trim();
     socket?.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
-  });
+  };
+
+  $("url").addEventListener("change", save);
+  $("project").addEventListener("change", save);
 
   // Called by OpenDeck (and the Stream Deck app) once the page has loaded.
   window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
@@ -44,6 +68,9 @@
       if (message.event === "didReceiveSettings") {
         settings = message.payload?.settings ?? {};
         show();
+      } else if (message.event === "sendToPropertyInspector") {
+        projects = message.payload?.projects ?? null;
+        projectMenu();
       }
     };
   };
