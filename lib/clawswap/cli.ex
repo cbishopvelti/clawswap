@@ -331,7 +331,7 @@ defmodule Clawswap.CLI do
     port = String.to_integer(System.get_env("CLAWSWAP_PORT") || "27390")
     if Ports.port_open?(port), do: fail("Port #{port} is taken already")
     {:ok, _} = Application.ensure_all_started(:clawswap)
-    :ok = Clawswap.Application.start_daemon(port, idle_ms: 10 * 60_000)
+    :ok = Clawswap.Application.start_daemon(port, idle_ms: 60 * 60_000)
     Process.sleep(:infinity)
   end
 
