@@ -89,8 +89,9 @@ li.behind .status { color: var(--behind); }
 .settings input, .settings textarea, .settings select { font: inherit; color: inherit; background: var(--bg);
   border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
 /* A select's open list takes the options' colours: without these, dark mode's light text lands on the
-   browser's white list. */
-.settings option { background: var(--bg); color: var(--fg); }
+   browser's white list. Every select's, the deck's keys menu as well as the settings'. */
+option { background: var(--card); color: var(--fg); }
+.settings option { background: var(--bg); }
 .settings textarea { resize: vertical; field-sizing: content; min-height: 1.6em; }
 .settings .code { font-family: ui-monospace, monospace; font-size: 13px; }
 .settings .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 10px;
