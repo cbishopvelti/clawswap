@@ -325,6 +325,23 @@ defmodule Clawswap.Deck do
     if is_reference(was), do: press(context, s), else: s
   end
 
+  # A key's settings page opened: tell it the daemon's projects, for its Project menu.
+  defp on_message(%{"event" => "propertyInspectorDidAppear", "context" => context} = m, s) do
+    with %{} = instance <- s.instances[context] do
+      daemon = url_of(%{instance | kind: :project}, s.url)
+
+      projects =
+        case s.fetch.(:get, "#{daemon}/projects", nil) do
+          {:ok, 200, %{"projects" => list}} when is_list(list) -> for p <- list, is_map(p), do: Map.take(p, ["id", "name"])
+          _ -> nil
+        end
+
+      s.send.(%{event: "sendToPropertyInspector", action: m["action"], context: context, payload: %{projects: projects}})
+    end
+
+    s
+  end
+
   defp on_message(_, s), do: s
 
   defp groups(s), do: Enum.group_by(s.instances, fn {_, i} -> url_of(i, s.url) end)

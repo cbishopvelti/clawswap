@@ -186,6 +186,15 @@ defmodule Clawswap.DeckTest do
     assert_received {:request, :post, "http://dev/select", %{next: true}}
   end
 
+  test "a key's settings page gets the daemon's projects for its Project menu" do
+    projects = %{"projects" => [%{"id" => "shop", "name" => "shop", "root" => "/x", "port" => 1}], "selected" => "shop"}
+    deck = start(fn :get, "http://dev/projects", nil -> {:ok, 200, projects} end)
+
+    appear(deck, "pinned", %{"project" => "blog"}, 0, 0)
+    Deck.handle(deck, %{"event" => "propertyInspectorDidAppear", "action" => "dev.clawswap.branch", "context" => "pinned"})
+    assert_received {:sent, %{event: "sendToPropertyInspector", context: "pinned", payload: %{projects: [%{"id" => "shop", "name" => "shop"}]}}}
+  end
+
   test "says when the watcher isn't running" do
     deck = start(fn _, _, _ -> {:error, :econnrefused} end)
     appear(deck, "a", %{}, 0, 0)
