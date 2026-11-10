@@ -60,15 +60,17 @@ case "${1:-}" in
     own elixir -r lib/clawswap/doctor.ex -e 'Clawswap.Doctor.main()'
     exit
     ;;
-  watch)
-    # Hologram serves its pages only with this set in dev.
+  daemon)
+    # The daemon that runs every project (clawswap up starts it in the background). Hologram serves its
+    # pages only with this set in dev.
     export HOLOGRAM_START=1
-    # The watcher exits with 75 after a switch that changed its config, so the new one takes over.
-    while :; do
-      own mix clawswap watch
-      code=$?
-      [ "$code" -eq 75 ] || exit "$code"
-    done
+    # The daemon serves several projects, so it keeps its own environment, and gives each project's
+    # commands the one it was registered from instead (Clawswap.HostEnv.for_project/2).
+    unset CLAWSWAP_HOST_PATH
+    # Ctrl-C in the terminal it was started from mustn't reach it.
+    export ELIXIR_ERL_OPTIONS="${ELIXIR_ERL_OPTIONS:-} +Bi"
+    own mix clawswap daemon
+    exit
     ;;
   *)
     own mix clawswap "$@"

@@ -7,6 +7,10 @@ defmodule Clawswap.HostEnv do
   restarts) finds your project's `mix` and `elixir`, not clawswap's.
 
   Without `CLAWSWAP_HOST_PATH` (clawswap run with `mix` directly, the tests) it changes nothing.
+
+  The daemon runs several projects, each registered from its own shell, so it leaves its own environment
+  alone and gives each project's commands the environment that project was registered with instead
+  (`for_project/2`).
   """
 
   # Set by erl for the VM it starts; another Elixir's erl sets its own, so they only mislead.
@@ -19,6 +23,25 @@ defmodule Clawswap.HostEnv do
     end
 
     :ok
+  end
+
+  # clawswap's own, for the command it was started with; nothing a project's commands should see.
+  @own_vars ~w(CLAWSWAP_EXEC CLAWSWAP_REPO CLAWSWAP_HOST_PATH CLAWSWAP_PIN_WARNED CLAWSWAP_DAEMON HOLOGRAM_START)
+
+  @doc """
+  The environment for a command run for a project registered with `host_env` (the shell it was registered
+  from, as `{name, value}` pairs, or nil to unset), given this VM's own `env`: exactly the project's, so
+  one project's shell (its direnv, its PATH) never leaks into another's. For `System.cmd/3`'s `env:` and
+  `Clawswap.Run`'s.
+  """
+  def for_project(host_env, env \\ System.get_env())
+
+  def for_project(nil, _env), do: []
+
+  def for_project(host_env, env) do
+    drop = @erl_vars ++ @own_vars
+    keep = Map.drop(host_env, drop)
+    Enum.sort(Map.to_list(keep)) ++ for(name <- Enum.sort(Map.keys(env)), not Map.has_key?(keep, name), do: {name, nil})
   end
 
   @doc """

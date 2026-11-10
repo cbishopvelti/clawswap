@@ -64,7 +64,11 @@ defmodule Clawswap.Integration do
     git(work, ["branch", "-qD", "claude/new-heading", "claude/merged-fix"])
 
     File.cp_r!(node_modules!(), Path.join(work, "node_modules"))
-    %{dir: dir, work: work, session: "clawswap-it-#{System.unique_integer([:positive])}"}
+    session = "clawswap-it-#{System.unique_integer([:positive])}"
+    # The example frames and calls its project's page on the daemon, /p/<id>, and the tests' session gives
+    # it another id than the example's own. (Not committed: it's the checkout's.)
+    write("#{work}/.env.local", "VITE_CLAWSWAP_URL=http://localhost:27390/p/#{Clawswap.Config.id(session)}\n")
+    %{dir: dir, work: work, session: session, id: Clawswap.Config.id(session)}
   end
 
   # npm install once per package-lock.json, shared by the tests' copies.
@@ -89,6 +93,8 @@ defmodule Clawswap.Integration do
   """
   def up!(project, multiplexer) do
     free_ports()
+    # The API paths the tests use are this project's on the daemon (/p/<id>).
+    :persistent_term.put({__MODULE__, :id}, project.id)
 
     env = [
       # bin/clawswap runs clawswap in dev, as for you, not in the tests' env.
@@ -172,7 +178,8 @@ defmodule Clawswap.Integration do
 
   @doc "Opens Chrome for the test, headless unless CLAWSWAP_HEADLESS=0, and closes it after."
   def browser!(project) do
-    {:ok, config} = Clawswap.Config.load(project.work)
+    # As the tests' `clawswap up` loads it: with their session, which names the project's page (/p/<id>).
+    {:ok, config} = Clawswap.Config.load(project.work, Map.put(System.get_env(), "CLAWSWAP_SESSION", project.session))
     {:ok, browser} = Browser.start(headless: true, dev_chrome: false, project: config)
     ExUnit.Callbacks.on_exit(fn -> Browser.stop(browser.session) end)
     browser
@@ -205,7 +212,7 @@ defmodule Clawswap.Integration do
 
   defp request(method, path, body \\ nil) do
     :inets.start()
-    url = ~c"http://127.0.0.1:27390" ++ String.to_charlist(path)
+    url = String.to_charlist("http://127.0.0.1:27390/p/#{:persistent_term.get({__MODULE__, :id})}#{path}")
 
     request =
       if method == :post,

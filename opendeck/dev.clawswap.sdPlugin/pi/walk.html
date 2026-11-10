@@ -15,9 +15,13 @@
 </head>
 <body>
   <h2>This key</h2>
+  <label><span>Project</span><input id="project" type="text" placeholder="the selected one"></label>
   <label><span>Watcher</span><input id="url" type="text" placeholder="http://127.0.0.1:27390"></label>
   <p>Plays the checkout's walkthrough in Chrome: the first one its branch added, else the first one. Watcher is the
     project's <code>port</code> from its <code>clawswap.exs</code>; leave it empty for the default.</p>
+  <p>Project is the project's id, as in its page's address (<code>/p/&lt;id&gt;</code>): the key serves only
+    that project. Leave it empty to follow the selected project, which the "clawswap project" key and the
+    clawswap page change.</p>
 
 <script>
   let socket;
@@ -25,12 +29,20 @@
   let settings = {};
   const $ = (id) => document.getElementById(id);
 
-  const show = () => ($("url").value = settings.url ?? "");
+  const show = () => {
+    $("url").value = settings.url ?? "";
+    $("project").value = settings.project ?? "";
+  };
 
-  $("url").addEventListener("change", () => {
-    settings = $("url").value.trim() ? { url: $("url").value.trim() } : {};
+  const save = () => {
+    settings = {};
+    if ($("url").value.trim()) settings.url = $("url").value.trim();
+    if ($("project").value.trim()) settings.project = $("project").value.trim();
     socket?.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
-  });
+  };
+
+  $("url").addEventListener("change", save);
+  $("project").addEventListener("change", save);
 
   // Called by OpenDeck (and the Stream Deck app) once the page has loaded.
   window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {

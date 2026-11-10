@@ -1,79 +1,89 @@
 defmodule Clawswap.DeckOwner do
   @moduledoc """
-  Which project's page drives the Stream Deck over WebHID, when several watchers run on one machine.
-  Each project's page is its own origin, so pages can't see each other; their watchers share a file
-  instead (`path/0`), naming the port and project of the watcher whose page has the deck. Pressing
-  Connect on a page claims it (`claim/2`); the other watchers notice the file change (this GenServer
-  looks every second) and tell their pages, which let the deck go and offer "Use here".
+  The Stream Deck that clawswap's pages drive over WebHID: which page drives it, and which project its
+  keys serve.
 
-  An owner whose watcher has stopped (nothing listens on its port) counts as no owner, so a page can
-  open the deck by itself again.
+  Every project's page is on the daemon's one origin now, so any of them can open the deck; one browser
+  tab has it at a time, the one where Connect (or "Use here") was last pressed (`claim/1`, by the tab's
+  id). The others let it go and offer "Use here". The tab that has it says so again every so often, so a
+  closed tab's claim runs out (`@stale_ms`) and the next page to load opens the deck by itself.
 
-  Options: `port` and `name` (this watcher's), `on_change` (called when the owner changes), `path`.
+  The keys follow the selected project (`Clawswap.Projects.selected/0`), with a key that selects the
+  next one, or are pinned to one project (`set_keys/1`). That choice is kept in `path/0`, so it outlives
+  the daemon.
+
+  Options: `on_change` (called when the owner or the choice changes), `path`, `name`.
   """
 
   use GenServer
 
-  @poll_ms 1000
+  @stale_ms 60_000
 
-  @doc "The shared file: `$XDG_STATE_HOME/clawswap/stream-deck` (`~/.local/state` without it)."
+  @doc "Where the keys' choice is kept: `$XDG_STATE_HOME/clawswap/stream-deck.json` (`~/.local/state` without it)."
   def path do
     state = System.get_env("XDG_STATE_HOME") || Path.expand("~/.local/state")
-    Path.join([state, "clawswap", "stream-deck"])
+    Path.join([state, "clawswap", "stream-deck.json"])
   end
 
-  @doc "Makes the watcher on `port` (project `name`) the deck's owner."
-  def claim(port, name, path \\ path()) do
-    File.mkdir_p!(Path.dirname(path))
-    File.write!(path, "#{port}\t#{name}\n")
-    :ok
-  end
-
-  @doc """
-  The deck's owner as the watcher on `port` sees it: `%{owner: "mine"}`, `%{owner: "free"}` (no owner, or
-  its watcher has stopped), or `%{owner: "other", name: project}`. Strings, as it goes to the page.
-  """
-  def status(port, path \\ path(), listening? \\ &listening?/1) do
-    case read(path) do
-      {^port, _} -> %{owner: "mine", name: nil}
-      {other, name} -> if listening?.(other), do: %{owner: "other", name: name}, else: %{owner: "free", name: nil}
-      nil -> %{owner: "free", name: nil}
-    end
-  end
-
-  defp read(path) do
-    with {:ok, text} <- File.read(path),
-         [port, name] <- text |> String.trim_trailing("\n") |> String.split("\t", parts: 2),
-         {port, ""} <- Integer.parse(port) do
-      {port, name}
-    else
-      _ -> nil
-    end
-  end
-
-  defp listening?(port) do
-    case :gen_tcp.connect(~c"127.0.0.1", port, [], 200) do
-      {:ok, socket} -> :gen_tcp.close(socket) == :ok
-      {:error, _} -> false
-    end
-  end
-
-  # `name: nil` starts one with no name (the tests do).
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
     GenServer.start_link(__MODULE__, opts, if(name, do: [name: name], else: []))
   end
 
+  @doc "The tab `tab` has the deck now (or still has it)."
+  def claim(tab, server \\ __MODULE__), do: GenServer.call(server, {:claim, tab})
+
+  @doc """
+  `%{tab, keys}`: the tab that has the deck (nil when none has said so lately), and what its keys serve,
+  `"follow"` (the selected project) or a project's id (pinned to it).
+  """
+  def status(server \\ __MODULE__) do
+    case GenServer.whereis(server) do
+      nil -> %{tab: nil, keys: "follow"}
+      pid -> GenServer.call(pid, :status)
+    end
+  end
+
+  @doc ~s|Makes the keys follow the selected project ("follow"), or pins them to a project's id.|
+  def set_keys(keys, server \\ __MODULE__) when is_binary(keys), do: GenServer.call(server, {:keys, keys})
+
   @impl true
   def init(opts) do
-    state = %{path: opts[:path] || path(), on_change: Keyword.fetch!(opts, :on_change), seen: nil}
-    {:ok, %{state | seen: File.read(state.path)}, @poll_ms}
+    path = opts[:path] || path()
+
+    keys =
+      with {:ok, text} <- File.read(path), {:ok, %{"keys" => keys}} when is_binary(keys) <- JSON.decode(text) do
+        keys
+      else
+        _ -> "follow"
+      end
+
+    {:ok, %{path: path, on_change: Keyword.fetch!(opts, :on_change), tab: nil, at: 0, keys: keys}}
   end
 
   @impl true
-  def handle_info(:timeout, state) do
-    seen = File.read(state.path)
-    if seen != state.seen, do: state.on_change.()
-    {:noreply, %{state | seen: seen}, @poll_ms}
+  def handle_call({:claim, tab}, _from, state) do
+    changed = tab != current_tab(state)
+    state = %{state | tab: tab, at: now()}
+    if changed, do: tell(state)
+    {:reply, :ok, state}
   end
+
+  def handle_call(:status, _from, state), do: {:reply, %{tab: current_tab(state), keys: state.keys}, state}
+
+  def handle_call({:keys, keys}, _from, state) do
+    if keys != state.keys do
+      File.mkdir_p!(Path.dirname(state.path))
+      File.write!(state.path, JSON.encode!(%{keys: keys}) <> "\n")
+      tell(state)
+    end
+
+    {:reply, :ok, %{state | keys: keys}}
+  end
+
+  # Not from here: on_change asks for the status.
+  defp tell(state), do: Task.start(state.on_change)
+
+  defp current_tab(state), do: if(now() - state.at < @stale_ms, do: state.tab)
+  defp now, do: System.monotonic_time(:millisecond)
 end

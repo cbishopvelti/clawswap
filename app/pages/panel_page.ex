@@ -1,6 +1,6 @@
 defmodule ClawswapWeb.PanelPage do
   @moduledoc """
-  /panel: the debug panel (`ClawswapWeb.DebugPanel`) on its own, filling the page at any width, for an app
+  /p/<id>/panel: a project's debug panel (`ClawswapWeb.DebugPanel`) on its own, filling the page at any width, for an app
   to frame in a sidebar of its own (docs/page.html#panel). The app folds its sidebar, so the panel's 🐞
   isn't shown.
   """
@@ -9,15 +9,16 @@ defmodule ClawswapWeb.PanelPage do
 
   alias ClawswapWeb.DebugPanel
 
-  route("/panel")
+  route("/p/:project/panel")
+  param(:project, :string)
 
   layout(ClawswapWeb.PanelLayout)
 
-  def init(_params, component, _server), do: component
+  def init(params, component, _server), do: put_state(component, :id, params.project)
 
   def template do
     ~HOLO"""
-    <DebugPanel cid="debug_panel" foldable={false} />
+    <DebugPanel cid="debug_panel" project={@id} foldable={false} />
     """
   end
 end

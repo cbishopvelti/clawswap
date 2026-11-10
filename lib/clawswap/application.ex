@@ -1,7 +1,8 @@
 defmodule Clawswap.Application do
   @moduledoc """
-  clawswap's OTP app. On its own it only runs the task supervisor; `clawswap watch` adds the watcher and
-  the web endpoint for the project it was started in (`start_watcher/2`).
+  clawswap's OTP app. On its own it runs the task supervisor and an empty list of projects
+  (`Clawswap.Projects`); `clawswap daemon` adds the web endpoint, which serves every project registered
+  with it (`start_daemon/1`).
   """
 
   use Application
@@ -9,36 +10,44 @@ defmodule Clawswap.Application do
   @impl true
   def start(_type, _args) do
     # clawswap may run on another Elixir than your project: what it starts in your repo gets yours back.
+    # (The daemon leaves its own alone: each project's commands get the environment it was registered with.)
     Clawswap.HostEnv.restore()
-    Supervisor.start_link([{Task.Supervisor, name: Clawswap.TaskSupervisor}], strategy: :one_for_one, name: Clawswap.Supervisor)
+
+    children = [
+      {Task.Supervisor, name: Clawswap.TaskSupervisor},
+      {Registry, keys: :unique, name: Clawswap.Registry},
+      {DynamicSupervisor, name: Clawswap.ProjectSupervisor, strategy: :one_for_one}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: Clawswap.Supervisor)
   end
 
-  @doc "The project the watcher runs, for the API and the page."
-  def project, do: :persistent_term.get({__MODULE__, :project})
-
-  @doc "Starts the watcher and the endpoint on the project's port, under the app's supervisor."
-  def start_watcher(project, smee_url) do
-    :persistent_term.put({__MODULE__, :project}, project)
-
+  @doc """
+  Starts the daemon on `port`: the projects, the Stream Deck's owner and the endpoint, under the app's
+  supervisor. Options: `idle_ms` (the daemon stops after that long with no projects; nil for never).
+  """
+  def start_daemon(port, opts \\ []) do
     endpoint = Application.get_env(:clawswap, ClawswapWeb.Endpoint, [])
-    Application.put_env(:clawswap, ClawswapWeb.Endpoint, Keyword.merge(endpoint, http: [ip: {127, 0, 0, 1}, port: project.port], server: true))
+    Application.put_env(:clawswap, ClawswapWeb.Endpoint, Keyword.merge(endpoint, http: [ip: {127, 0, 0, 1}, port: port], server: true))
+    :persistent_term.put({__MODULE__, :port}, port)
 
-    watcher =
-      {Clawswap.Watcher,
-       project: project,
-       smee_url: smee_url,
-       servers: Clawswap.Multiplexer.pick(project).servers(project, &Clawswap.Watcher.log/1),
-       run_step: Clawswap.Watcher.step_runner(project),
-       on_change: &ClawswapWeb.View.broadcast/1}
+    projects =
+      {Clawswap.Projects,
+       on_change: &ClawswapWeb.View.projects_changed/0,
+       idle_ms: Keyword.get(opts, :idle_ms),
+       on_idle: fn ->
+         Clawswap.Watcher.log("No projects for a while; the daemon stops (clawswap up starts it again)")
+         System.stop(0)
+       end,
+       project_opts: [on_change: &ClawswapWeb.View.broadcast/2, on_debug: &ClawswapWeb.DebugView.broadcast/2]}
 
-    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, watcher)
-    # Another project's page taking the Stream Deck: tell this one's pages, so they let it go.
-    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, {Clawswap.DeckOwner, on_change: fn -> ClawswapWeb.View.broadcast(Clawswap.Watcher.state()) end})
-    # The debug panel's Chrome (ClawswapWeb.DebugPanel, on every page).
-    debugger = {Clawswap.Walkthrough.Debugger, project: project, on_change: &ClawswapWeb.DebugView.broadcast/1}
-    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, debugger)
+    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, {Clawswap.DeckOwner, on_change: &ClawswapWeb.View.deck_changed/0})
+    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, projects)
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, ClawswapWeb.Endpoint)
-    Clawswap.Watcher.log("API and page on http://127.0.0.1:#{project.port} (#{project.name}, base branch #{project.base})")
+    Clawswap.Watcher.log("clawswap daemon on http://127.0.0.1:#{port}")
     :ok
   end
+
+  @doc "The daemon's port (nil outside it)."
+  def port, do: :persistent_term.get({__MODULE__, :port}, nil)
 end

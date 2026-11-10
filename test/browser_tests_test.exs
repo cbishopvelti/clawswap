@@ -26,7 +26,7 @@ defmodule Clawswap.BrowserTestsTest do
   test "url/3 finds a server's port by name", %{project: project} do
     assert Config.url(project, nil, "/chat") == "http://localhost:4000/chat"
     assert Config.url(project, :api, "/") == "http://localhost:4001/"
-    assert Config.url(project, :clawswap, "/state") == "http://localhost:27390/state"
+    assert Config.url(project, :clawswap, "/state") == "http://localhost:27390/p/#{project.id}/state"
     assert_raise RuntimeError, "No server called nope", fn -> Config.url(project, :nope, "/") end
   end
 end

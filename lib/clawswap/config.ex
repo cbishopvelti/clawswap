@@ -39,15 +39,25 @@ defmodule Clawswap.Config do
     end
 
     name = config[:name] || Path.basename(root)
+    # The environment the project was registered from (the shell `clawswap up` ran in): what the steps it
+    # runs see, and where CLAWSWAP_* settings are read from. This VM's own, outside the daemon.
+    host_env = opts[:env] || System.get_env()
+    env = &env(host_env, &1)
+    session = env.("CLAWSWAP_SESSION") || config[:session] || name
 
     %{
       root: root,
       file: file,
       local_file: opts[:local_file] || Path.join([root, ".git", "clawswap.json"]),
       name: name,
-      session: env("CLAWSWAP_SESSION") || config[:session] || name,
-      base: env("CLAWSWAP_BASE") || config[:base] || opts[:base] || "main",
-      port: String.to_integer(env("CLAWSWAP_PORT") || to_string(config[:port] || 27390)),
+      # The project's name in the daemon's URLs (/p/<id>/), from its session, which is unique per project
+      # anyway (two sessions can't share a name).
+      id: id(session),
+      session: session,
+      host_env: host_env,
+      base: env.("CLAWSWAP_BASE") || config[:base] || opts[:base] || "main",
+      # The daemon's port: projects that name the same one (27390 unless they say otherwise) share a daemon.
+      port: String.to_integer(env.("CLAWSWAP_PORT") || to_string(config[:port] || 27390)),
       # Pages allowed to call the API from a browser: the servers' own, and any the config adds.
       origins: MapSet.new(server_origins(servers) ++ (config[:origins] || [])),
       # Server and pane order, as written: a map would lose it.
@@ -56,7 +66,7 @@ defmodule Clawswap.Config do
       servers: servers,
       panes: panes,
       layout: config[:layout],
-      multiplexer: env("CLAWSWAP_MULTIPLEXER") || config[:multiplexer],
+      multiplexer: env.("CLAWSWAP_MULTIPLEXER") || config[:multiplexer],
       prepare: (config[:prepare] || []) |> Enum.with_index() |> Enum.map(fn {s, i} -> Plan.normalise_step(s, i) end),
       steps: (config[:steps] || []) |> Enum.with_index() |> Enum.map(fn {s, i} -> Plan.normalise_step(s, i) end),
       notes: for(n <- config[:notes] || [], do: %{message: Map.new(n).message, test: Plan.matcher(Map.new(n)[:when])}),
@@ -70,16 +80,24 @@ defmodule Clawswap.Config do
     }
   end
 
+  @doc "A project's id in the daemon's URLs: its session's name, lower case, with only letters, digits, - and _."
+  def id(session) do
+    case session |> to_string() |> String.downcase() |> String.replace(~r/[^a-z0-9_-]+/, "-") |> String.trim("-") do
+      "" -> "project"
+      id -> id
+    end
+  end
+
   @doc """
   The address of one of the project's servers by its name (the first with a port when it's nil), or of
-  clawswap's own page with `:clawswap`, plus `path`. Walkthroughs' and browser tests' `url/2`.
+  the project's clawswap page with `:clawswap` (the daemon's /p/<id>), plus `path`. Walkthroughs' and
+  browser tests' `url/2`.
   """
+  def url(project, server, path) when server in [:clawswap, "clawswap"], do: "http://localhost:#{project.port}/p/#{project.id}#{path}"
+
   def url(project, server, path) do
     port =
       cond do
-        server in [:clawswap, "clawswap"] ->
-          project.port
-
         server == nil ->
           Enum.find_value(project.server_names, &project.servers[&1].port) || raise "None of the servers has a port"
 
@@ -90,7 +108,7 @@ defmodule Clawswap.Config do
     "http://localhost:#{port}#{path}"
   end
 
-  defp env(name), do: System.get_env(name) |> then(&if(&1 == "", do: nil, else: &1))
+  defp env(env, name), do: env[name] |> then(&if(&1 == "", do: nil, else: &1))
 
   defp server_origins(servers) do
     for {_, %{port: port}} <- servers, port, origin <- ["http://localhost:#{port}", "http://127.0.0.1:#{port}"], do: origin
@@ -101,16 +119,16 @@ defmodule Clawswap.Config do
   `cwd` up to the repo's root, so a project in a subfolder (examples/react-embed, say) has its own. A
   folder with more than one is an error. CLAWSWAP_CONFIG names another file, relative to the root.
   """
-  def load(cwd) do
+  def load(cwd, host_env \\ System.get_env()) do
     with {:ok, root} <- Git.repo_root(cwd),
-         {:ok, file} <- find(cwd, root),
+         {:ok, file} <- find(cwd, root, host_env),
          {:ok, config} <- read(Path.expand(file, root)) do
-      {:ok, normalise(config || [], root: root, file: file, base: Git.default_base(root), local_file: Git.git_path(root, "clawswap.json"))}
+      {:ok, normalise(config || [], root: root, file: file, base: Git.default_base(root), local_file: Git.git_path(root, "clawswap.json"), env: host_env)}
     end
   end
 
-  defp find(cwd, root) do
-    case env("CLAWSWAP_CONFIG") do
+  defp find(cwd, root, host_env) do
+    case env(host_env, "CLAWSWAP_CONFIG") do
       nil -> nearest(cwd, root)
       file -> if File.exists?(Path.expand(file, root)), do: {:ok, file}, else: {:error, "No #{file} in #{root}"}
     end

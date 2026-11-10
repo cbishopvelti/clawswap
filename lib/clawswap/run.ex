@@ -45,7 +45,7 @@ defmodule Clawswap.Run do
 
   @doc """
   Runs a command with its output passed through to ours (each line prefixed), keeping the last lines for
-  the error. Returns `:ok` or `{:error, message}`.
+  the error. Returns `:ok` or `{:error, message}`. `env` is `{name, value}` pairs (nil unsets one).
   """
   def stream(cmd, args, opts \\ []) do
     prefix = opts[:prefix] || ""
@@ -57,7 +57,8 @@ defmodule Clawswap.Run do
         :exit_status,
         :stderr_to_stdout,
         args: ["-c", ~s(exec "$@" </dev/null), "sh", cmd | args],
-        cd: opts[:cwd] || File.cwd!()
+        cd: opts[:cwd] || File.cwd!(),
+        env: for({name, value} <- opts[:env] || [], do: {String.to_charlist(name), if(value, do: String.to_charlist(value), else: false)})
       ])
 
     stream_loop(port, prefix, write, "", true)

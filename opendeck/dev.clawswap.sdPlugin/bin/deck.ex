@@ -2,8 +2,12 @@ defmodule Clawswap.Deck do
   @moduledoc """
   The "clawswap branch" keys: each shows a branch from a clawswap watcher (the base branch, then the newest
   open PRs) and switches to it when pressed; "clawswap pull" pulls whatever branch the checkout is on;
-  "clawswap walkthrough" plays the checkout's walkthrough (the first one its branch added, else the first).
-  Each key names its watcher's URL, so one deck can drive several projects. See ../../../README.md.
+  "clawswap walkthrough" plays the checkout's walkthrough (the first one its branch added, else the first);
+  "clawswap project" shows the selected project and selects the next one.
+
+  Each key follows the daemon's selected project, or is pinned to one by its `project` setting (the
+  project's id, /p/<id>). Keys on the same project share its list. A key can name another daemon's URL
+  (`url`), for a project that runs on a port of its own. See ../../../docs/opendeck.html.
 
   Options: `send` (posts one event to OpenDeck), `fetch` (`fn method, url, body -> {:ok, status, map} |
   {:error, reason}`, :httpc by default), `url` (the watcher for keys that don't name one), `schedule`
@@ -19,6 +23,7 @@ defmodule Clawswap.Deck do
   @branch_action "dev.clawswap.branch"
   @pull_action "dev.clawswap.pull"
   @walk_action "dev.clawswap.walk"
+  @project_action "dev.clawswap.project"
   @default_url "http://127.0.0.1:27390"
   @poll_ms 1000
   @retry_ms 3000
@@ -32,6 +37,7 @@ defmodule Clawswap.Deck do
   def branch_action, do: @branch_action
   def pull_action, do: @pull_action
   def walk_action, do: @walk_action
+  def project_action, do: @project_action
 
   @doc "Up to `lines` lines of about `width` characters, breaking at spaces, slashes and dashes."
   def wrap(text, width, lines) do
@@ -196,6 +202,9 @@ defmodule Clawswap.Deck do
     end
   end
 
+  @doc "What a project key shows: the project the keys that follow the selected one show now."
+  def project_look(state), do: %{title: state["project"] || "No project", mark: "⇄", mark_colour: @colours.behind, status: "Next project", bar: @colours.behind}
+
   @doc """
   Which branch each key shows: keys on "next branch" take the list in deck order (row by row), the first
   one the base branch; keys set to a branch name show that branch. `instances` are one watcher's keys.
@@ -219,10 +228,19 @@ defmodule Clawswap.Deck do
 
   defp blank?(value), do: value in [nil, ""]
 
-  defp url_of(instance, fallback) do
+  @doc """
+  Where a key's API is: its daemon (its `url`, else the default), and on it the project the key is pinned
+  to (/p/<project>), or none: the paths without one answer for the selected project.
+  """
+  def url_of(instance, fallback) do
     url = instance.settings["url"]
     url = if is_binary(url) and String.trim(url) != "", do: String.trim(url), else: fallback
-    String.trim_trailing(url, "/")
+    url = String.trim_trailing(url, "/")
+    project = instance.settings["project"]
+
+    if instance.kind != :project and is_binary(project) and String.trim(project) != "",
+      do: "#{url}/p/#{URI.encode(String.trim(project), &URI.char_unreserved?/1)}",
+      else: url
   end
 
   # The GenServer: keys come and go as OpenDeck says, and their watchers are polled every second.
@@ -247,7 +265,7 @@ defmodule Clawswap.Deck do
        schedule: opts[:schedule] || fn ms -> Process.send_after(me, :poll, ms) end,
        later: opts[:later] || fn ms, message -> Process.send_after(me, message, ms) end,
        log: opts[:log] || fn _ -> :ok end,
-       # context -> %{settings, coordinates, kind (:branch, :pull or :walk), image}
+       # context -> %{settings, coordinates, kind (:branch, :pull, :walk or :project), image}
        instances: %{},
        # url -> %{state} | %{error}
        watchers: %{},
@@ -272,7 +290,7 @@ defmodule Clawswap.Deck do
 
   defp on_message(%{"event" => "willAppear", "context" => context} = m, s) do
     payload = m["payload"] || %{}
-    kind = %{@pull_action => :pull, @walk_action => :walk}[m["action"]] || :branch
+    kind = %{@pull_action => :pull, @walk_action => :walk, @project_action => :project}[m["action"]] || :branch
     instance = %{settings: payload["settings"] || %{}, coordinates: payload["coordinates"] || %{}, kind: kind, image: nil}
     s.send.(%{event: "setTitle", context: context, payload: %{title: "", target: 0}})
     s |> put_in([:instances, context], instance) |> draw() |> schedule(0)
@@ -334,6 +352,7 @@ defmodule Clawswap.Deck do
               cond do
                 i.kind == :pull -> pull_look(state)
                 i.kind == :walk -> walk_look(state)
+                i.kind == :project -> project_look(state)
                 entry && entry["missing"] -> %{title: entry["branch"], status: "Not listed"}
                 true -> key_look(state, entry)
               end
@@ -384,6 +403,7 @@ defmodule Clawswap.Deck do
 
       answer =
         case instance.kind do
+          :project -> s.fetch.(:post, "#{url}/select", %{next: true})
           :pull -> s.fetch.(:post, "#{url}/pull", %{})
           :walk -> s.fetch.(:post, "#{url}/walk", %{name: walk["name"]})
           :branch -> s.fetch.(:post, "#{url}/switch", %{branch: entry["branch"]})
@@ -410,7 +430,7 @@ defmodule Clawswap.Deck do
     instance = s.instances[context]
     entry = s.shown[context]
 
-    if instance == nil or (instance.kind == :branch and (entry == nil or entry["missing"])) do
+    if instance == nil or instance.kind == :project or (instance.kind == :branch and (entry == nil or entry["missing"])) do
       s.send.(%{event: "showAlert", context: context})
     else
       branch = if instance.kind == :branch, do: entry["branch"]

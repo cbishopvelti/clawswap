@@ -1,17 +1,79 @@
 defmodule ClawswapWeb.View do
   @moduledoc """
-  What the branch page shows, worked out on the server from the watcher's state, so the page's template
-  only lays it out. `broadcast/1` sends it to every open page when the state changes.
+  What the pages show, worked out on the server, so their templates only lay it out: a project's branch
+  page (from its watcher's state), the index of projects, and the pages' Stream Deck. `broadcast/2` sends
+  a project's to its open pages when its state changes.
   """
 
+  @views :clawswap_views
+
   @doc """
-  Sends the new state to the open pages (the watcher's on_change). Without HOLOGRAM_START=1 (which
-  bin/clawswap sets) Hologram isn't running, and there are no pages to tell.
+  A project's watcher changed (its on_change, in the daemon): keeps its state for the index page and the
+  deck, and sends it to the project's open pages, the index page, and the deck when it shows this project.
+  Without HOLOGRAM_START=1 (which bin/clawswap sets) Hologram isn't running, and there are no pages to tell.
   """
-  def broadcast(state) do
-    if Hologram.enabled?(), do: Hologram.Realtime.broadcast_action(:clawswap, :state_changed, view: page(state))
+  def broadcast(id, state) do
+    if :ets.whereis(@views) != :undefined, do: :ets.insert(@views, {id, state})
+
+    if Hologram.enabled?() do
+      Hologram.Realtime.broadcast_action({:clawswap, id}, :state_changed, view: page(state))
+      Hologram.Realtime.broadcast_action(:clawswap_index, :projects_changed, projects: index())
+      if deck_target(Clawswap.DeckOwner.status()) == id, do: deck_changed()
+    end
+
     :ok
   end
+
+  @doc "The list of projects or the selected one changed: tells the index page and the deck."
+  def projects_changed do
+    if :ets.whereis(@views) != :undefined do
+      ids = MapSet.new(Clawswap.Projects.cached(:list), & &1.id)
+      for {id, _} <- :ets.tab2list(@views), not MapSet.member?(ids, id), do: :ets.delete(@views, id)
+    end
+
+    if Hologram.enabled?(), do: Hologram.Realtime.broadcast_action(:clawswap_index, :projects_changed, projects: index())
+    deck_changed()
+  end
+
+  @doc "What the deck shows changed (its owner, what its keys serve, or that project): tells the pages' decks."
+  def deck_changed do
+    if Hologram.enabled?(), do: Hologram.Realtime.broadcast_action(:clawswap_deck, :draw, deck: deck())
+    :ok
+  end
+
+  @doc "A project's watcher state as it last told the pages, or nil."
+  def cached(id) do
+    case :ets.whereis(@views) != :undefined && :ets.lookup(@views, id) do
+      [{^id, state}] -> state
+      _ -> nil
+    end
+  end
+
+  @doc "The index page's rows: each project, the branch it's on, and how its last switch went."
+  def index do
+    selected = Clawswap.Projects.cached(:selected)
+
+    for p <- Clawswap.Projects.cached(:list) do
+      state = cached(p.id)
+      view = state && page(state)
+
+      %{
+        id: p.id,
+        name: p.name,
+        root: p.root,
+        href: "/p/#{p.id}",
+        on: (view && view.on) || "",
+        status: (view && index_status(state)) || "starting",
+        class: if(p.id == selected, do: "project selected", else: "project")
+      }
+    end
+  end
+
+  defp index_status(%{switch: %{phase: "running"} = run}), do: "#{if run.pull, do: "pulling", else: "switching to #{run.target}"}: #{run.step}"
+  defp index_status(%{switch: %{phase: "failed"} = run}), do: "#{run.target}: #{run.error}"
+  defp index_status(%{error: error}) when is_binary(error), do: error
+  defp index_status(%{dirty: true}), do: "uncommitted changes"
+  defp index_status(_), do: ""
 
   @doc "The page's view of the watcher's state."
   def page(state) do
@@ -22,6 +84,7 @@ defmodule ClawswapWeb.View do
 
     %{
       project: state.project,
+      id: Map.get(state, :id),
       current: current || "",
       # The checkout's branch as its row names it, for the header.
       on: on(state, current),
@@ -42,35 +105,61 @@ defmodule ClawswapWeb.View do
       error: (match?(%{phase: "failed"}, run) && "#{run.target}: #{run.error}") || state.error,
       branches: Enum.map(state.branches, &branch(&1, state, run, current)),
       walkthroughs: Enum.map(Map.get(state, :walkthroughs, []), &walkthrough(&1, Map.get(state, :walk))),
-      walk: walk_status(Map.get(state, :walk)),
-      keys: keys(state),
-      deck: deck()
+      walk: walk_status(Map.get(state, :walk))
     }
   end
 
   @doc """
-  Who has the Stream Deck that pages drive over WebHID (`Clawswap.DeckOwner.status/1`), as this
-  watcher sees it. Outside a running watcher (no project), nobody.
+  What the pages' Stream Deck (ClawswapWeb.StreamDeck) shows: which tab drives it (`tab`), what its keys
+  serve (`keys`: "follow" or a project's id), the project they show now (`target`, `target_name`; nil
+  when that project isn't running), the projects to pin them to, and the keys' images (`ClawswapWeb.View.keys/2`),
+  nil when there's no project to show.
   """
-  def deck do
-    case :persistent_term.get({Clawswap.Application, :project}, nil) do
-      nil -> %{owner: "free", name: nil}
-      project -> Clawswap.DeckOwner.status(project.port)
+  def deck(status \\ Clawswap.DeckOwner.status()) do
+    projects = Clawswap.Projects.cached(:list)
+    target = deck_target(status, projects)
+    state = target && cached(target)
+    follow = status.keys == "follow"
+
+    %{
+      tab: status.tab,
+      keys: status.keys,
+      target: target,
+      target_name: Enum.find_value(projects, &(&1.id == target && &1.name)),
+      projects: Enum.map(projects, &%{id: &1.id, name: &1.name}),
+      images: state && keys(state, follow && length(projects) > 1 && project_key(projects, target))
+    }
+  end
+
+  defp deck_target(status, projects \\ Clawswap.Projects.cached(:list)) do
+    case status.keys do
+      "follow" -> Clawswap.Projects.cached(:selected)
+      id -> Enum.find_value(projects, &(&1.id == id && id))
     end
+  end
+
+  # The key that selects the next project, showing the one the keys follow now.
+  defp project_key(projects, target) do
+    index = Enum.find_index(projects, &(&1.id == target)) || 0
+    name = Enum.at(projects, index).name
+    Clawswap.Deck.branch_image(%{title: name, mark: "⇄", status: "Project #{index + 1}/#{length(projects)}", bar: "#58a6ff"})
   end
 
   @doc """
   The Stream Deck keys a page that drives a deck itself (ClawswapWeb.StreamDeck) shows: each branch's
-  image, the walkthrough key's (with the walkthrough it plays, or nil) and the pull key's. They're the OpenDeck plugin's (Clawswap.Deck), so the two decks look alike.
+  image, the walkthrough key's (with the walkthrough it plays, or nil) and the pull key's, and the key that
+  selects the next project (`project`, nil when there's none). They're the OpenDeck plugin's (Clawswap.Deck),
+  so the two decks look alike.
   """
-  def keys(state) do
+  def keys(state, project \\ nil) do
     # The plugin reads the state as the API sends it: JSON, with string keys.
     json = state |> JSON.encode!() |> JSON.decode!()
 
     %{
       branches: Enum.map(json["branches"] || [], &%{branch: &1["branch"], image: Clawswap.Deck.branch_image(Clawswap.Deck.key_look(json, &1))}),
       walk: %{name: get_in(Clawswap.Deck.walkthrough(json) || %{}, ["name"]), image: Clawswap.Deck.branch_image(Clawswap.Deck.walk_look(json))},
-      pull: Clawswap.Deck.branch_image(Clawswap.Deck.pull_look(json))
+      pull: Clawswap.Deck.branch_image(Clawswap.Deck.pull_look(json)),
+      project: project || nil
     }
   end
 

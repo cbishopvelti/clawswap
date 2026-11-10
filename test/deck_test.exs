@@ -166,6 +166,26 @@ defmodule Clawswap.DeckTest do
     assert_received {:request, :post, "http://shop/switch", %{branch: "fix"}}
   end
 
+  test "keys pinned to a project use its paths; the others, and the project key, follow the selected one" do
+    shop = Map.merge(@state, %{"project" => "shop"})
+    me = self()
+    deck = start(fn method, url, body -> send(me, {:request, method, url, body}) && {:ok, 200, shop} end)
+
+    appear(deck, "follow", %{}, 0, 0)
+    appear(deck, "pinned", %{"project" => "blog"}, 0, 1)
+    appear(deck, "next", %{"project" => "ignored"}, 0, 2, "dev.clawswap.project")
+    Deck.poll(deck)
+    assert_received {:request, :get, "http://dev/state", nil}
+    assert_received {:request, :get, "http://dev/p/blog/state", nil}
+    next = image("next")
+    assert next =~ "shop" and next =~ "Next project"
+
+    tap_key(deck, "pinned")
+    assert_received {:request, :post, "http://dev/p/blog/switch", %{branch: "claude-main"}}
+    tap_key(deck, "next")
+    assert_received {:request, :post, "http://dev/select", %{next: true}}
+  end
+
   test "says when the watcher isn't running" do
     deck = start(fn _, _, _ -> {:error, :econnrefused} end)
     appear(deck, "a", %{}, 0, 0)

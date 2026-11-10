@@ -6,16 +6,15 @@ defmodule ClawswapWeb.DebugView do
 
   alias Clawswap.Walkthrough
 
-  @doc "Sends the debugger's new state to the open pages' debug panels (its on_change)."
-  def broadcast(state) do
-    if Hologram.enabled?(), do: Hologram.Realtime.broadcast_action(:clawswap_debug, :debug_changed, view: page(state))
+  @doc "Sends a project's debugger's new state to its open pages' debug panels (its on_change)."
+  def broadcast(project, state) do
+    if Hologram.enabled?(), do: Hologram.Realtime.broadcast_action({:clawswap_debug, project.id}, :debug_changed, view: page(state, project))
     :ok
   end
 
-  @doc "The page's view of the debugger's state."
-  def page(state) do
+  @doc "The page's view of a project's debugger's state (no project: none of its walkthroughs or servers)."
+  def page(state, project) do
     walk = state.walk
-    project = :persistent_term.get({Clawswap.Application, :project}, nil)
 
     %{
       browser: state.browser,
@@ -33,7 +32,7 @@ defmodule ClawswapWeb.DebugView do
           %{handle: t.handle, url: t.url, label: tab_label(t), class: if(t.current, do: "tab current", else: "tab")}
         end),
       url: state.url,
-      shot: if(state.shot > 0, do: "/debug/screenshot.png?v=#{state.shot}"),
+      shot: if(state.shot > 0 and project, do: "/p/#{project.id}/debug/screenshot.png?v=#{state.shot}"),
       # Newest first, so what just happened is at the top.
       log: state.log |> Enum.reverse() |> Enum.take(150)
     }

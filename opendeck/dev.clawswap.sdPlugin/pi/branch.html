@@ -22,12 +22,16 @@
     </select>
   </label>
   <label id="pinned" hidden><span>Branch</span><input id="branch" type="text" placeholder="main"></label>
+  <label><span>Project</span><input id="project" type="text" placeholder="the selected one"></label>
   <label><span>Watcher</span><input id="url" type="text" placeholder="http://127.0.0.1:27390"></label>
   <p>Keys on "next branch" share their watcher's list in deck order, row by row: the first shows the base
     branch, the rest the newest open pull requests. Pressing one stops the servers, checks the branch out,
     runs the steps it needs and starts them again.</p>
   <p>Watcher is the project's <code>port</code> from its <code>clawswap.exs</code>; leave it empty for
     the default. Needs <code>clawswap up</code> running in that project.</p>
+  <p>Project is the project's id, as in its page's address (<code>/p/&lt;id&gt;</code>): the key serves only
+    that project. Leave it empty to follow the selected project, which the "clawswap project" key and the
+    clawswap page change.</p>
 
 <script>
   let socket;
@@ -40,6 +44,7 @@
     $("pinned").hidden = !settings.branch && $("mode").value !== "pinned";
     $("branch").value = settings.branch ?? "";
     $("url").value = settings.url ?? "";
+    $("project").value = settings.project ?? "";
   };
 
   const save = () => {
@@ -48,12 +53,14 @@
     settings = {};
     if (pinned && $("branch").value.trim()) settings.branch = $("branch").value.trim();
     if ($("url").value.trim()) settings.url = $("url").value.trim();
+    if ($("project").value.trim()) settings.project = $("project").value.trim();
     socket?.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
   };
 
   $("mode").addEventListener("change", save);
   $("branch").addEventListener("change", save);
   $("url").addEventListener("change", save);
+  $("project").addEventListener("change", save);
 
   // Called by OpenDeck (and the Stream Deck app) once the page has loaded.
   window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
