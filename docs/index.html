@@ -44,11 +44,11 @@ and starts the servers again. The branch list shows the open pull requests, newe
 one's merge status, and lights up when the branch you're on has new commits on GitHub.</p>
 
 <div class="cards">
-  <a href="install.html"><strong>Install</strong><span>Elixir, zellij and clawswap, and the <code>clawswap</code> command.</span></a>
-  <a href="usage.html"><strong>Use</strong><span><code>clawswap up</code>, the session and every command.</span></a>
+  <a href="install.html"><strong>Install</strong><span>Elixir, zellij or tmux and clawswap, <code>clawswap doctor</code>, and the <code>clawswap</code> command.</span></a>
+  <a href="usage.html"><strong>Use</strong><span><code>clawswap up</code>, the session, several projects in one daemon, and every command.</span></a>
   <a href="configuration.html"><strong>Configure</strong><span><code>clawswap.exs</code> or <code>clawswap.yml</code>, by hand or from the page's editor.</span></a>
   <a href="switching.html"><strong>Switching</strong><span>What a switch and a pull do, step by step.</span></a>
-  <a href="page.html"><strong>Branch page</strong><span>The watcher's page, merge marks, and embedding it in your app.</span></a>
+  <a href="page.html"><strong>Branch page</strong><span>Each project's page, the list of projects, merge marks, and embedding it in your app.</span></a>
   <a href="api.html"><strong>API</strong><span>The JSON API, to build your own control.</span></a>
   <a href="opendeck.html"><strong>Stream Deck</strong><span>Branch, pull and walkthrough keys through OpenDeck, or from the page over WebHID.</span></a>
   <a href="walkthroughs.html"><strong>Walkthroughs</strong><span>Scripts on a branch that play its change in Chrome while you watch.</span></a>
@@ -71,7 +71,7 @@ one's merge status, and lights up when the branch you're on has new commits on G
   <li><strong>The webhook.</strong> GitHub posts branch, push and pull-request events to a
     <a href="https://smee.io">smee.io</a> channel; the watcher follows the channel and looks again when one arrives.
     Without it, it looks every 15 minutes and whenever you press a key.</li>
-  <li><strong>The controls.</strong> Stream Deck keys (an OpenDeck plugin, or the page itself over WebHID), the watcher's
+  <li><strong>The controls.</strong> Stream Deck keys (an OpenDeck plugin, or the page itself over WebHID), each project's
     <a href="https://hologram.page">Hologram</a> page (on its own or in an iframe in your app), your own control
     built on the API, and the CLI all drive the same daemon.</li>
 </ul>
@@ -79,14 +79,18 @@ one's merge status, and lights up when the branch you're on has new commits on G
 <h2 id="quick-start">Quick start</h2>
 <p>Once clawswap is <a href="install.html">installed</a> and <code>clawswap</code> is on your <code>PATH</code>:</p>
 <pre><code>cd &lt;path-to-your-project&gt;
+clawswap doctor   # checks what clawswap needs is installed, and prints the fix for what isn't
 clawswap init     # writes a starter clawswap.exs from what it finds
 clawswap smee     # optional: a webhook channel, so new branches show up straight away
-clawswap up       # opens the session; the page is at http://127.0.0.1:27390/p/&lt;project&gt;</code></pre>
-<p>Then pick a branch on the page, press a key, or run <code>clawswap switch &lt;branch&gt;</code>.</p>
+clawswap up       # starts the daemon if it isn't running, and opens the session; the page is at
+                  # http://127.0.0.1:27390/p/&lt;project&gt;, and every project's at http://127.0.0.1:27390</code></pre>
+<p>Then pick a branch on the page, press a key, or run <code>clawswap switch &lt;branch&gt;</code>. Run
+<code>clawswap up</code> in another project and it joins the same daemon.</p>
 
 <h2 id="elixir">All Elixir</h2>
-<p>clawswap is written in Elixir. The watcher is an OTP application, its page is a Hologram page served by
-Phoenix, and the OpenDeck plugin is an Elixir script. It started as <code>devtools/bmx-dev</code> in the bmx
+<p>clawswap is written in Elixir. The daemon is an OTP application, its pages are Hologram pages served by
+Phoenix, and the OpenDeck plugin is an Elixir script. It runs on the Elixir its own <code>.tool-versions</code> pins,
+not your project's (<a href="install.html#own-elixir">its own Elixir</a>). It started as <code>devtools/bmx-dev</code> in the bmx
 project; the servers and steps that were written into it are now a config file in each repo.</p>
 <div class="pager"><span></span><span><a href="install.html">Install →</a></span></div>
 <footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>

@@ -1,7 +1,7 @@
 # clawswap
 
 Runs a project's dev servers in one [zellij](https://zellij.dev) or [tmux](https://github.com/tmux/tmux) session, and
-switches the checkout to another branch from a Stream Deck key, the watcher's web page or the command line. A switch
+switches the checkout to another branch from a Stream Deck key, its web page or the command line. A switch
 stops the servers, checks the branch out, runs only what the change needs (`mix deps.get`, migrations, `npm install`...)
 and starts them again.
 
@@ -62,12 +62,12 @@ A minimal `clawswap.exs` (or the same as `clawswap.yml`):
 | Page | What's in it |
 | --- | --- |
 | [Install](https://cbishopvelti.github.io/clawswap/install.html) | Requirements, the `clawswap` command, setting up a project and its webhook |
-| [Use](https://cbishopvelti.github.io/clawswap/usage.html) | `clawswap up`, the session, zellij or tmux, and every command |
+| [Use](https://cbishopvelti.github.io/clawswap/usage.html) | `clawswap up`, the session, zellij or tmux, several projects in one daemon, and every command |
 | [Configuration](https://cbishopvelti.github.io/clawswap/configuration.html) | Every key of `clawswap.exs` / `clawswap.yml`, the page's config editor, ports, environment variables |
 | [Switching](https://cbishopvelti.github.io/clawswap/switching.html) | What a switch and a pull do, step by step |
-| [Branch page](https://cbishopvelti.github.io/clawswap/page.html) | The watcher's page, its marks, and embedding it in your app (iframe, reload after a switch) |
+| [Branch page](https://cbishopvelti.github.io/clawswap/page.html) | Each project's page, the list of projects at `/`, its marks, and embedding it in your app (iframe, reload after a switch) |
 | [API](https://cbishopvelti.github.io/clawswap/api.html) | The JSON API, to build your own control |
-| [Stream Deck](https://cbishopvelti.github.io/clawswap/opendeck.html) | Branch, pull and walkthrough keys, through OpenDeck or from the page over WebHID |
+| [Stream Deck](https://cbishopvelti.github.io/clawswap/opendeck.html) | Branch, pull, walkthrough and project keys, through OpenDeck or from the page over WebHID; keys follow the selected project or are pinned to one |
 | [Walkthroughs](https://cbishopvelti.github.io/clawswap/walkthroughs.html) | Scripts on a branch that play its change in Chrome, how to have Claude write them, and the debug panel that steps through one or drives Chrome by hand |
 | [Browser tests](https://cbishopvelti.github.io/clawswap/testing.html) | `clawswap test`: your project's Wallaby suite, several browsers at once, against the session's servers |
 
@@ -86,6 +86,10 @@ CLAWSWAP_HEADLESS=0 CLAWSWAP_SLOW=800 mix test.integration   # watch them in Chr
 The browser tests drive [examples/react-embed](examples/react-embed) through a real session in zellij and tmux. They
 need Chrome, chromedriver of the same major version, Node.js, tmux and zellij, and ports 27390, 27391 and 27393 free
 ([more](https://cbishopvelti.github.io/clawswap/walkthroughs.html#tests)).
+
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs both on every pull request and push to `main`:
+`mix format --check-formatted`, `mix compile --warnings-as-errors` and `mix test`, then the browser tests, headless,
+in tmux and zellij.
 
 The docs are plain HTML and CSS in [docs/](docs), published by GitHub Pages from `main`. Edit the pages there directly,
 in the same change as the feature, and keep this README to the overview: anything longer belongs in the docs. The

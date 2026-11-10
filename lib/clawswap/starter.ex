@@ -26,7 +26,7 @@ defmodule Clawswap.Starter do
     # clawswap's settings for this repo. See https://github.com/cbishopvelti/clawswap#configuration
     [
       # base: "main",            # the branch listed first (default: origin's default branch)
-      # port: 27390,              # the watcher's page and API; give each project its own to run several
+      # port: 27390,              # the daemon's pages and API; projects on the same port share one daemon
       # multiplexer: :tmux,      # or :zellij (default: the one you're in, else zellij if installed, else tmux)
 
       # The servers a switch stops and starts again, each in its own pane.
