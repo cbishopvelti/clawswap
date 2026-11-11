@@ -50,6 +50,12 @@ copy, since OpenDeck doesn't reliably follow a symlink there, so run it again af
   <li>Quit OpenDeck fully (tray &gt; Quit) and start it again; it only starts plugins when it launches.</li>
   <li>Drag <strong>clawswap branch</strong> (category clawswap) onto keys, and <strong>clawswap pull</strong> and <strong>clawswap walkthrough</strong> onto one each. With several projects, add a <strong>clawswap project</strong> key too (<a href="#projects">Several projects</a>).</li>
 </ol>
+<h3 id="reload">Reinstalling after changes: <code>clawswap reload</code></h3>
+<p><code>clawswap reload</code> does the reinstall in one go: it quits OpenDeck, copies the plugin in again, starts
+OpenDeck, then recompiles clawswap and restarts the daemon. It finds the Flatpak (<code>flatpak run</code>) or an
+<code>opendeck</code> on your <code>PATH</code>; set <code>CLAWSWAP_OPENDECK_CMD</code> to the command that starts OpenDeck
+otherwise (an AppImage's path, say), and <code>CLAWSWAP_OPENDECK_PLUGINS</code> to its plugins folder if it's somewhere
+else. Without an OpenDeck it just recompiles and restarts the daemon.</p>
 <p>The keys need the daemon running with your project in it, which <code>clawswap up</code> sees to. With more than one
 project in it, see <a href="#projects">Several projects</a> for which one a key serves.</p>
 

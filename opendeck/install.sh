@@ -2,10 +2,13 @@
 # Copies the clawswap plugin into OpenDeck's plugins folder (the Flatpak's if that's how OpenDeck is
 # installed). OpenDeck doesn't reliably follow a symlink there, so it's a copy: run this again after
 # pulling changes. OpenDeck only starts plugins when it launches, so quit it fully (tray > Quit) and start
-# it again afterwards.
+# it again afterwards. `clawswap reload` does all of that (and restarts the daemon).
+# CLAWSWAP_OPENDECK_PLUGINS overrides the plugins folder.
 set -eu
 src="$(cd "$(dirname "$0")" && pwd)/dev.clawswap.sdPlugin"
-if [ -d "$HOME/.var/app/me.amankhanna.opendeck" ]; then
+if [ -n "${CLAWSWAP_OPENDECK_PLUGINS:-}" ]; then
+  dir="$CLAWSWAP_OPENDECK_PLUGINS"
+elif [ -d "$HOME/.var/app/me.amankhanna.opendeck" ]; then
   dir="$HOME/.var/app/me.amankhanna.opendeck/config/opendeck/plugins"
 else
   dir="${XDG_CONFIG_HOME:-$HOME/.config}/opendeck/plugins"
