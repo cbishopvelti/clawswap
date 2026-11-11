@@ -107,8 +107,9 @@ Vite + React app does both. (It's a test target, so it's JavaScript; clawswap it
   <li><strong>A Branches button</strong> that opens the page in a dropdown (<a href="#iframe">below</a>).</li>
   <li><strong>A Pull button</strong> next to it, on the API (<a href="#pull">below</a>), so pulling the branch
     you're on is one click, without opening the menu, and the button shows when there's something to pull.</li>
-  <li><strong>A listener that reloads your page</strong> when a switch or pull is done (<a href="#reload">below</a>),
-    unless your dev server reloads it already.</li>
+  <li><strong>A listener that reloads your page</strong> when a switch or pull is done, however it was started
+    (<a href="#reload">below</a>: it follows the API's <code>/events</code> stream), unless your dev server reloads it
+    already.</li>
 </ol>
 <p>The <a href="#panel">debug panel</a> in a sidebar is optional, for projects with
 <a href="walkthroughs.html">walkthroughs</a>.</p>
@@ -130,59 +131,77 @@ closes), so it keeps following a switch while closed, and adds reload, open-in-a
 </ul>
 
 <h3 id="reload">Reloading your app after a switch</h3>
-<p>clawswap doesn't reload your app's page: the framed page is on another port, so another origin, and can't. A
-Vite app reloads by itself when its dev server comes back. Anything else (a Phoenix app, a plain server) stays on
-the old page, so let the framed page tell it. When a switch or pull is done, after the servers listen on their
-<code>port</code>s again, the page in the frame posts its parent this message, whoever started the switch (the page,
-a key or the API):</p>
+<p>clawswap doesn't reload your app's page: it's on another port, so another origin, and can't. A Vite app reloads
+by itself when its dev server comes back. Anything else (a Phoenix app, a plain server) stays on the old page, so
+give it a listener in its dev JavaScript (Phoenix: <code>assets/js/app.js</code>) that follows the project's
+<a href="api.html#events"><code>GET /p/&lt;id&gt;/events</code></a>. That's a Server-Sent Events stream of the
+project's <a href="api.html#state">state</a>: once when it opens, then each time the state changes. It hears every
+switch and pull however it was started (the page, a Stream Deck key, the CLI or the API), with no frame open:</p>
+<pre><code>const CLAWSWAP = "http://localhost:27390/p/myapp";
+let doneAt; // the last finished switch's, once known
+
+new EventSource(`${CLAWSWAP}/events`).onmessage = (e) =&gt; {
+  const next = JSON.parse(e.data).switch?.doneAt ?? null;
+  if (doneAt !== undefined &amp;&amp; next !== null &amp;&amp; next !== doneAt) return location.reload();
+  if (doneAt === undefined || next !== null) doneAt = next;
+};</code></pre>
+<p>Things to get right:</p>
+<ul>
+  <li><strong>Reload on a new <code>doneAt</code> only.</strong> <code>switch.doneAt</code> is set when a switch or pull
+    is done and its servers listen on their <code>port</code>s again. A switch that starts drops it until then, so
+    don't reload on it going away: the page would load while your server is down, and the browser's error page
+    doesn't reload again. The first event only says where things stand (a switch done before the page loaded isn't
+    news). A failed switch, or a pull with nothing new, sets no <code>doneAt</code>.</li>
+  <li><strong>Reconnects are free.</strong> <code>EventSource</code> opens the stream again by itself when the daemon
+    restarts, and the first event after that is the state then. It gives up on an answer that isn't a stream: a
+    404 for a project that isn't running (or a clawswap older than <code>/events</code>). Poll
+    <code>GET /p/&lt;id&gt;/state</code> every few seconds then, with the same <code>doneAt</code> rule, and try the
+    stream again later.</li>
+  <li><strong>Origins.</strong> The browser may call the API from your servers' own <code>localhost</code> ports;
+    add others with the config's <code>origins</code>. Use the config's <code>port</code> if it isn't 27390.</li>
+</ul>
+<p>The page in a frame also tells its parent when a switch or pull is done, whoever started it:</p>
 <pre><code>{ clawswap: "switched", branch: "claude/fix-login" }</code></pre>
-<p>Reload on it with a listener in your app's dev JavaScript (Phoenix: <code>assets/js/app.js</code>):</p>
 <pre><code>addEventListener("message", (e) =&gt; {
   if (e.origin === "http://localhost:27390" &amp;&amp; e.data?.clawswap === "switched") location.reload();
 });</code></pre>
-<p>The origin is the daemon's, without the <code>/p/&lt;id&gt;</code>; use the config's <code>port</code> if it isn't 27390. The page only posts while it's loaded, so keep the frame
-loaded once opened (hide it rather than remove it when the menu closes), as the example's <code>BranchMenu</code> does.
-A failed switch, or a pull with nothing new, posts nothing. Without a frame, poll the <a href="api.html#state">API</a>
-and reload when <code>switch.doneAt</code> changes to a new time. That also catches a switch started from a key or the
-CLI while the menu was never opened.</p>
+<p>That's enough on its own only while the frame is loaded (keep it loaded once opened: hide it rather than remove
+it when the menu closes, as the example's <code>BranchMenu</code> does). A reload unloads the frame, so after one, a
+switch from a key or the CLI goes unheard until the menu is opened again: listen on <code>/events</code> too. The
+origin is the daemon's, without the <code>/p/&lt;id&gt;</code>.</p>
 
 <h3 id="pull">A Pull button</h3>
 <p>The page has Pull, but it's only reachable once the menu is open. Give your app its own button next to
-Branches: <code>POST /p/&lt;id&gt;/pull</code> pulls the checkout's branch, and <code>GET /p/&lt;id&gt;/state</code>'s
+Branches: <code>POST /p/&lt;id&gt;/pull</code> pulls the checkout's branch, and the state's
 <code>upstream.behind</code> says how many commits there are to pull. With no framed page to post
-<code>switched</code>, reload when <code>switch.doneAt</code> changes to a new time. A switch that starts drops
-<code>doneAt</code> until it's done, so don't reload on it going away: the page would load while your server is down,
-and the browser's error page doesn't reload again. In plain JavaScript:</p>
+<code>switched</code>, the same <code>/events</code> stream drives the button and the reload
+(<a href="#reload">above</a>), so this one listener does both. In plain JavaScript:</p>
 <pre><code>&lt;button id="clawswap-pull"&gt;↓ Pull&lt;/button&gt;
 
 const CLAWSWAP = "http://localhost:27390/p/myapp";
 const button = document.getElementById("clawswap-pull");
 let doneAt; // the last switch's, once known
 
-async function poll() {
-  let running = false;
-  try {
-    const state = await (await fetch(`${CLAWSWAP}/state`)).json();
-    const run = state.switch, behind = state.upstream?.behind;
-    const next = run?.doneAt ?? null; // gone while a switch runs, so only a new time counts
-    if (doneAt !== undefined &amp;&amp; next !== null &amp;&amp; next !== doneAt) return location.reload();
-    if (doneAt === undefined || next !== null) doneAt = next;
-    running = run?.phase === "running";
-    button.disabled = running;
-    button.textContent = running ? `Pulling: ${run.step || "…"}`
-      : behind ? `↓ Pull ${behind} new` : "↓ Pull";
-  } catch {} // clawswap isn't up
-  setTimeout(poll, running ? 2000 : 10000);
-}
+// EventSource reconnects by itself when the daemon restarts.
+new EventSource(`${CLAWSWAP}/events`).onmessage = (e) =&gt; {
+  const state = JSON.parse(e.data);
+  const run = state.switch, behind = state.upstream?.behind;
+  const next = run?.doneAt ?? null; // gone while a switch runs, so only a new time counts
+  if (doneAt !== undefined &amp;&amp; next !== null &amp;&amp; next !== doneAt) return location.reload();
+  if (doneAt === undefined || next !== null) doneAt = next;
+  const running = run?.phase === "running";
+  button.disabled = running;
+  button.textContent = running ? `Pulling: ${run.step || "…"}`
+    : behind ? `↓ Pull ${behind} new` : "↓ Pull";
+};
 
 button.onclick = () =&gt; fetch(`${CLAWSWAP}/pull`, {
   method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
-}).then(poll);
-poll();</code></pre>
+});</code></pre>
 <p>The browser can call the API from your server's own <code>localhost</code> port (it's an allowed origin; add others
 with <code>origins</code>). A pull with nothing new answers 202 with <code>"Already up to date"</code> in
 <code>switch.notes</code> and changes nothing. The example's <code>BranchBadge</code> (<a href="#badge">below</a>) does
-the same in React.</p>
+the same in React, polling <code>/state</code> instead.</p>
 
 <h3 id="panel">The debug panel in a sidebar</h3>
 <p>The <a href="walkthroughs.html#debug">debug panel</a> is on its own at <code>/p/&lt;id&gt;/panel</code>, filling the page at any

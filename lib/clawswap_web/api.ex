@@ -5,6 +5,8 @@ defmodule ClawswapWeb.Api do
   Stream Deck key or a script that names no project follows whichever is selected.
 
       GET  /p/<id>/state                    the watcher's state (see README.md)
+      GET  /p/<id>/events                   the same state as Server-Sent Events: now, then each time it
+                                            changes, so a page can listen rather than poll /state
       POST /p/<id>/switch  {"branch": ...}  202, then follow /state's switch
       POST /p/<id>/pull                     the checkout's branch; 202 (switch.pull), or "Already up to date"
       POST /p/<id>/refresh                  look at GitHub now
@@ -53,7 +55,7 @@ defmodule ClawswapWeb.Api do
   # {:project, id or "selected", path} | {:daemon, path} | nil (a page's)
   defp route("/p/" <> rest) do
     case String.split(rest, "/", parts: 2) do
-      [id, sub] when id != "" -> if(("/" <> sub) in ["/log" | @project_paths], do: {:project, id, "/" <> sub})
+      [id, sub] when id != "" -> if(("/" <> sub) in ["/log", "/events" | @project_paths], do: {:project, id, "/" <> sub})
       _ -> nil
     end
   end
@@ -104,6 +106,7 @@ defmodule ClawswapWeb.Api do
   end
 
   defp dispatch(conn, {:project, _, "/log"}, project) when conn.method == "GET", do: follow_log(conn, project.id)
+  defp dispatch(conn, {:project, _, "/events"}, project) when conn.method == "GET", do: stream_state(conn, project)
 
   defp dispatch(conn, route, project) do
     if conn.method != "POST" or not String.starts_with?(conn |> get_req_header("content-type") |> List.first() || "", "application/json") do
@@ -172,6 +175,55 @@ defmodule ClawswapWeb.Api do
   defp watcher(project), do: Project.via(project.id, :watcher)
   defp string(nil), do: ""
   defp string(value), do: to_string(value)
+
+  @doc """
+  A project's state changed (its watcher's on_change, through `ClawswapWeb.View.broadcast/2`): sends it to
+  each open /p/<id>/events stream.
+  """
+  def notify(id, state) do
+    if Process.whereis(Clawswap.Listeners),
+      do: Registry.dispatch(Clawswap.Listeners, id, fn entries -> for {pid, _} <- entries, do: send(pid, {:clawswap_state, state}) end)
+
+    :ok
+  end
+
+  # The state now, then each change, as Server-Sent Events, until the browser goes. A comment line every
+  # beat (@log_beat_ms; config :events_beat_ms for tests) keeps proxies and idle timeouts from closing it, and notices a browser that went away.
+  # A project that's gone ends the stream; the page's EventSource then gets a 404 and stops.
+  defp stream_state(conn, project) do
+    {:ok, _} = Registry.register(Clawswap.Listeners, project.id, nil)
+
+    conn =
+      conn
+      |> put_resp_header("content-type", "text/event-stream")
+      |> put_resp_header("cache-control", "no-store")
+      |> send_chunked(200)
+
+    try do
+      case event(conn, Watcher.state(watcher(project))) do
+        {:ok, conn} -> state_loop(conn, project.id)
+        {:error, _} -> halt(conn)
+      end
+    catch
+      :exit, _ -> halt(conn)
+    after
+      Registry.unregister(Clawswap.Listeners, project.id)
+    end
+  end
+
+  defp state_loop(conn, id) do
+    receive do
+      {:clawswap_state, state} -> next_event(conn, id, event(conn, state))
+    after
+      Application.get_env(:clawswap, :events_beat_ms, @log_beat_ms) ->
+        if Projects.get(id), do: next_event(conn, id, chunk(conn, ": beat\n\n")), else: halt(conn)
+    end
+  end
+
+  defp next_event(_conn, id, {:ok, conn}), do: state_loop(conn, id)
+  defp next_event(conn, _id, {:error, _}), do: halt(conn)
+
+  defp event(conn, state), do: chunk(conn, "data: " <> JSON.encode!(state) <> "\n\n")
 
   # The log so far, then each write as it comes, until the pane goes. A reload starts the project's log
   # again; the stream carries on with the new one.

@@ -16,6 +16,8 @@ defmodule Clawswap.Application do
     children = [
       {Task.Supervisor, name: Clawswap.TaskSupervisor},
       {Registry, keys: :unique, name: Clawswap.Registry},
+      # GET /p/<id>/events streams, by project id (ClawswapWeb.Api.notify/2).
+      {Registry, keys: :duplicate, name: Clawswap.Listeners},
       {DynamicSupervisor, name: Clawswap.ProjectSupervisor, strategy: :one_for_one}
     ]
 
