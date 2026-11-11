@@ -30,6 +30,12 @@ defmodule Clawswap.Walkthrough.DebuggerTest do
       end
     end
 
+    test "says a module's function isn't a command, whether or not its name is an atom yet" do
+      for code <- [~s|File.rm_rf!("/tmp/x")|, ~s|System.cmd("true", [])|, ~s|Nope.not_an_atom_yet_#{System.unique_integer([:positive])}()|] do
+        assert {:error, "Not a command" <> _} = Debugger.command(code), code
+      end
+    end
+
     test "checks how many arguments a command takes" do
       assert {:error, "click takes 1 or 2 arguments"} = Debugger.command("click")
     end
