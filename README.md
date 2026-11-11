@@ -45,8 +45,8 @@ clawswap up       # starts the daemon if it isn't running, and opens the session
 ```
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:
-`clawswap switch 23`). Run `clawswap help` for every command, and `clawswap completion bash` (or zsh, fish) for
-Tab completion.
+`clawswap switch 23`). Run `clawswap help` for every command, and `clawswap completion install` once for Tab
+completion (`clawswap re<Tab>` gives `clawswap reload`); `clawswap reload` keeps it up to date.
 
 A minimal `clawswap.exs` (or the same as `clawswap.yml`):
 
