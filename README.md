@@ -65,7 +65,7 @@ A minimal `clawswap.exs` (or the same as `clawswap.yml`):
 | [Use](https://cbishopvelti.github.io/clawswap/usage.html) | `clawswap up`, the session, zellij or tmux, several projects in one daemon, and every command |
 | [Configuration](https://cbishopvelti.github.io/clawswap/configuration.html) | Every key of `clawswap.exs` / `clawswap.yml`, the page's config editor, ports, environment variables |
 | [Switching](https://cbishopvelti.github.io/clawswap/switching.html) | What a switch and a pull do, step by step |
-| [Branch page](https://cbishopvelti.github.io/clawswap/page.html) | Each project's page, the list of projects at `/`, its marks, and embedding it in your app (iframe, reload after a switch) |
+| [Branch page](https://cbishopvelti.github.io/clawswap/page.html) | Each project's page, the list of projects at `/`, its marks, and embedding it in your app (iframe, a Pull button, reload after a switch) |
 | [API](https://cbishopvelti.github.io/clawswap/api.html) | The JSON API, to build your own control |
 | [Stream Deck](https://cbishopvelti.github.io/clawswap/opendeck.html) | Branch, pull, walkthrough and project keys, through OpenDeck or from the page over WebHID; keys follow the selected project or are pinned to one |
 | [Walkthroughs](https://cbishopvelti.github.io/clawswap/walkthroughs.html) | Scripts on a branch that play its change in Chrome, how to have Claude write them, and the debug panel that steps through one or drives Chrome by hand |
