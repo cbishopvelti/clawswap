@@ -11,7 +11,7 @@ defmodule ClawswapWeb.Endpoint do
   # Before the parsers, which would take the API's JSON bodies.
   plug(ClawswapWeb.Api)
 
-  plug(Plug.Static, at: "/", from: :clawswap, gzip: false, only: ~w(hologram clawswap.css))
+  plug(Plug.Static, at: "/", from: :clawswap, gzip: false, only: ~w(hologram clawswap.css clawswap-focus.js))
 
   plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],

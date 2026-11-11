@@ -14,6 +14,7 @@ defmodule ClawswapWeb.MainLayout do
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>clawswap</title>
         <link rel="stylesheet" href="/clawswap.css" />
+        <script src="/clawswap-focus.js" defer></script>
         <Runtime />
       </head>
       <body>
