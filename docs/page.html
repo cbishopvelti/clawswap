@@ -96,8 +96,20 @@ light or dark theme.</p>
 
 <h2 id="embed">Embedding it in your app</h2>
 <p>Your app's dev page can show clawswap two ways: frame the watcher's page, or build its own control on the
-<a href="api.html">API</a>. The <a href="https://github.com/cbishopvelti/clawswap/tree/main/examples/react-embed"><code>examples/react-embed</code></a>
+<a href="api.html">API</a>. Use both: the page for switching, and a Pull button of your own beside it. The <a href="https://github.com/cbishopvelti/clawswap/tree/main/examples/react-embed"><code>examples/react-embed</code></a>
 Vite + React app does both. (It's a test target, so it's JavaScript; clawswap itself isn't.)</p>
+
+<h3 id="recommended">The recommended setup</h3>
+<p>Put three things in your app's dev chrome (a top bar, or a sidebar's bottom):</p>
+<ol>
+  <li><strong>A Branches button</strong> that opens the page in a dropdown (<a href="#iframe">below</a>).</li>
+  <li><strong>A Pull button</strong> next to it, on the API (<a href="#pull">below</a>), so pulling the branch
+    you're on is one click, without opening the menu, and the button shows when there's something to pull.</li>
+  <li><strong>A listener that reloads your page</strong> when a switch or pull is done (<a href="#reload">below</a>),
+    unless your dev server reloads it already.</li>
+</ol>
+<p>The <a href="#panel">debug panel</a> in a sidebar is optional, for projects with
+<a href="walkthroughs.html">walkthroughs</a>.</p>
 
 <h3 id="iframe">The page in an iframe</h3>
 <p>The simplest: a button in your top bar that opens a dropdown with the page in it.</p>
@@ -130,6 +142,41 @@ a key or the API):</p>
 loaded once opened (hide it rather than remove it when the menu closes), as the example's <code>BranchMenu</code> does.
 A failed switch, or a pull with nothing new, posts nothing. Without a frame, poll the <a href="api.html#state">API</a>
 and reload when <code>switch.doneAt</code> changes.</p>
+
+<h3 id="pull">A Pull button</h3>
+<p>The page has Pull, but it's only reachable once the menu is open. Give your app its own button next to
+Branches: <code>POST /p/&lt;id&gt;/pull</code> pulls the checkout's branch, and <code>GET /p/&lt;id&gt;/state</code>'s
+<code>upstream.behind</code> says how many commits there are to pull. With no framed page to post
+<code>switched</code>, reload when <code>switch.doneAt</code> changes. In plain JavaScript:</p>
+<pre><code>&lt;button id="clawswap-pull"&gt;↓ Pull&lt;/button&gt;
+
+const CLAWSWAP = "http://localhost:27390/p/myapp";
+const button = document.getElementById("clawswap-pull");
+let doneAt; // the last switch's, once known
+
+async function poll() {
+  let running = false;
+  try {
+    const state = await (await fetch(`${CLAWSWAP}/state`)).json();
+    const run = state.switch, behind = state.upstream?.behind;
+    if (doneAt !== undefined &amp;&amp; (run?.doneAt ?? null) !== doneAt) return location.reload();
+    doneAt = run?.doneAt ?? null;
+    running = run?.phase === "running";
+    button.disabled = running;
+    button.textContent = running ? `Pulling: ${run.step || "…"}`
+      : behind ? `↓ Pull ${behind} new` : "↓ Pull";
+  } catch {} // clawswap isn't up
+  setTimeout(poll, running ? 2000 : 10000);
+}
+
+button.onclick = () =&gt; fetch(`${CLAWSWAP}/pull`, {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+}).then(poll);
+poll();</code></pre>
+<p>The browser can call the API from your server's own <code>localhost</code> port (it's an allowed origin; add others
+with <code>origins</code>). A pull with nothing new answers 202 with <code>"Already up to date"</code> in
+<code>switch.notes</code> and changes nothing. The example's <code>BranchBadge</code> (<a href="#badge">below</a>) does
+the same in React.</p>
 
 <h3 id="panel">The debug panel in a sidebar</h3>
 <p>The <a href="walkthroughs.html#debug">debug panel</a> is on its own at <code>/p/&lt;id&gt;/panel</code>, filling the page at any
