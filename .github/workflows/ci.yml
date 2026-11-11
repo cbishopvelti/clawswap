@@ -68,7 +68,7 @@ jobs:
       # The tests run `clawswap up` in tmux and zellij (and npm ci for examples/react-embed); the watcher
       # needs inotify-tools to notice file changes. The runner image has tmux. zellij and inotify-tools'
       # packages are cached, so a run doesn't wait on (or fail with) GitHub's or Ubuntu's mirrors; only a
-      # cache miss downloads them, with retries.
+      # cache miss downloads them, with timeouts and retries.
       - uses: actions/cache@v4
         id: tools
         with:
@@ -77,13 +77,17 @@ jobs:
 
       - name: Download zellij and inotify-tools
         if: steps.tools.outputs.cache-hit != 'true'
+        timeout-minutes: 5
         run: |
           mkdir -p ~/ci-tools && cd ~/ci-tools
-          curl -fsSL --retry 5 --retry-all-errors \
-            "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" \
-            | tar -xz zellij
-          sudo apt-get update -o Acquire::Retries=5
-          apt-get download -o Acquire::Retries=5 inotify-tools libinotifytools0
+          fetch() { curl -fsSL --connect-timeout 10 --max-time 120 --retry 5 --retry-all-errors "$@"; }
+          fetch "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" | tar -xz zellij
+          # Straight from the archive's pool, not through apt: no index to update, and a second mirror if the
+          # runner's own doesn't answer.
+          for deb in libinotifytools0_3.22.6.0-4_amd64.deb inotify-tools_3.22.6.0-4_amd64.deb; do
+            fetch -o "$deb" "http://azure.archive.ubuntu.com/ubuntu/pool/universe/i/inotify-tools/$deb" \
+              || fetch -o "$deb" "http://archive.ubuntu.com/ubuntu/pool/universe/i/inotify-tools/$deb"
+          done
 
       - name: Install tmux, zellij and inotify-tools
         run: |
