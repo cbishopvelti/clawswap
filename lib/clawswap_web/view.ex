@@ -92,6 +92,9 @@ defmodule ClawswapWeb.View do
       webhook: webhook(state),
       webhook_class: if(state.webhook == "connected", do: "ok", else: "off"),
       busy: running,
+      # When the last switch or pull was asked for (nil before one): the page keeps a click's spinner
+      # until this changes, so it knows the watcher has heard of it.
+      run_at: run && Map.get(run, :at),
       # The switch or pull that finished last (its branch, and when), so a page in an app's iframe can tell
       # the app to reload when it changes; nil until one has.
       switched: switched(run),

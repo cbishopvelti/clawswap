@@ -28,6 +28,10 @@ defmodule ClawswapWeb.StreamDeck do
   alias Clawswap.{DeckOwner, Project, Projects, Watcher}
   alias ClawswapWeb.View
 
+  # The project whose page this deck is on (nil on the projects page): a key for it shows its spinner there
+  # at once, as a click does (`ClawswapWeb.BranchesPage`).
+  prop(:page_project, :string, default: nil)
+
   @vendor 0x0FD9
   # Product id => {name, number of keys, key size in pixels}.
   @models %{
@@ -46,7 +50,7 @@ defmodule ClawswapWeb.StreamDeck do
   # The tab that has the deck says so this often (Clawswap.DeckOwner forgets a claim after a minute).
   @beat_ms 20_000
 
-  def init(_props, component, server) do
+  def init(props, component, server) do
     deck = View.deck()
 
     component =
@@ -63,7 +67,8 @@ defmodule ClawswapWeb.StreamDeck do
         holds: %{},
         presses: 0,
         beat: 0,
-        message: nil
+        message: nil,
+        page_project: props.page_project
       )
       |> put_action(:reconnect)
 
@@ -313,11 +318,18 @@ defmodule ClawswapWeb.StreamDeck do
 
     case key_command(component.state.keys, component.state.count, key) do
       :next_project -> put_command(component, :next_project)
-      :pull -> put_command(component, :pull, project: project)
+      :pull -> component |> show_switching(project, nil) |> put_command(:pull, project: project)
       {:walk, name} -> put_command(component, :walk, name: name, project: project)
-      {:switch, branch} -> put_command(component, :switch, branch: branch, project: project)
+      {:switch, branch} -> component |> show_switching(project, branch) |> put_command(:switch, branch: branch, project: project)
       nil -> component
     end
+  end
+
+  # On the page of the project the key switches, the page shows it running before the server hears of it.
+  defp show_switching(component, project, branch) do
+    if project != nil and project == component.state.page_project,
+      do: put_action(component, name: :switching, target: "page", params: %{branch: branch}),
+      else: component
   end
 
   defp release(component) do

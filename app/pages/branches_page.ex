@@ -5,6 +5,10 @@ defmodule ClawswapWeb.BranchesPage do
   broadcasts each change, so the page follows a switch step by step. Switching, pulling or running a
   walkthrough here selects the project (`Clawswap.Projects.select/1`), so keys that follow the selected
   project show this one.
+
+  A click shows the switch (or pull) running at once, with a spinner, before the server has heard of it
+  (`switching/2`, on the client); the watcher's broadcasts take over once one shows it running. A press
+  of a Stream Deck key driven from this page does the same.
   """
 
   use Hologram.Page
@@ -23,10 +27,11 @@ defmodule ClawswapWeb.BranchesPage do
 
     case Project.whereis(id, :watcher) do
       nil ->
-        put_state(component, id: id, view: nil, message: nil)
+        put_state(component, id: id, view: nil, server: nil, pending: nil, message: nil)
 
       watcher ->
-        {put_state(component, id: id, view: View.page(Watcher.state(watcher)), message: nil), put_subscription(server, {:clawswap, id})}
+        view = View.page(Watcher.state(watcher))
+        {put_state(component, id: id, view: view, server: view, pending: nil, message: nil), put_subscription(server, {:clawswap, id})}
     end
   end
 
@@ -46,9 +51,9 @@ defmodule ClawswapWeb.BranchesPage do
         <h1>{@view.project}</h1>
         {%if @view.on}<span class="on" title="The branch checked out now">On <strong>{@view.on}</strong></span>{/if}
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
-        <button class="pull {@view.pull_class}" $click={command: :pull, params: %{project: @id}}>{@view.pull_label}</button>
+        <button class="pull {@view.pull_class}" $click={action: :pull}>{%if @view.pull_class == "running"}<span class="spinner"></span>{/if}{@view.pull_label}</button>
         <a class="settings-link" href={"/p/#{@id}/settings"} target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
-        <StreamDeck cid="stream_deck" />
+        <StreamDeck cid="stream_deck" page_project={@id} />
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
       {%if @view.error}<p class="message">{@view.error}</p>{/if}
@@ -64,11 +69,11 @@ defmodule ClawswapWeb.BranchesPage do
       <ul>
         {%for b <- @view.branches}
           <li class={b.row_class}>
-            <button $click={command: :switch, params: %{branch: b.branch, project: @id}}>
+            <button $click={action: :switch, params: %{branch: b.branch}}>
               <span class="mark {b.mark_class}" title={b.mark_title}>{b.mark}</span>
               {%if b.number}<span class="number">{b.number}</span>{/if}
               <span class="title">{b.title}</span>
-              <span class="status">{b.status}</span>
+              <span class="status">{%if b.class == "running"}<span class="spinner"></span>{/if}{b.status}</span>
             </button>
           </li>
         {/for}
@@ -82,13 +87,58 @@ defmodule ClawswapWeb.BranchesPage do
   end
 
   def action(:state_changed, params, component) do
-    switched = params.view.switched
-    if switched && switched != component.state.view.switched, do: tell_parent(switched)
+    view = params.view
+    switched = view.switched
+    if switched && switched != component.state.server.switched, do: tell_parent(switched)
 
-    put_state(component, :view, params.view)
+    follow(component, view)
   end
 
-  def action(:show_message, params, component), do: put_state(component, :message, params.message)
+  # The answer to a click: a refusal ends its spinner (the message says why); otherwise the watcher's
+  # broadcasts do, once one shows it.
+  def action(:show_message, params, component) do
+    component = put_state(component, :message, params.message)
+
+    cond do
+      component.state.pending == nil -> component
+      params.message -> put_state(component, pending: nil, view: component.state.server)
+      true -> follow(component, component.state.server)
+    end
+  end
+
+  # A click: show it running now, then ask the server.
+  def action(:switch, params, component) do
+    :switching
+    |> action(%{branch: params.branch}, component)
+    |> put_command(:switch, branch: params.branch, project: component.state.id)
+  end
+
+  def action(:pull, _params, component) do
+    :switching
+    |> action(%{branch: nil}, component)
+    |> put_command(:pull, project: component.state.id)
+  end
+
+  # What a switch to `branch` (or a pull, with branch nil) shows until the watcher says where it's got to.
+  # A Stream Deck key pressed on this page sends this too. Nothing changes while one is running: the
+  # watcher will refuse it.
+  def action(:switching, params, component) do
+    view = component.state.view
+
+    if view.busy,
+      do: component,
+      else: put_state(component, view: switching(view, params), pending: Map.put(params, :since, component.state.server.run_at), message: nil)
+  end
+
+  # Shows the watcher's view, or a click's spinner over it while the watcher hasn't acted on the click
+  # yet (its last switch is the one it had then): a broadcast sent before it heard of it mustn't hide it.
+  defp follow(component, server) do
+    pending = component.state.pending
+
+    if pending && server.run_at == pending.since && !server.busy,
+      do: put_state(component, server: server, view: switching(server, pending)),
+      else: put_state(component, server: server, view: server, pending: nil)
+  end
 
   def command(:switch, params, server), do: answer(server, Watcher.switch_to(watcher(params), params.branch))
   def command(:pull, params, server), do: answer(server, Watcher.pull(watcher(params)))
@@ -108,6 +158,15 @@ defmodule ClawswapWeb.BranchesPage do
     # `:parent`, the global, rather than JS.get(:window, :parent): boxing another origin's window fails.
     JS.call(:parent, :postMessage, [%{clawswap: "switched", branch: switched.branch}, "*"])
   end
+
+  defp switching(view, %{branch: nil}), do: %{view | busy: true, pull_class: "running", pull_label: "Pulling: ..."}
+
+  defp switching(view, %{branch: branch}) do
+    %{view | busy: true, branches: Enum.map(view.branches, &if(&1.branch == branch, do: switching_row(&1, view.current), else: &1))}
+  end
+
+  defp switching_row(row, current),
+    do: %{row | class: "running", row_class: if(row.branch == current, do: "running checkout", else: "running"), status: "Switching"}
 
   defp answer(server, {:ok, _state}), do: put_action(server, :show_message, message: nil)
   defp answer(server, {:error, _status, message}), do: put_action(server, :show_message, message: message)
