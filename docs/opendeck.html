@@ -36,7 +36,7 @@
   <main>
 <h1>Stream Deck keys</h1>
 <p class="lede">Branch and pull keys on a Stream Deck, through the <a href="https://github.com/nekename/OpenDeck">OpenDeck</a>
-plugin or <a href="#webhid">straight from the watcher's page</a> in Chrome.</p>
+plugin or <a href="#webhid">straight from clawswap's pages</a> in Chrome.</p>
 
 <h2 id="install">OpenDeck: install the plugin</h2>
 <pre><code>&lt;path-to-clawswap&gt;/opendeck/install.sh</code></pre>
@@ -48,9 +48,10 @@ copy, since OpenDeck doesn't reliably follow a symlink there, so run it again af
     <code>bin/plugin</code>, which runs <code>plugin.exs</code> with <code>elixir</code>. A version manager that only sets
     Elixir up in your shell won't do.</li>
   <li>Quit OpenDeck fully (tray &gt; Quit) and start it again; it only starts plugins when it launches.</li>
-  <li>Drag <strong>clawswap branch</strong> (category clawswap) onto keys, and <strong>clawswap pull</strong> and <strong>clawswap walkthrough</strong> onto one each.</li>
+  <li>Drag <strong>clawswap branch</strong> (category clawswap) onto keys, and <strong>clawswap pull</strong> and <strong>clawswap walkthrough</strong> onto one each. With several projects, add a <strong>clawswap project</strong> key too (<a href="#projects">Several projects</a>).</li>
 </ol>
-<p>The keys need the project's watcher running (<code>clawswap up</code>).</p>
+<p>The keys need the daemon running with your project in it, which <code>clawswap up</code> sees to. With more than one
+project in it, see <a href="#projects">Several projects</a> for which one a key serves.</p>
 
 <h2 id="branch">clawswap branch</h2>
 <p>Each key either shows <strong>the next branch</strong> or <strong>a branch you name</strong> (set in the key's settings).</p>
@@ -74,12 +75,12 @@ copy, since OpenDeck doesn't reliably follow a symlink there, so run it again af
 tinted green), ◌ a draft PR (grey), ✓ merged into the base (purple, tinted purple), ○ neither.</p>
 
 <h2 id="claude">Open the branch's Claude Code thread</h2>
-<p>Hold a branch key for half a second and the watcher opens, in your browser, the Claude Code thread that made that
+<p>Hold a branch key for half a second and clawswap opens, in your browser, the Claude Code thread that made that
 branch: the project thread its PR's description links to, or else the session named in the
 <code>Claude-Session:</code> trailer of its newest commit. On a pull key it's the checkout's branch. The key shows a tick,
 or an alert when the branch has neither (the base branch, say). It's the same on a <a href="#webhid">deck the page
 drives</a>.</p>
-<p>The watcher opens it with <code>xdg-open</code> (<code>open</code> on a Mac), on the machine it runs on.</p>
+<p>The daemon opens it with <code>xdg-open</code> (<code>open</code> on a Mac), on the machine it runs on.</p>
 
 <h2 id="pull">clawswap pull</h2>
 <p>Pulls the branch the checkout is on and restarts the servers if anything came in, like
@@ -137,7 +138,6 @@ page opens it again when it loads and when the deck is plugged back in.</p>
   <li><strong>Not in the embed.</strong> An iframe needs <code>allow="hid"</code> for WebHID, so press Connect on the page
     itself; the narrow <a href="page.html#embed">embed menu</a> leaves the button out.</li>
 </ul>
-<div class="note"><p>This is new and hasn't been tried on a real deck yet. If it misbehaves, OpenDeck still works.</p></div>
 <p>It's Elixir too: <code>app/components/stream_deck.ex</code> calls <code>navigator.hid</code> and a canvas through
 Hologram's JavaScript interop.</p>
 <div class="pager"><span><a href="api.html">← API</a></span><span><a href="walkthroughs.html">Walkthroughs →</a></span></div>

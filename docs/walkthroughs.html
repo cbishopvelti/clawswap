@@ -83,6 +83,9 @@ stay between runs) and a debugging port (27392, or <code>CLAWSWAP_BROWSER_PORT</
 open a debugging port on your everyday profile, so it can't be your usual window.
 <code>CLAWSWAP_CHROME_DEBUGGER</code> points at another Chrome started with <code>--remote-debugging-port</code>
 (<code>localhost:9222</code>, say), or <code>off</code> ignores the dev Chrome.</p>
+<p>With <a href="usage.html#several">several projects</a> in the daemon there's still one dev Chrome, on the one port,
+and every project's walkthroughs play in its tab. Each project runs its own walkthroughs one at a time, but two projects' aren't
+queued behind each other, so let one finish before playing another project's.</p>
 <p>A failure names the line, the caption it was showing and what it couldn't find, and saves a screenshot of that
 moment in the temp folder (its path is in the message).</p>
 
@@ -179,7 +182,11 @@ zellij, and are left out of <code>mix test</code>:</p>
 <pre><code>mix test.integration                                      # headless
 CLAWSWAP_HEADLESS=0 CLAWSWAP_SLOW=800 mix test.integration  # watch them
 tmux -L clawswap-tests attach                             # and the panes, in another terminal</code></pre>
-<p>They use ports 27390, 27391 and 27393, so stop your own session first. For a suite of your own project's, see <a href="testing.html">Browser tests</a>.</p>
+<p>They use ports 27390, 27391 and 27393, and stop whatever listens on them first, which includes a daemon of your
+own on 27390 (and so every project in it): stop your own sessions before running them. For a suite of your own
+project's, see <a href="testing.html">Browser tests</a>.</p>
+<p>CI (<code>.github/workflows/ci.yml</code>) runs them headless on every pull request and push to <code>main</code>,
+after <code>mix format --check-formatted</code>, <code>mix compile --warnings-as-errors</code> and <code>mix test</code>.</p>
 <div class="pager"><span><a href="opendeck.html">← Stream Deck</a></span><span><a href="testing.html">Browser tests →</a></span></div>
 <footer>clawswap · <a href="https://github.com/cbishopvelti/clawswap">github.com/cbishopvelti/clawswap</a> · <a href="https://github.com/cbishopvelti/clawswap/tree/main/docs">edit these pages</a></footer>
   </main>

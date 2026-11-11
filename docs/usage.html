@@ -45,7 +45,7 @@
   <tr><th>Command</th><th>What it does</th></tr>
   <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config and webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
   <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
-  <tr><td><code>clawswap up</code></td><td>Opens the zellij or tmux session, or re-attaches to it.</td></tr>
+  <tr><td><code>clawswap up</code></td><td>Starts the daemon if it isn't running, adds the project to it, and opens the zellij or tmux session, or re-attaches to it.</td></tr>
   <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
   <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane. The branch can be its full name, its PR number (<code>switch 23</code>), its short name or any part of its name that only one listed branch has.</td></tr>
   <tr><td><code>clawswap pull</code></td><td>Pulls the current branch the same way. Does nothing if it's up to date.</td></tr>
@@ -74,7 +74,9 @@ clawswap completion zsh &gt; ~/.zfunc/_clawswap     # a folder on your $fpath, b
 clawswap completion fish &gt; ~/.config/fish/completions/clawswap.fish</code></pre>
 
 <h2 id="up">clawswap up</h2>
-<p>When no session is running, <code>up</code>:</p>
+<p><code>up</code> first makes sure the daemon is running on the config's <code>port</code> (starting it in the background
+if nothing answers there) and adds the project to it, so its page is up while the session starts
+(<a href="#several">Several projects</a>). Then, when no session is running, it:</p>
 <ol class="steps">
   <li>Runs the config's <code>prepare</code> steps (starting containers, say), waiting for any <code>wait_for_port</code>.</li>
   <li>Runs the steps for whatever changed since they last ran, all of them the first time, so the servers don't
@@ -102,7 +104,7 @@ with <code>respawn-pane</code>, so it keeps its place and size.</p>
 <p>The default layout stacks the servers on the left and puts the watcher and your other panes on the right:</p>
 <ul>
   <li>a pane for each server, named as in <code>servers</code>;</li>
-  <li>one called <code>clawswap</code>, the watcher, where switch output shows;</li>
+  <li>one called <code>clawswap</code>, which runs <code>clawswap watch</code>: it keeps the project in the daemon and shows the project's log, where switch output shows;</li>
   <li>one for each of the config's other <code>panes</code>; a pane with no command is an empty shell, at the repo root unless it has a <code>cwd</code> (<a href="configuration.html#keys"><code>shell: []</code></a>).</li>
 </ul>
 <p>Ctrl+Q leaves zellij (in tmux, Ctrl+B then D); <code>clawswap up</code> again comes back.</p>
@@ -136,7 +138,7 @@ and each project comes into it with a watcher of its own.</p>
   <li><strong>A config change</strong> (a switch that changes it, or a save on the settings page) starts that one
     project again on the new config; the others carry on.</li>
   <li><strong>When a session ends</strong>, its project leaves the daemon about 30 seconds later. The daemon stops by
-    itself ten minutes after its last project has gone. If the daemon stops while a session runs, the session's
+    itself an hour after its last project has gone. If the daemon stops while a session runs, the session's
     <code>clawswap</code> pane starts it again and carries on.</li>
 </ul>
 <p>A project with a <code>port</code> of its own gets a daemon of its own on that port, apart from the others: give

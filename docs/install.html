@@ -41,7 +41,7 @@
 <table>
   <tr><th>What</th><th>Version</th><th>Why</th></tr>
   <tr><td>Elixir</td><td>1.19 or newer</td><td>Hologram, the page's framework, needs it.</td></tr>
-  <tr><td>Erlang/OTP</td><td>26 or newer</td><td>The watcher is an OTP app.</td></tr>
+  <tr><td>Erlang/OTP</td><td>26 or newer</td><td>The daemon is an OTP app. <code>.tool-versions</code> pins OTP 28, which <code>mise install</code> or <code>asdf install</code> gets you (<a href="#own-elixir">its own Elixir</a>).</td></tr>
   <tr><td><a href="https://zellij.dev">zellij</a></td><td>0.44 or newer</td><td>It added <code>--pane-id</code> to its CLI, which switches use.
     Ubuntu's package may be older; take the binary from <a href="https://github.com/zellij-org/zellij/releases">the releases</a>
     or <code>cargo install --locked zellij</code>.</td></tr>
