@@ -24,7 +24,11 @@ for multiplexer <- [:zellij, :tmux] do
       visit url(:web)
       see "Your app goes here"
       click "Branches"
-      in_frame "iframe[title=clawswap]", fn -> click css("li button", text: "new-heading") end
+      in_frame "iframe[title=clawswap]", fn ->
+        click css("li button", text: "new-heading")
+        # A spinner straight away, before clawswap has fetched or started a step.
+        see css("li.running .spinner")
+      end
 
       say "clawswap stops the dev server, checks out the branch and starts it again"
       Integration.wait_for_branch("claude/new-heading")

@@ -78,6 +78,33 @@ defmodule Clawswap.WatcherTest do
     assert Watcher.state(w).switch.phase == "failed"
   end
 
+  test "shows a switch as running as soon as it's asked for, before the refresh it waits for", %{start: start} do
+    me = self()
+    w = start.(on_change: &send(me, {:changed, &1.switch}))
+    Watcher.refresh(w)
+
+    flush = fn flush ->
+      receive do
+        {:changed, _} -> flush.(flush)
+      after
+        0 -> :ok
+      end
+    end
+
+    flush.(flush)
+
+    assert {:ok, _} = Watcher.switch_to(w, "claude/new-thing")
+    # The first thing it broadcasts is the queued switch, before the fetch; then the real one.
+    assert_received {:changed, %{phase: "running", step: "Fetching", queued: true, target: "claude/new-thing"}}
+    TestRepo.until(fn -> finished?(w) end)
+    assert Watcher.state(w).switch.phase == "done"
+    refute Map.has_key?(Watcher.state(w).switch, :queued)
+
+    # A branch that isn't listed puts back the switch it showed over.
+    assert {:error, 404, _} = Watcher.switch_to(w, "nope")
+    assert %{phase: "done", target: "claude/new-thing"} = Watcher.state(w).switch
+  end
+
   test "waits for the servers' ports before a switch is done, and fails one that never opens", %{project: project, start: start} do
     me = self()
 

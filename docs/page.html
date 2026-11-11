@@ -78,7 +78,9 @@ in Chrome on this machine. The ones the branch added come first, outlined, and t
 <ul class="marks">
   <li><span class="bar current"></span><strong>Current</strong>: the checkout's branch (<em>Uncommitted</em> if tracked files have changes).</li>
   <li><span class="bar behind"></span><strong>New commits</strong>: the checkout's branch has commits on GitHub it doesn't have. Pull to get them.</li>
-  <li><span class="bar running"></span><strong>A step's label</strong>: a switch to this branch is running, on that step.</li>
+  <li><span class="bar running"></span><strong>A spinner and a step's label</strong>: a switch to this branch is running, on that step.
+    The spinner shows the moment you click the row (or press its Stream Deck key with this page open), on <em>Switching</em>,
+    then <em>Fetching</em> while clawswap looks at origin, then each step. The Pull button spins the same way.</li>
   <li><span class="bar failed"></span><strong>Failed</strong>: the last switch to this branch failed; the error shows above the list.</li>
 </ul>
 

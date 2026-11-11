@@ -179,3 +179,10 @@ body.panel-only { background: var(--card); }
 .panel-only aside.debug header { flex-wrap: wrap; margin: 0 0 8px; }
 .panel-only aside.debug h1 { flex: 1; font-size: 16px; font-weight: 600; color: var(--fg); }
 .panel-only aside.debug button { white-space: nowrap; }
+
+/* A switch or pull running: shows as soon as it's clicked or its key pressed. */
+.spinner { display: inline-block; width: 0.8em; height: 0.8em; margin-right: 6px; vertical-align: -0.1em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
