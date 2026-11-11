@@ -88,10 +88,10 @@ defmodule Clawswap.Integration do
 
   @doc """
   Runs `clawswap up` for the project in `multiplexer` (:zellij or :tmux), inside a pane of the tests' tmux
-  server (zellij needs a terminal), and waits until the watcher and the app answer. Attach to watch the
-  panes: `tmux -L clawswap-tests attach`.
+  server (zellij needs a terminal), and waits until the watcher (on `branch`, main unless the test checked
+  out another) and the app answer. Attach to watch the panes: `tmux -L clawswap-tests attach`.
   """
-  def up!(project, multiplexer) do
+  def up!(project, multiplexer, branch \\ "main") do
     free_ports()
     # The API paths the tests use are this project's on the daemon (/p/<id>).
     :persistent_term.put({__MODULE__, :id}, project.id)
@@ -118,7 +118,7 @@ defmodule Clawswap.Integration do
     IO.puts("[integration] #{multiplexer} session #{project.session}: tmux -L #{@socket} attach")
 
     try do
-      wait_for(fn -> match?({:ok, %{"current" => %{"branch" => "main"}}}, state()) end, 180_000, "the watcher on 27390")
+      wait_for(fn -> match?({:ok, %{"current" => %{"branch" => ^branch}}}, state()) end, 180_000, "the watcher on 27390")
       wait_for(fn -> http_ok?("http://localhost:27391/") end, 120_000, "the app on 27391")
     rescue
       error ->
@@ -160,6 +160,16 @@ defmodule Clawswap.Integration do
     System.cmd("tmux", ["-L", @socket, "kill-server"], stderr_to_stdout: true)
     free_ports()
     File.rm_rf!(project.dir)
+    :ok
+  end
+
+  @doc """
+  Stops the project's sessions and the daemon (as a daemon left with no projects stops itself), keeping
+  the checkout, so a test can bring it `up!` again.
+  """
+  def stop!(_project) do
+    System.cmd("tmux", ["-L", @socket, "kill-server"], stderr_to_stdout: true)
+    free_ports()
     :ok
   end
 

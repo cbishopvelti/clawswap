@@ -8,11 +8,13 @@ defmodule Clawswap.Integration.StreamDeckTest do
   @moduletag :integration
   @moduletag timeout: 300_000
 
-  # A Stream Deck MK.2 (15 keys) that records the images sent to it and can press its keys.
+  # A Stream Deck MK.2 (15 keys) that records the images sent to it and can press its keys. Once chosen,
+  # Chrome lets the page have it again without asking (getDevices), as a real one.
   @fake_deck """
   (() => {
     const reports = [];
     const device = new EventTarget();
+    let granted = false;
     Object.assign(device, {
       vendorId: 0x0fd9, productId: 0x0080, productName: "Stream Deck MK.2", opened: false, collections: [],
       open: async () => { device.opened = true; },
@@ -27,8 +29,8 @@ defmodule Clawswap.Integration.StreamDeckTest do
     };
     window.fakeDeck = {reports, press: (key) => { report([key]); report([]); }};
     const hid = new EventTarget();
-    hid.getDevices = async () => [];
-    hid.requestDevice = async () => [device];
+    hid.getDevices = async () => (granted ? [device] : []);
+    hid.requestDevice = async () => { granted = true; return [device]; };
     Object.defineProperty(Navigator.prototype, "hid", {get: () => hid, configurable: true});
   })();
   """
@@ -38,23 +40,14 @@ defmodule Clawswap.Integration.StreamDeckTest do
     project = Integration.up!(Integration.project!(), :tmux)
     on_exit(fn -> Integration.down!(project) end)
     Integration.browser!(project)
-    :ok
+    %{project: project}
   end
 
   test "Connect Stream Deck draws the keys, and a key press switches" do
-    before_load(@fake_deck)
-
-    say "Connect a (stand-in) Stream Deck from the page"
-    visit url(:clawswap)
-    click button("Connect Stream Deck")
-    see css(".deck-on", text: "Stream Deck MK.2")
+    connect_deck()
 
     say "Each key gets an image: the branches, then Pull on the last one"
-
-    keys =
-      wait_until(fn -> (k = js("return [...new Set(fakeDeck.reports.filter(r => r.last).map(r => r.key))].sort((a, b) => a - b)")) |> length() == 15 && k end)
-
-    assert keys == Enum.to_list(0..14)
+    assert keys_drawn() == Enum.to_list(0..14)
 
     say "Pressing claude/new-heading's key switches to it"
     {:ok, state} = Integration.state()
@@ -62,5 +55,48 @@ defmodule Clawswap.Integration.StreamDeckTest do
     js("fakeDeck.press(arguments[0])", [key])
     Integration.wait_for_branch("claude/new-heading")
     see css("li.current", text: "new-heading"), timeout: 20_000
+  end
+
+  test "When clawswap up starts the daemon again, the deck catches up at once", %{project: project} do
+    connect_deck()
+    keys_drawn()
+    sent = js("return fakeDeck.reports.length")
+
+    say "The daemon stops, and the checkout moves to another branch meanwhile"
+    Integration.stop!(project)
+    {_, 0} = System.cmd("git", ["checkout", "-q", "claude/new-heading"], cd: project.work, stderr_to_stdout: true)
+
+    say "clawswap up starts it again: the open page's deck shows the new branch without waiting for its next beat"
+    Integration.up!(project, :tmux, "claude/new-heading")
+    # The page reconnects within Hologram's reconnect delay (5 s at most); the deck's own beat (20 s) is
+    # what it used to wait for.
+    wait_until(fn -> js("return fakeDeck.reports.length") > sent end, timeout: 10_000, message: "The deck wasn't redrawn")
+  end
+
+  # Connects the stand-in deck from the project's page.
+  defp connect_deck do
+    before_load(@fake_deck)
+
+    say "Connect a (stand-in) Stream Deck from the page"
+    visit url(:clawswap)
+    # A click before the page's client is up does nothing, so wait for it (its link to the daemon is up),
+    # and click again if the first was lost anyway.
+    wait_until(fn -> js("return window.Hologram?.['sseConnected?'] === true") end, message: "The page didn't connect to the daemon")
+
+    click_connect(3)
+  end
+
+  defp click_connect(tries) do
+    if js("return !document.querySelector('.deck-on')"), do: click(button("Connect Stream Deck"))
+    see css(".deck-on", text: "Stream Deck MK.2"), timeout: 8_000
+  rescue
+    error -> if tries > 1, do: click_connect(tries - 1), else: reraise(error, __STACKTRACE__)
+  end
+
+  # Waits until every key has had an image, and gives their numbers.
+  defp keys_drawn do
+    wait_until(fn ->
+      (k = js("return [...new Set(fakeDeck.reports.filter(r => r.last).map(r => r.key))].sort((a, b) => a - b)")) |> length() == 15 && k
+    end)
   end
 end

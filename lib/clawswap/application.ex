@@ -28,7 +28,10 @@ defmodule Clawswap.Application do
   """
   def start_daemon(port, opts \\ []) do
     endpoint = Application.get_env(:clawswap, ClawswapWeb.Endpoint, [])
-    Application.put_env(:clawswap, ClawswapWeb.Endpoint, Keyword.merge(endpoint, http: [ip: {127, 0, 0, 1}, port: port], server: true))
+    # A stopping daemon closes the pages' event streams at once rather than after Bandit's 15 seconds: a
+    # page only reconnects (to the daemon `clawswap up` starts next) once its stream has closed.
+    http = [ip: {127, 0, 0, 1}, port: port, thousand_island_options: [shutdown_timeout: 500]]
+    Application.put_env(:clawswap, ClawswapWeb.Endpoint, Keyword.merge(endpoint, http: http, server: true))
     :persistent_term.put({__MODULE__, :port}, port)
 
     projects =

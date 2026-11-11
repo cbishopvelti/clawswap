@@ -14,6 +14,9 @@ defmodule ClawswapWeb.StreamDeck do
   pressed in, which says so again every 20 seconds while it has it. The others let it go and offer "Use
   here" to take it back, so one key press never switches twice.
 
+  When the page loses the daemon (it stopped, and `clawswap up` starts it again), the page reconnects by
+  itself, and the deck then catches up with what changed meanwhile at once, rather than at the next change.
+
   It's all browser APIs (navigator.hid, OffscreenCanvas) called through Hologram's JS interop, so this
   runs on the client. The key images are the OpenDeck plugin's SVGs (`ClawswapWeb.View.keys/2`), turned
   into the JPEG the deck wants on a canvas.
@@ -49,6 +52,8 @@ defmodule ClawswapWeb.StreamDeck do
   @header_bytes 7
   # The tab that has the deck says so this often (Clawswap.DeckOwner forgets a claim after a minute).
   @beat_ms 20_000
+  # How often the page looks at whether its link to the daemon is up (on the client: no requests).
+  @link_ms 500
 
   def init(props, component, server) do
     deck = View.deck()
@@ -103,6 +108,7 @@ defmodule ClawswapWeb.StreamDeck do
   # tab has it.
   def action(:reconnect, _params, component) do
     component = put_state(component, :tab, tab_id())
+    watch_link()
 
     if supported?() and component.state.model == nil and not elsewhere?(component) do
       listen_for_plugging()
@@ -150,6 +156,22 @@ defmodule ClawswapWeb.StreamDeck do
       elsewhere?(component) -> release(component)
       true -> draw(component)
     end
+  end
+
+  # The page's link to the daemon came (back) up: what changed while it was down never reached this page,
+  # so it asks for what the deck shows now (:synced), and says again that it has the deck.
+  def action(:online, _params, component) do
+    put_command(component, :sync, tab: if(component.state.model != nil, do: component.state.tab))
+  end
+
+  # What the deck shows now, after the link came back: drawn as any change is, and a deck no tab has
+  # (the daemon started again, so it forgot) is opened here, as on load.
+  def action(:synced, params, component) do
+    component = action(:draw, params, component)
+
+    if component.state.model == nil and not elsewhere?(component),
+      do: action(:reconnect, %{}, component),
+      else: component
   end
 
   # While this tab has the deck, it says so now and then, so a closed tab's claim runs out.
@@ -236,6 +258,13 @@ defmodule ClawswapWeb.StreamDeck do
   def command(:claim, params, server) do
     DeckOwner.claim(params.tab)
     server
+  end
+
+  # The page is back in touch: what the deck shows now. A tab that had the deck keeps it if no other tab
+  # took it meanwhile (a daemon that started again knows of none).
+  def command(:sync, params, server) do
+    if params.tab != nil and DeckOwner.status().tab == nil, do: DeckOwner.claim(params.tab)
+    put_action(server, :synced, deck: View.deck())
   end
 
   defp watcher(params), do: Project.via(params.project, :watcher)
@@ -378,6 +407,26 @@ defmodule ClawswapWeb.StreamDeck do
       JS.set(:window, :clawswapPlugging, true)
       JS.call(hid(), :addEventListener, ["connect", fn _event -> dispatch("reconnect", %{}) end])
       JS.call(hid(), :addEventListener, ["disconnect", fn _event -> dispatch("gone", %{}) end])
+    end
+  end
+
+  # Broadcasts sent while the page's link to the daemon (Hologram's server-sent events) is down never reach
+  # it, as when `clawswap up` starts the daemon again under an open page. Hologram reconnects by itself but
+  # says nothing, so the page looks at the link now and then, and when it's back up (the first time too)
+  # the deck catches up (:online).
+  defp watch_link do
+    if JS.get(:window, :clawswapLinkWatch) != true do
+      JS.set(:window, :clawswapLinkWatch, true)
+      JS.call(:window, :setInterval, [fn -> check_link() end, @link_ms])
+    end
+  end
+
+  defp check_link do
+    up = JS.get(:Hologram, :sseConnected?) == true
+
+    if up != (JS.get(:window, :clawswapLinkUp) == true) do
+      JS.set(:window, :clawswapLinkUp, up)
+      if up, do: dispatch("online", %{})
     end
   end
 
