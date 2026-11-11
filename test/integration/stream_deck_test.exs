@@ -27,7 +27,7 @@ defmodule Clawswap.Integration.StreamDeckTest do
       keys.forEach((k) => (bytes[3 + k] = 1));
       device.dispatchEvent(Object.assign(new Event("inputreport"), {reportId: 1, data: new DataView(bytes.buffer), device}));
     };
-    window.fakeDeck = {reports, press: (key) => { report([key]); report([]); }};
+    window.fakeDeck = {reports, press: (key) => { report([key]); report([]); }, down: (key) => report([key]), up: () => report([])};
     const hid = new EventTarget();
     hid.getDevices = async () => (granted ? [device] : []);
     hid.requestDevice = async () => { granted = true; return [device]; };
@@ -55,6 +55,25 @@ defmodule Clawswap.Integration.StreamDeckTest do
     js("fakeDeck.press(arguments[0])", [key])
     Integration.wait_for_branch("claude/new-heading")
     see css("li.current", text: "new-heading"), timeout: 20_000
+  end
+
+  test "A key shows it's pressed at once, drawn by the page, then what the server says again" do
+    connect_deck()
+    keys_drawn()
+    {:ok, state} = Integration.state()
+    key = Enum.find_index(state["branches"], &(&1["branch"] == "claude/new-heading"))
+    images = fn -> js("return fakeDeck.reports.filter(r => r.last && r.key === arguments[0]).length", [key]) end
+    before = images.()
+
+    say "Pressing a key outlines it, and holding it on says it's opening the branch's Claude Code thread"
+    js("fakeDeck.down(arguments[0])", [key])
+    wait_until(fn -> images.() >= before + 2 end, timeout: 3_000, message: "The held key wasn't redrawn twice")
+    js("fakeDeck.up()")
+
+    say "There's no thread for this branch: the page says so, and the key shows what it did before"
+    see css(".deck-message", text: "No Claude Code thread")
+    # The server's image for the key never changed, so only the mark running out redraws it.
+    wait_until(fn -> images.() >= before + 3 end, timeout: 8_000, message: "The key wasn't put back")
   end
 
   test "When clawswap up starts the daemon again, the deck catches up at once", %{project: project} do

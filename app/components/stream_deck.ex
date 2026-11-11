@@ -50,6 +50,12 @@ defmodule ClawswapWeb.StreamDeck do
   # Holding a key this long opens its branch's Claude Code thread instead of switching.
   @hold_ms 500
   @header_bytes 7
+  # A pressed key shows it at once, drawn here, until the server's image for it changes (the switch it
+  # started shows), or for this long when it doesn't (a switch refused, a Claude thread opened).
+  @mark_ms 3_000
+  # What a pressed key shows meanwhile: its bar and status line, as the server draws them (Clawswap.Deck).
+  @switching "#e3b341"
+  @current "#3fb950"
   # The tab that has the deck says so this often (Clawswap.DeckOwner forgets a claim after a minute).
   @beat_ms 20_000
   # How often the page looks at whether its link to the daemon is up (on the client: no requests).
@@ -70,6 +76,8 @@ defmodule ClawswapWeb.StreamDeck do
         sent: %{},
         pressed: [],
         holds: %{},
+        # Keys showing a press (mark/3): key => {press, the server's image under it}.
+        marks: %{},
         presses: 0,
         beat: 0,
         message: nil,
@@ -185,15 +193,15 @@ defmodule ClawswapWeb.StreamDeck do
     end
   end
 
-  # An input report: which keys are down now, 1 or 0 each. A key does its thing when it's let go, unless
+  # An input report: the keys down now (`down`, their numbers). A key does its thing when it's let go, unless
   # it was held long enough to open its branch's Claude Code thread instead (:held, below).
   def action(:keys, params, component) do
     before = component.state.pressed
-    changed = fn now -> params.keys |> Enum.with_index() |> Enum.find_value(fn {down, key} -> down == now and Enum.at(before, key, 0) != now and key end) end
-    component = put_state(component, :pressed, params.keys)
+    component = put_state(component, :pressed, params.down)
 
     # A report says one change at a time (and a component chains one action or command), so one each.
-    case {changed.(1), changed.(0)} do
+    # The keys down are a short list (comparing every key's byte instead took tens of milliseconds here).
+    case {List.first(params.down -- before), List.first(before -- params.down)} do
       {nil, nil} ->
         component
 
@@ -202,6 +210,7 @@ defmodule ClawswapWeb.StreamDeck do
 
         component
         |> put_state(presses: press, holds: Map.put(component.state.holds, down, {press, params.at}))
+        |> mark(down, :pressed)
         |> put_action(name: :held, params: %{key: down, press: press}, delay: @hold_ms)
 
       {_, up} ->
@@ -230,10 +239,23 @@ defmodule ClawswapWeb.StreamDeck do
     end
   end
 
+  # A press's mark has had its time: the key shows what the server says again, if it hasn't already.
+  def action(:unmark, params, component) do
+    case component.state.marks[params.key] do
+      {press, _image} when press == params.press ->
+        component
+        |> put_state(marks: Map.delete(component.state.marks, params.key), sent: Map.delete(component.state.sent, params.key))
+        |> draw()
+
+      _ ->
+        component
+    end
+  end
+
   # A deck was unplugged; if it was ours, forget it.
   def action(:gone, _params, component) do
     if component.state.model != nil and not opened?(deck()),
-      do: put_state(component, model: nil, sent: %{}, pressed: []),
+      do: put_state(component, model: nil, sent: %{}, pressed: [], marks: %{}),
       else: component
   end
 
@@ -334,11 +356,11 @@ defmodule ClawswapWeb.StreamDeck do
     branch_room = component.state.count - branch_keys(keys)
 
     case key_command(keys, component.state.count, key) do
-      {:switch, branch} -> put_command(component, :claude, branch: branch, project: project)
+      {:switch, branch} -> component |> mark(key, {@current, "Opening thread"}) |> put_command(:claude, branch: branch, project: project)
       :next_project -> component
       nil when key < branch_room -> component
       # Pull and the walkthrough: the checkout's branch.
-      _ -> if project, do: put_command(component, :claude, branch: nil, project: project), else: component
+      _ -> if project, do: component |> mark(key, {@current, "Opening thread"}) |> put_command(:claude, branch: nil, project: project), else: component
     end
   end
 
@@ -346,11 +368,20 @@ defmodule ClawswapWeb.StreamDeck do
     project = component.state.deck.target
 
     case key_command(component.state.keys, component.state.count, key) do
-      :next_project -> put_command(component, :next_project)
-      :pull -> component |> show_switching(project, nil) |> put_command(:pull, project: project)
-      {:walk, name} -> put_command(component, :walk, name: name, project: project)
-      {:switch, branch} -> component |> show_switching(project, branch) |> put_command(:switch, branch: branch, project: project)
-      nil -> component
+      :next_project ->
+        put_command(component, :next_project)
+
+      :pull ->
+        component |> mark(key, {@switching, "Pulling"}) |> show_switching(project, nil) |> put_command(:pull, project: project)
+
+      {:walk, name} ->
+        component |> mark(key, {@switching, "Opening Chrome"}) |> put_command(:walk, name: name, project: project)
+
+      {:switch, branch} ->
+        component |> mark(key, {@switching, "Switching"}) |> show_switching(project, branch) |> put_command(:switch, branch: branch, project: project)
+
+      nil ->
+        component
     end
   end
 
@@ -361,11 +392,33 @@ defmodule ClawswapWeb.StreamDeck do
       else: component
   end
 
+  # Shows a press on `key` at once, drawn over the image the server gave it: `:pressed` (an outline, on key
+  # down) or `{colour, status}` (the bar and status line it'll show once the server has it). Kept until the
+  # server's image for the key changes (draw/1), or @mark_ms. Not for blank keys.
+  defp mark(component, key, overlay) do
+    image = component.state.keys |> key_images(component.state.count) |> Enum.at(key)
+    device = deck()
+
+    if image != nil and component.state.model != nil and opened?(device) do
+      press = component.state.presses + 1
+      send_image(device, key, image, component.state.size, overlay)
+      JS.call(:window, :setTimeout, [fn -> dispatch("unmark", %{key: key, press: press}) end, @mark_ms])
+
+      put_state(component,
+        presses: press,
+        marks: Map.put(component.state.marks, key, {press, image}),
+        sent: Map.delete(component.state.sent, key)
+      )
+    else
+      component
+    end
+  end
+
   defp release(component) do
     device = deck()
     if opened?(device), do: device |> JS.call(:close, []) |> Task.await()
     JS.set(:window, :clawswapDeck, nil)
-    put_state(component, model: nil, sent: %{}, pressed: [], holds: %{})
+    put_state(component, model: nil, sent: %{}, pressed: [], holds: %{}, marks: %{})
   end
 
   # A deck Chrome already let this page use, plugged in now; nil if none.
@@ -446,25 +499,28 @@ defmodule ClawswapWeb.StreamDeck do
         fn event ->
           if JS.get(event, :reportId) == 1 do
             data = JS.get(event, :data)
-            dispatch("keys", %{keys: Enum.map(0..(count - 1), &JS.call(data, :getUint8, [3 + &1])), at: JS.call(:Date, :now, [])})
+            dispatch("keys", %{down: Enum.filter(0..(count - 1), &(JS.call(data, :getUint8, [3 + &1]) == 1)), at: JS.call(:Date, :now, [])})
           end
         end
       ])
     end
 
     component
-    |> put_state(model: name, count: count, size: size, sent: %{}, pressed: [], holds: %{}, message: nil)
+    |> put_state(model: name, count: count, size: size, sent: %{}, pressed: [], holds: %{}, marks: %{}, message: nil)
     |> draw()
   end
 
   # Sends the keys whose image changed since they were last sent.
+  # A key showing a press is left as it is while the server's image for it is the one it was drawn over.
   defp draw(component) do
     %{count: count, size: size, sent: sent} = component.state
     images = component.state.keys |> key_images(count) |> Enum.with_index()
+    marks = Map.filter(component.state.marks, fn {key, {_press, image}} -> Enum.at(images, key) == {image, key} end)
+    unmarked = Enum.reject(images, fn {_image, key} -> Map.has_key?(marks, key) end)
 
-    case send_images(deck(), images, size, sent) do
-      :lost -> put_state(component, model: nil, sent: %{}, pressed: [])
-      sent -> put_state(component, :sent, sent)
+    case send_images(deck(), unmarked, size, sent) do
+      :lost -> put_state(component, model: nil, sent: %{}, pressed: [], marks: %{})
+      sent -> put_state(component, sent: sent, marks: marks)
     end
   end
 
@@ -482,12 +538,13 @@ defmodule ClawswapWeb.StreamDeck do
         send_images(device, rest, size, sent)
 
       true ->
-        send_image(device, key, image, size)
+        send_image(device, key, image, size, nil)
         send_images(device, rest, size, Map.put(sent, key, image))
     end
   end
 
-  defp send_image(device, key, image, size) do
+  # Draws in the key images' own 144 pixel square, scaled to the key.
+  defp send_image(device, key, image, size, overlay) do
     canvas = JS.new(:OffscreenCanvas, [size, size])
     context = JS.call(canvas, :getContext, ["2d"])
     JS.set(context, :fillStyle, "#000000")
@@ -498,13 +555,32 @@ defmodule ClawswapWeb.StreamDeck do
       JS.set(img, :src, image)
       img |> JS.call(:decode, []) |> Task.await()
       # These decks show their images upside down.
-      JS.call(context, :setTransform, [-1, 0, 0, -1, size, size])
-      JS.call(context, :drawImage, [img, 0, 0, size, size])
+      JS.call(context, :setTransform, [-size / 144, 0, 0, -size / 144, size, size])
+      JS.call(context, :drawImage, [img, 0, 0, 144, 144])
+      draw_overlay(context, overlay)
     end
 
     blob = canvas |> JS.call(:convertToBlob, [%{type: "image/jpeg", quality: 0.9}]) |> Task.await()
     jpeg = JS.new(:Uint8Array, [blob |> JS.call(:arrayBuffer, []) |> Task.await()])
     send_pages(device, key, jpeg, JS.get(jpeg, :length), 0)
+  end
+
+  defp draw_overlay(_context, nil), do: nil
+
+  defp draw_overlay(context, :pressed) do
+    JS.set(context, :strokeStyle, "#ffffff")
+    JS.set(context, :lineWidth, 8)
+    JS.call(context, :strokeRect, [4, 4, 136, 136])
+  end
+
+  defp draw_overlay(context, {colour, status}) do
+    JS.set(context, :fillStyle, colour)
+    JS.call(context, :fillRect, [0, 0, 144, 10])
+    JS.set(context, :fillStyle, "#16191f")
+    JS.call(context, :fillRect, [0, 114, 144, 30])
+    JS.set(context, :fillStyle, colour)
+    JS.set(context, :font, "14px sans-serif")
+    JS.call(context, :fillText, [status, 10, 132])
   end
 
   # Header: 7, the key, 1 on the last page, the page's length and its number (both little-endian).
