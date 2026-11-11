@@ -114,6 +114,10 @@ defmodule Clawswap.Walkthrough.Debugger do
     end
   end
 
+  # A module's function, as in `File.rm_rf!("/tmp/x")`. Without this it would say "Not a command" only
+  # when the function's name isn't an atom yet (the parse refuses it), and "Write one command" otherwise.
+  defp call({{:., _, [_, name]}, _, args}) when is_atom(name) and is_list(args), do: {:error, not_a_command()}
+
   # A bare name, as in `pause` or `screenshot`.
   defp call({name, _, context}) when is_atom(name) and is_atom(context), do: call({name, [], []})
   defp call(_), do: {:error, "Write one command, as in a walkthrough: click \"Ping\""}
