@@ -21,54 +21,81 @@ defmodule Clawswap.Integration do
 
   def heading, do: "Hello from the new-heading branch"
 
-  @doc "Compiles clawswap as bin/clawswap runs it (MIX_ENV=dev), once, before the first `up`."
+  @doc "Compiles clawswap as bin/clawswap runs it (MIX_ENV=dev), once a run, before the first `up`."
   def compile! do
-    {out, code} = System.cmd("mix", ["compile"], cd: @tool, env: [{"MIX_ENV", "dev"}], stderr_to_stdout: true)
-    if code != 0, do: raise("mix compile failed:\n" <> out)
-    :ok
+    once({__MODULE__, :compiled}, fn ->
+      {out, code} = System.cmd("mix", ["compile"], cd: @tool, env: [{"MIX_ENV", "dev"}], stderr_to_stdout: true)
+      if code != 0, do: raise("mix compile failed:\n" <> out)
+      :ok
+    end)
   end
 
-  @doc "The example's repo, with its origin and branches, and node_modules in place."
+  # Runs `fun` the first time a test asks, and gives what it gave then to every test after. (The tests
+  # run one at a time: they share the ports.)
+  defp once(key, fun) do
+    case :persistent_term.get(key, nil) do
+      nil -> tap(fun.(), &:persistent_term.put(key, &1))
+      done -> done
+    end
+  end
+
+  @doc "The example's repo, with its origin and branches, and node_modules in place: a copy of its own."
   def project! do
     dir = Path.join(System.tmp_dir!(), "clawswap-it-#{System.unique_integer([:positive])}")
     work = Path.join(dir, "react-embed")
-    File.mkdir_p!(dir)
-    git(dir, ["init", "-q", "--bare", "-b", "main", "origin.git"])
-    git(dir, ["clone", "-q", "origin.git", "react-embed"])
+    # One process copies the lot (node_modules too), much quicker than building the repo again.
+    {out, code} = System.cmd("cp", ["-a", template!(), dir], stderr_to_stdout: true)
+    if code != 0, do: raise("cp failed:\n" <> out)
+    git(work, ["remote", "set-url", "origin", Path.join(dir, "origin.git")])
 
-    for name <- File.ls!(@example), name != "node_modules", do: File.cp_r!(Path.join(@example, name), Path.join(work, name))
-    git(work, ["add", "."])
-    git(work, ["commit", "-qm", "react-embed"])
-
-    git(work, ["checkout", "-qb", "claude/merged-fix"])
-    write("#{work}/NOTES.md", "A fix that's been merged.\n")
-    git(work, ["add", "."])
-    git(work, ["commit", "-qm", "Merged fix"])
-    git(work, ["checkout", "-q", "main"])
-    git(work, ["merge", "-q", "--ff-only", "claude/merged-fix"])
-
-    git(work, ["checkout", "-qb", "claude/new-heading"])
-    app = Path.join(work, "src/App.jsx")
-    File.write!(app, String.replace(File.read!(app), "Your app goes here", heading()))
-
-    write("#{work}/walkthroughs/new-heading.exs", """
-    say "This branch changes the app's heading"
-    visit url(:web)
-    see "#{heading()}"
-    """)
-
-    git(work, ["add", "."])
-    git(work, ["commit", "-qm", "New heading"])
-    git(work, ["push", "-q", "origin", "main", "claude/merged-fix", "claude/new-heading"])
-    git(work, ["checkout", "-q", "main"])
-    git(work, ["branch", "-qD", "claude/new-heading", "claude/merged-fix"])
-
-    File.cp_r!(node_modules!(), Path.join(work, "node_modules"))
     session = "clawswap-it-#{System.unique_integer([:positive])}"
     # The example frames and calls its project's page on the daemon, /p/<id>, and the tests' session gives
     # it another id than the example's own. (Not committed: it's the checkout's.)
     write("#{work}/.env.local", "VITE_CLAWSWAP_URL=http://localhost:27390/p/#{Clawswap.Config.id(session)}\n")
     %{dir: dir, work: work, session: session, id: Clawswap.Config.id(session)}
+  end
+
+  # The repo every test copies, built once a run: a bare origin with the branches, and a clone on main.
+  defp template! do
+    once({__MODULE__, :template}, fn ->
+      dir = Path.join(System.tmp_dir!(), "clawswap-it-template-#{System.unique_integer([:positive])}")
+      work = Path.join(dir, "react-embed")
+      File.rm_rf!(dir)
+      File.mkdir_p!(dir)
+      git(dir, ["init", "-q", "--bare", "-b", "main", "origin.git"])
+      git(dir, ["clone", "-q", "origin.git", "react-embed"])
+
+      for name <- File.ls!(@example), name != "node_modules", do: File.cp_r!(Path.join(@example, name), Path.join(work, name))
+      git(work, ["add", "."])
+      git(work, ["commit", "-qm", "react-embed"])
+
+      git(work, ["checkout", "-qb", "claude/merged-fix"])
+      write("#{work}/NOTES.md", "A fix that's been merged.\n")
+      git(work, ["add", "."])
+      git(work, ["commit", "-qm", "Merged fix"])
+      git(work, ["checkout", "-q", "main"])
+      git(work, ["merge", "-q", "--ff-only", "claude/merged-fix"])
+
+      git(work, ["checkout", "-qb", "claude/new-heading"])
+      app = Path.join(work, "src/App.jsx")
+      File.write!(app, String.replace(File.read!(app), "Your app goes here", heading()))
+
+      write("#{work}/walkthroughs/new-heading.exs", """
+      say "This branch changes the app's heading"
+      visit url(:web)
+      see "#{heading()}"
+      """)
+
+      git(work, ["add", "."])
+      git(work, ["commit", "-qm", "New heading"])
+      git(work, ["push", "-q", "origin", "main", "claude/merged-fix", "claude/new-heading"])
+      git(work, ["checkout", "-q", "main"])
+      git(work, ["branch", "-qD", "claude/new-heading", "claude/merged-fix"])
+
+      File.cp_r!(node_modules!(), Path.join(work, "node_modules"))
+      ExUnit.after_suite(fn _ -> File.rm_rf!(dir) end)
+      dir
+    end)
   end
 
   # npm install once per package-lock.json, shared by the tests' copies.
@@ -158,7 +185,7 @@ defmodule Clawswap.Integration do
     end
 
     System.cmd("tmux", ["-L", @socket, "kill-server"], stderr_to_stdout: true)
-    free_ports()
+    end_servers()
     File.rm_rf!(project.dir)
     :ok
   end
@@ -169,7 +196,7 @@ defmodule Clawswap.Integration do
   """
   def stop!(_project) do
     System.cmd("tmux", ["-L", @socket, "kill-server"], stderr_to_stdout: true)
-    free_ports()
+    end_servers()
     :ok
   end
 
@@ -179,6 +206,13 @@ defmodule Clawswap.Integration do
   end
 
   defp free_ports, do: Enum.each(@ports, &Clawswap.Ports.free_port(&1, fn _ -> :ok end))
+
+  # The daemon outlives its projects (for an hour), and nothing else stops it: end it, and whatever else
+  # still holds the ports, at once rather than after free_port's 5 s wait for them to close.
+  defp end_servers do
+    for port <- @ports, pid <- Clawswap.Ports.port_pids(port), do: System.cmd("kill", ["-TERM", to_string(pid)], stderr_to_stdout: true)
+    free_ports()
+  end
 
   defp tmux!(args, env) do
     {out, code} = System.cmd("tmux", ["-L", @socket, "-f", "/dev/null" | args], env: env, stderr_to_stdout: true)

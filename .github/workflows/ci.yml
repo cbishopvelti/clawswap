@@ -49,6 +49,7 @@ jobs:
       MIX_ENV: test
       CLAWSWAP_HEADLESS: "1"
       ZELLIJ_VERSION: "0.45.1"
+      INOTIFY_TOOLS_VERSION: "4.23.9.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -66,15 +67,46 @@ jobs:
           restore-keys: mix-integration-${{ runner.os }}-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
 
       # The tests run `clawswap up` in tmux and zellij (and npm ci for examples/react-embed); the watcher
-      # needs inotify-tools to notice file changes.
+      # needs inotify-tools to notice file changes. The runner image has tmux. zellij and inotify-tools
+      # are cached, so a run doesn't wait on (or fail with) GitHub's or Ubuntu's mirrors; only a
+      # cache miss fetches them (from GitHub), with timeouts and retries.
+      - uses: actions/cache@v4
+        id: tools
+        with:
+          path: ~/ci-tools
+          key: ci-tools-${{ runner.os }}-ubuntu-24.04-zellij-${{ env.ZELLIJ_VERSION }}-inotify-tools-${{ env.INOTIFY_TOOLS_VERSION }}
+
+      - name: Download zellij, build inotify-tools
+        if: steps.tools.outputs.cache-hit != 'true'
+        timeout-minutes: 5
+        run: |
+          mkdir -p ~/ci-tools/src && cd ~/ci-tools
+          fetch() { curl -fsSL --connect-timeout 10 --max-time 120 --retry 5 --retry-all-errors "$@"; }
+          fetch "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" | tar -xz zellij
+          # From its source on GitHub rather than Ubuntu's mirrors, which the runners sometimes can't even resolve.
+          fetch "https://github.com/inotify-tools/inotify-tools/archive/refs/tags/${INOTIFY_TOOLS_VERSION}.tar.gz" \
+            | tar -xz -C src --strip-components=1
+          cd src
+          ./autogen.sh
+          ./configure --prefix="$HOME/ci-tools/inotify" --disable-shared CFLAGS="-O2 -Wno-error"
+          make -j"$(nproc)"
+          make install
+          cd .. && rm -rf src
+
       - name: Install tmux, zellij and inotify-tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y tmux inotify-tools
-          curl -fsSL "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin zellij
+          sudo install -m 755 ~/ci-tools/zellij /usr/local/bin/zellij
+          sudo install -m 755 ~/ci-tools/inotify/bin/* /usr/local/bin/
+          command -v tmux || { sudo apt-get update -o Acquire::Retries=5 && sudo apt-get install -y -o Acquire::Retries=5 tmux; }
           tmux -V
           zellij --version
+          command -v inotifywait
+
+      # npm ci for the example app, from npm's cache when its lock hasn't changed.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('examples/react-embed/package-lock.json') }}
 
       # The runner image ships Google Chrome with the chromedriver built for it (same major version, which
       # is all Clawswap.Walkthrough.Driver asks for). Ubuntu 24.04's AppArmor can stop Chrome's sandbox
