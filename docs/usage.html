@@ -59,6 +59,7 @@
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap completion &lt;shell&gt;</code></td><td>Prints shell completion for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
   <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
+  <tr><td><code>clawswap reload</code></td><td>After changing or pulling clawswap: quits OpenDeck, copies the plugin into its plugins folder, starts OpenDeck again, then recompiles clawswap (clearing Hologram's page bundle) and restarts the daemon. It compiles before stopping the daemon, so a compile error leaves everything running. See <a href="opendeck.html#reload">Stream Deck keys</a> for finding OpenDeck.</td></tr>
   <tr><td><code>clawswap daemon</code></td><td>The daemon itself, which runs every project's watcher, page and API. <code>up</code> starts it in the background; you rarely run it yourself.</td></tr>
 </table>
 <p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the project in the daemon, so they need

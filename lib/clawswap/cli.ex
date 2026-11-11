@@ -20,6 +20,7 @@ defmodule Clawswap.CLI do
     {"layout", "", 0, 0, "Print the layout up opens (zellij's layout, or tmux's commands)"},
     {"watch", "", 0, 0, "Run this project in the daemon and follow its log (the session's clawswap pane does)"},
     {"daemon", "", 0, 0, "The daemon that runs every project's watcher, page and API (clawswap up starts it)"},
+    {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
     {"completion", "<shell>", 1, 1, "Print shell completion for bash, zsh or fish"},
     {"help", "", 0, 0, "This list"}
   ]
@@ -62,6 +63,7 @@ defmodule Clawswap.CLI do
   defp dispatch("browser", []), do: browser()
   defp dispatch("test", rest), do: browser_tests(rest)
   defp dispatch("layout", []), do: layout()
+  defp dispatch("reload", []), do: reload()
   defp dispatch("completion", [shell]), do: completion(shell)
 
   defp unknown(command, rest) do
@@ -333,6 +335,108 @@ defmodule Clawswap.CLI do
     {:ok, _} = Application.ensure_all_started(:clawswap)
     :ok = Clawswap.Application.start_daemon(port, idle_ms: 60 * 60_000)
     Process.sleep(:infinity)
+  end
+
+  # For working on clawswap (or after pulling it): puts the OpenDeck plugin in again and restarts OpenDeck,
+  # which only starts plugins when it launches; then recompiles clawswap and restarts the daemon on it. It
+  # compiles before stopping the daemon, so a compile error leaves everything running, and the sessions'
+  # clawswap panes, which start a lost daemon again within a second or two, find clawswap compiled already.
+  defp reload do
+    port = daemon_port()
+    reload_opendeck()
+
+    IO.puts("Compiling clawswap")
+    unless compile_clawswap(), do: fail("clawswap didn't compile; the daemon is left running as it was")
+
+    case stop_daemon(port) do
+      :ok -> IO.puts("Stopped the clawswap daemon on port #{port}")
+      :none -> IO.puts("No clawswap daemon was running on port #{port}")
+    end
+
+    # A session's clawswap pane may have started it again already.
+    if wait_for_daemon(port, 6) do
+      IO.puts("The clawswap daemon is running again on port #{port} (a session's clawswap pane started it)")
+    else
+      log = daemon_log(port)
+      IO.puts("Starting the clawswap daemon on port #{port} (its log: #{log})")
+      start_daemon(port, log)
+      unless wait_for_daemon(port, 240), do: fail("The clawswap daemon didn't start on port #{port}; see #{log}")
+      IO.puts("The clawswap daemon is running on port #{port}")
+    end
+  end
+
+  defp reload_opendeck do
+    if Clawswap.OpenDeck.start_command() == nil and not Clawswap.OpenDeck.running?() do
+      IO.puts("No OpenDeck here (set CLAWSWAP_OPENDECK_CMD to the command that starts it); leaving its plugin alone")
+    else
+      if Clawswap.OpenDeck.stop() == :ok, do: IO.puts("Quit OpenDeck")
+      IO.puts("Copied the OpenDeck plugin to #{Clawswap.OpenDeck.install()}")
+      log = Path.join(Path.dirname(daemon_log(0)), "opendeck.log")
+
+      case Clawswap.OpenDeck.start(log) do
+        {:ok, command} -> IO.puts("Started OpenDeck (#{command}; its output: #{log})")
+        :none -> IO.puts("Start OpenDeck again yourself: clawswap doesn't know how here (set CLAWSWAP_OPENDECK_CMD)")
+      end
+    end
+  end
+
+  # Compiles clawswap afresh, with the Elixir this runs on (clawswap's own, not your project's that
+  # Clawswap.HostEnv put back on the PATH), and with Hologram's page bundle cleared, since it can otherwise
+  # serve the old one.
+  defp compile_clawswap do
+    tool = Path.expand("../..", __DIR__)
+    build = Mix.Project.build_path()
+    File.rm_rf!(Path.join(build, "lib/clawswap/priv/static/hologram"))
+    File.rm_rf!(Path.join(build, "lib/hologram/priv/tmp"))
+    elixir_bin = Path.expand("../../bin", to_string(:code.lib_dir(:elixir)))
+    erlang_bin = Path.join(to_string(:code.root_dir()), "bin")
+    path = Enum.join([elixir_bin, erlang_bin, System.get_env("PATH", "")], ":")
+    env = [{"PATH", path}, {"MIX_ENV", to_string(Mix.env())} | for(v <- ~w(ROOTDIR BINDIR EMU PROGNAME), do: {v, nil})]
+    {_, status} = System.cmd("mix", ["compile", "--force"], cd: tool, env: env, into: IO.stream(), stderr_to_stdout: true)
+    status == 0
+  end
+
+  # Asks the daemon on the port for its OS pid and stops it (killing it if it hasn't gone in 15 seconds).
+  defp stop_daemon(port) do
+    case :httpc.request(:get, {String.to_charlist("http://127.0.0.1:#{port}/daemon"), []}, [timeout: 5000], body_format: :binary) do
+      {:ok, {{_, 200, _}, _, body}} ->
+        case JSON.decode(body) do
+          {:ok, %{"clawswap" => "daemon", "pid" => pid}} ->
+            System.cmd("kill", [pid], stderr_to_stdout: true)
+
+            unless wait_until_gone(port, 30) do
+              System.cmd("kill", ["-KILL", pid], stderr_to_stdout: true)
+              wait_until_gone(port, 10)
+            end
+
+            :ok
+
+          _ ->
+            fail("Something that isn't clawswap's daemon listens on port #{port}")
+        end
+
+      _ ->
+        if Ports.port_open?(port), do: fail("Something that isn't clawswap's daemon listens on port #{port}"), else: :none
+    end
+  end
+
+  defp wait_until_gone(_port, 0), do: false
+
+  defp wait_until_gone(port, tries) do
+    if Ports.port_open?(port) do
+      Process.sleep(500)
+      wait_until_gone(port, tries - 1)
+    else
+      true
+    end
+  end
+
+  # The daemon's port: this checkout's project's, or CLAWSWAP_PORT's (27390 without it) outside one.
+  defp daemon_port do
+    case Config.load(repo_dir()) do
+      {:ok, project} -> project.port
+      _ -> String.to_integer(System.get_env("CLAWSWAP_PORT") || "27390")
+    end
   end
 
   # Where the API is for this checkout: its project's paths on its daemon (/p/<id>), from the config; or
