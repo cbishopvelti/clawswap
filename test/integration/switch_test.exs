@@ -24,6 +24,7 @@ for multiplexer <- [:zellij, :tmux] do
       visit url(:web)
       see "Your app goes here"
       click "Branches"
+
       in_frame "iframe[title=clawswap]", fn ->
         click css("li button", text: "new-heading")
         # A spinner straight away, before clawswap has fetched or started a step.
