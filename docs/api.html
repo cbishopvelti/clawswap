@@ -47,6 +47,7 @@ Stream Deck keys and the React example all use this API.</p>
 <table>
   <tr><th>Request</th><th>Body</th><th>Answer</th></tr>
   <tr><td><code>GET /p/&lt;id&gt;/state</code></td><td></td><td>200 and the <a href="#state">state</a>.</td></tr>
+  <tr id="events"><td><code>GET /p/&lt;id&gt;/events</code></td><td></td><td>The <a href="#state">state</a> as <a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events">Server-Sent Events</a>: one <code>data:</code> event with it at once, then another each time it changes, so a page can listen with <code>EventSource</code> rather than poll <code>/state</code>. A comment line every 15 s keeps it open. It ends when the project goes from the daemon. Only under <code>/p/&lt;id&gt;</code>.</td></tr>
   <tr><td><code>POST /p/&lt;id&gt;/switch</code></td><td><code>{"branch": "..."}</code></td><td>202 and the state once the switch has started; follow <code>/state</code>'s <code>switch</code>. It looks at origin first, so a branch pushed a moment ago is found. Otherwise <code>{"error": "..."}</code>: 409 for uncommitted changes or a switch already running, 404 for a branch that isn't listed.</td></tr>
   <tr><td><code>POST /p/&lt;id&gt;/pull</code></td><td><code>{}</code></td><td>The checkout's branch: 202 with <code>switch.pull</code> true, or 202 with <code>"Already up to date"</code> in <code>switch.notes</code>. 409 when not on a branch, 404 when the branch isn't on GitHub.</td></tr>
   <tr><td><code>POST /p/&lt;id&gt;/claude</code></td><td><code>{"branch": "..."}</code></td><td>Opens the Claude Code thread that made the branch (the checkout's branch without one) in the browser, on the watcher's machine: the project thread its PR's description links to, else the <code>Claude-Session:</code> in its commits. 200 and <code>{"url": "..."}</code>, or 404 when it has neither.</td></tr>
@@ -67,6 +68,7 @@ Stream Deck keys and the React example all use this API.</p>
 </table>
 <p>POSTs need <code>Content-Type: application/json</code>.</p>
 <pre><code>curl -s http://127.0.0.1:27390/p/bmx/state
+curl -sN http://127.0.0.1:27390/p/bmx/events
 curl -s -X POST -H 'Content-Type: application/json' -d '{"branch":"claude/fix-login"}' http://127.0.0.1:27390/p/bmx/switch
 curl -s -X POST -H 'Content-Type: application/json' -d '{"next":true}' http://127.0.0.1:27390/select</code></pre>
 

@@ -159,6 +159,32 @@ defmodule Clawswap.ProjectsTest do
                api(:post, "/p/blog/switch", %{branch: "nope"}) |> then(fn {s, b} -> {s, %{"error" => String.replace(b["error"], "nope ", "")}} end)
     end
 
+    test "streams a project's state at /p/<id>/events: now, then each change, until the project goes", %{repos: [shop, _], env: env} do
+      {:ok, _} = Projects.register(shop.work, env)
+      Application.put_env(:clawswap, :events_beat_ms, 100)
+      on_exit(fn -> Application.delete_env(:clawswap, :events_beat_ms) end)
+
+      stream =
+        Task.async(fn ->
+          conn = %{conn(:get, "/p/shop/events") | host: "127.0.0.1", port: 27390} |> put_req_header("origin", "http://localhost:4000")
+          ClawswapWeb.Api.call(conn, [])
+        end)
+
+      TestRepo.until(fn -> Registry.lookup(Clawswap.Listeners, "shop") != [] end)
+      ClawswapWeb.Api.notify("shop", %{project: "shop", switch: %{phase: "done", doneAt: 7}})
+      ClawswapWeb.Api.notify("blog", %{project: "blog"})
+      :ok = Projects.unregister("shop")
+      conn = Task.await(stream, 5000)
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["text/event-stream"]
+      assert get_resp_header(conn, "access-control-allow-origin") == ["http://localhost:4000"]
+
+      events = for "data: " <> json <- String.split(conn.resp_body, "\n\n", trim: true), do: JSON.decode!(json)
+      assert [%{"project" => "shop"}, %{"switch" => %{"doneAt" => 7}}] = events
+      assert Registry.lookup(Clawswap.Listeners, "shop") == []
+    end
+
     test "only a project's own origins may call its paths, and no page may register a project", %{repos: [shop, _], env: env} do
       {:ok, _} = Projects.register(shop.work, env)
       assert {200, _} = api(:get, "/p/shop/state", nil, [{"origin", "http://localhost:4000"}])

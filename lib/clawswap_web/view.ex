@@ -9,11 +9,12 @@ defmodule ClawswapWeb.View do
 
   @doc """
   A project's watcher changed (its on_change, in the daemon): keeps its state for the index page and the
-  deck, and sends it to the project's open pages, the index page, and the deck when it shows this project.
+  deck, and sends it to the project's open pages, the index page, the deck when it shows this project, and the API's /events streams.
   Without HOLOGRAM_START=1 (which bin/clawswap sets) Hologram isn't running, and there are no pages to tell.
   """
   def broadcast(id, state) do
     if :ets.whereis(@views) != :undefined, do: :ets.insert(@views, {id, state})
+    ClawswapWeb.Api.notify(id, state)
 
     if Hologram.enabled?() do
       Hologram.Realtime.broadcast_action({:clawswap, id}, :state_changed, view: page(state))
