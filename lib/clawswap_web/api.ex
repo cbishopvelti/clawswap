@@ -14,11 +14,16 @@ defmodule ClawswapWeb.Api do
                                             without one) in the browser; 200 {"url": ...} or 404
       POST /p/<id>/walk    {"name": ...}    202, then follow /state's walk
       POST /p/<id>/smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
+      POST /p/<id>/focus                    the project's page is in view: makes it the focused project
+                                            (the branch page and the debug panel send it); 200 {project, root, at}
       GET  /p/<id>/debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
       GET  /p/<id>/log                      the project's log, then each new line as it comes (the
                                             session's clawswap pane follows it; the project stays while one does)
 
-      GET  /projects                        {"projects": [{id, name, root, port}], "selected": id}
+      GET  /projects                        {"projects": [{id, name, root, port}], "selected": id,
+                                            "focused": {project, root, at} or null}
+      GET  /focus/events                    the focused project as Server-Sent Events: now, then each time
+                                            a page reports, so a tool can follow the project you're looking at
       POST /select  {"project": id}         selects a project ({"next": true}: the one after the selected one)
       GET  /daemon                          {"clawswap": "daemon", "port": ..., "pid": ...}
       POST /daemon/projects {"cwd", "env"}  registers the project whose config is found from cwd, with the
@@ -36,8 +41,8 @@ defmodule ClawswapWeb.Api do
 
   alias Clawswap.{Project, ProjectLog, Projects, Watcher}
 
-  @project_paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee", "/debug/screenshot.png"]
-  @daemon_paths ["/projects", "/select", "/daemon", "/daemon/projects"]
+  @project_paths ["/state", "/switch", "/pull", "/refresh", "/claude", "/walk", "/smee", "/focus", "/debug/screenshot.png"]
+  @daemon_paths ["/projects", "/select", "/daemon", "/daemon/projects", "/focus/events"]
   # The log's stream says something this often, so a pane that went away is noticed.
   @log_beat_ms 15_000
 
@@ -95,7 +100,8 @@ defmodule ClawswapWeb.Api do
   end
 
   defp dispatch(conn, {:daemon, "/daemon"}, _), do: json(conn, 200, %{clawswap: "daemon", port: Clawswap.Application.port(), pid: System.pid()})
-  defp dispatch(conn, {:daemon, "/projects"}, _), do: json(conn, 200, %{projects: Projects.list(), selected: Projects.selected()})
+  defp dispatch(conn, {:daemon, "/projects"}, _), do: json(conn, 200, %{projects: Projects.list(), selected: Projects.selected(), focused: Projects.focused()})
+  defp dispatch(conn, {:daemon, "/focus/events"}, _) when conn.method == "GET", do: stream_focus(conn)
   defp dispatch(conn, {:project, _, "/state"}, project) when conn.method == "GET", do: json(conn, 200, Watcher.state(watcher(project)))
 
   defp dispatch(conn, {:project, _, "/debug/screenshot.png"}, project) when conn.method == "GET" do
@@ -151,6 +157,13 @@ defmodule ClawswapWeb.Api do
     case Watcher.open_claude(watcher(project), string(body["branch"])) do
       {:ok, url} -> json(conn, 200, %{url: url})
       {:error, status, message} -> json(conn, status, %{error: message})
+    end
+  end
+
+  defp post(conn, {:project, _, "/focus"}, _body, project) do
+    case Projects.focus(project.id) do
+      {:ok, focused} -> json(conn, 200, focused)
+      {:error, message} -> json(conn, 404, %{error: message})
     end
   end
 
@@ -224,6 +237,41 @@ defmodule ClawswapWeb.Api do
   defp next_event(conn, _id, {:error, _}), do: halt(conn)
 
   defp event(conn, state), do: chunk(conn, "data: " <> JSON.encode!(state) <> "\n\n")
+
+  # The focused project now (null for none), then each time a page reports one, as Server-Sent Events,
+  # until the client goes or the daemon's projects stop. Beats as /events does.
+  defp stream_focus(conn) do
+    {:ok, _} = Registry.register(Clawswap.Listeners, Projects.focus_listeners(), nil)
+
+    conn =
+      conn
+      |> put_resp_header("content-type", "text/event-stream")
+      |> put_resp_header("cache-control", "no-store")
+      |> send_chunked(200)
+
+    try do
+      case event(conn, Projects.focused()) do
+        {:ok, conn} -> focus_loop(conn)
+        {:error, _} -> halt(conn)
+      end
+    catch
+      :exit, _ -> halt(conn)
+    after
+      Registry.unregister(Clawswap.Listeners, Projects.focus_listeners())
+    end
+  end
+
+  defp focus_loop(conn) do
+    receive do
+      {:clawswap_focus, focused} -> next_focus(conn, event(conn, focused))
+    after
+      Application.get_env(:clawswap, :events_beat_ms, @log_beat_ms) ->
+        if Process.whereis(Projects), do: next_focus(conn, chunk(conn, ": beat\n\n")), else: halt(conn)
+    end
+  end
+
+  defp next_focus(_conn, {:ok, conn}), do: focus_loop(conn)
+  defp next_focus(conn, {:error, _}), do: halt(conn)
 
   # The log so far, then each write as it comes, until the pane goes. A reload starts the project's log
   # again; the stream carries on with the new one.

@@ -128,6 +128,8 @@ closes), so it keeps following a switch while closed, and adds reload, open-in-a
     gets its cookie. Mixing <code>localhost</code> and <code>127.0.0.1</code> makes them cross-site.</li>
   <li><strong>Restarts.</strong> A switch kills your dev server, while the framed page keeps its own connection to
     the watcher and follows the switch to the end. Whether your app's page reloads is up to it: see below.</li>
+  <li><strong>Focus.</strong> The framed page tells the daemon when its tab comes into view, so tools that follow
+    <a href="api.html#focus">the focused project</a> know which project you're looking at.</li>
 </ul>
 
 <h3 id="reload">Reloading your app after a switch</h3>

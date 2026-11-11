@@ -12,6 +12,11 @@ defmodule Clawswap.Projects do
   Deck keys that follow the selected project show. It's the first one to come in, until something picks
   another (`select/1`, `select_next/0`).
 
+  One project may be the focused one: the project whose page you last looked at (`focus/1`, which the
+  branch page and the debug panel call when they come into view), so another tool, such as a notes app,
+  can follow the project you're working on. Each change goes to `focus_listeners/0`'s registry key as
+  `{:clawswap_focus, focused}`.
+
   Options: `on_change` (called with no arguments when the list or the selection changes), `project_opts`
   (more options for each `Clawswap.Project`), `detached_ms` (how long a project stays with no pane
   following it), `idle_ms` and `on_idle` (called once the daemon has had no project that long; nil for
@@ -59,6 +64,18 @@ defmodule Clawswap.Projects do
   @doc "Selects the project after the selected one (the first after the last), and returns its id."
   def select_next(server \\ __MODULE__), do: GenServer.call(server, :select_next)
 
+  @doc """
+  Makes the project the focused one, the project whose page was last in view: `{:ok, focused}` or
+  `{:error, message}`. See `focused/0`.
+  """
+  def focus(id, server \\ __MODULE__), do: GenServer.call(server, {:focus, id})
+
+  @doc "The focused project as `%{project: id, root: root, at: ms}` (`at` from `System.os_time(:millisecond)`), or nil when none is."
+  def focused(server \\ __MODULE__), do: GenServer.call(server, :focused)
+
+  @doc "The `Clawswap.Listeners` key that each change of the focused project is sent to, as `{:clawswap_focus, focused}`."
+  def focus_listeners, do: :focus
+
   @doc "`pid` follows the project's log (a pane's `clawswap watch`): the project stays while one does."
   def attach(id, pid \\ self(), server \\ __MODULE__), do: GenServer.call(server, {:attach, id, pid})
 
@@ -75,6 +92,7 @@ defmodule Clawswap.Projects do
       projects: %{},
       order: [],
       selected: nil,
+      focused: nil,
       on_change: opts[:on_change] || fn -> :ok end,
       project_opts: opts[:project_opts] || [],
       detached_ms: opts[:detached_ms] || 30_000,
@@ -135,6 +153,19 @@ defmodule Clawswap.Projects do
       true -> {:reply, :ok, changed(%{state | selected: id})}
     end
   end
+
+  def handle_call({:focus, id}, _from, state) do
+    case state.projects[id] do
+      nil ->
+        {:reply, {:error, "No project #{id}"}, state}
+
+      %{project: project} ->
+        state = focus_on(state, %{project: id, root: project.root, at: System.os_time(:millisecond)})
+        {:reply, {:ok, state.focused}, state}
+    end
+  end
+
+  def handle_call(:focused, _from, state), do: {:reply, state.focused, state}
 
   def handle_call(:select_next, _from, %{order: []} = state), do: {:reply, nil, state}
 
@@ -276,6 +307,7 @@ defmodule Clawswap.Projects do
         DynamicSupervisor.terminate_child(@supervisor, entry.pid)
         order = List.delete(state.order, id)
         selected = if state.selected == id, do: List.first(order), else: state.selected
+        state = if match?(%{project: ^id}, state.focused), do: focus_on(state, nil), else: state
         changed(idle(%{state | projects: projects, order: order, selected: selected}))
     end
   end
@@ -290,6 +322,15 @@ defmodule Clawswap.Projects do
   defp idle(state), do: state
 
   defp no_idle(state), do: %{state | idle: nil}
+
+  # Tells each listener (the API's /focus/events streams) about the focused project, every time a page
+  # reports, so a tool following it hears the same project coming back into view too.
+  defp focus_on(state, focused) do
+    if Process.whereis(Clawswap.Listeners),
+      do: Registry.dispatch(Clawswap.Listeners, focus_listeners(), fn entries -> for {pid, _} <- entries, do: send(pid, {:clawswap_focus, focused}) end)
+
+    %{state | focused: focused}
+  end
 
   defp summary(state) do
     Enum.map(state.order, fn id ->

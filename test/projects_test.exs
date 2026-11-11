@@ -129,6 +129,30 @@ defmodule Clawswap.ProjectsTest do
     TestRepo.until(fn -> Projects.get("shop") == nil end)
   end
 
+  test "the focused project: the one whose page was last in view, until it goes", %{repos: [shop, blog], env: env} do
+    {:ok, _} = Projects.register(shop.work, env)
+    {:ok, _} = Projects.register(blog.work, env)
+    assert Projects.focused() == nil
+
+    {:ok, _} = Registry.register(Clawswap.Listeners, Projects.focus_listeners(), nil)
+    assert {:ok, %{project: "blog", root: root, at: at}} = Projects.focus("blog")
+    assert root == blog.work and is_integer(at)
+    assert_receive {:clawswap_focus, %{project: "blog"}}
+    assert Projects.focused().project == "blog"
+    # Focus isn't the selection.
+    assert Projects.selected() == "shop"
+
+    assert Projects.focus("nope") == {:error, "No project nope"}
+    assert Projects.focused().project == "blog"
+
+    # Another project going leaves it; the focused one going clears it.
+    :ok = Projects.unregister("shop")
+    refute_receive {:clawswap_focus, _}
+    :ok = Projects.unregister("blog")
+    assert_receive {:clawswap_focus, nil}
+    assert Projects.focused() == nil
+  end
+
   describe "the API" do
     defp api(method, path, body \\ nil, headers \\ []) do
       conn = conn(method, path, body && JSON.encode!(body))
@@ -183,6 +207,46 @@ defmodule Clawswap.ProjectsTest do
       events = for "data: " <> json <- String.split(conn.resp_body, "\n\n", trim: true), do: JSON.decode!(json)
       assert [%{"project" => "shop"}, %{"switch" => %{"doneAt" => 7}}] = events
       assert Registry.lookup(Clawswap.Listeners, "shop") == []
+    end
+
+    test "a project's page reports focus at /p/<id>/focus, and /projects says which is focused", %{repos: [shop, blog], env: env} do
+      {:ok, _} = Projects.register(shop.work, env)
+      {:ok, _} = Projects.register(blog.work, env)
+      assert {200, %{"focused" => nil}} = api(:get, "/projects")
+
+      # The branch page, framed or not, is on the daemon's own origin; an app's own server may report too.
+      assert {200, %{"project" => "blog", "root" => root}} = api(:post, "/p/blog/focus", %{}, [{"origin", "http://localhost:27390"}])
+      assert root == blog.work
+      assert {200, %{"focused" => %{"project" => "blog"}}} = api(:get, "/projects")
+      assert {200, %{"project" => "shop"}} = api(:post, "/p/shop/focus", %{}, [{"origin", "http://localhost:4000"}])
+      assert {403, _} = api(:post, "/p/shop/focus", %{}, [{"origin", "http://localhost:5000"}])
+      assert {404, _} = api(:post, "/p/nope/focus", %{})
+      assert {404, _} = api(:get, "/p/shop/focus")
+      assert {200, %{"focused" => %{"project" => "shop"}}} = api(:get, "/projects")
+    end
+
+    test "streams the focused project at /focus/events: now, then each report", %{repos: [shop, _], env: env} do
+      {:ok, _} = Projects.register(shop.work, env)
+      Application.put_env(:clawswap, :events_beat_ms, 100)
+      on_exit(fn -> Application.delete_env(:clawswap, :events_beat_ms) end)
+
+      stream = Task.async(fn -> ClawswapWeb.Api.call(%{conn(:get, "/focus/events") | host: "127.0.0.1", port: 27390}, []) end)
+
+      TestRepo.until(fn -> Registry.lookup(Clawswap.Listeners, Projects.focus_listeners()) != [] end)
+      {:ok, _} = Projects.focus("shop")
+      {:ok, _} = Projects.focus("shop")
+      :ok = Projects.unregister("shop")
+      # The stream ends with the daemon's projects.
+      stop_supervised!(Projects)
+      conn = Task.await(stream, 5000)
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["text/event-stream"]
+      events = for "data: " <> json <- String.split(conn.resp_body, "\n\n", trim: true), do: JSON.decode!(json)
+      # The first event is the focus as the stream opened, which may already be the first report.
+      assert [%{"project" => "shop", "root" => root}, %{"project" => "shop"} | _] = Enum.reject(events, &is_nil/1)
+      assert root == shop.work
+      assert List.last(events) == nil
     end
 
     test "only a project's own origins may call its paths, and no page may register a project", %{repos: [shop, _], env: env} do
