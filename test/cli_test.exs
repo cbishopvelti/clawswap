@@ -45,4 +45,27 @@ defmodule Clawswap.CLITest do
 
     assert Completion.script("tcsh", []) == nil
   end
+
+  @tag :tmp_dir
+  test "installs completion where each shell looks, and refreshes the installed ones", %{tmp_dir: home} do
+    env = %{"HOME" => home, "SHELL" => "/usr/bin/zsh"}
+    assert Completion.login_shell(env) == "zsh"
+    assert Completion.login_shell(%{"SHELL" => "/bin/tcsh"}) == nil
+
+    {path, notes} = Completion.install("zsh", [{"up", "Start"}], env)
+    assert path == Path.join(home, ".zfunc/_clawswap")
+    assert [note] = notes
+    assert note =~ "fpath=(#{home}/.zfunc $fpath)"
+
+    File.write!(Path.join(home, ".zshrc"), "fpath=(~/.zfunc $fpath)\n")
+    assert {^path, []} = Completion.install("zsh", [{"up", "Start"}], env)
+
+    {bash, _} = Completion.install("bash", [{"up", "Start"}], env)
+    assert bash == Path.join(home, ".local/share/bash-completion/completions/clawswap")
+
+    assert Completion.refresh([{"up", "Start"}, {"reload", "Reload"}], env) == [bash, path]
+    assert File.read!(bash) =~ "up reload"
+    assert File.read!(path) =~ "'reload:Reload'"
+    refute File.exists?(Completion.path("fish", env))
+  end
 end

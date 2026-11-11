@@ -1,0 +1,17 @@
+# clawswap completion for bash: source this from ~/.bashrc, or save it as
+# ~/.local/share/bash-completion/completions/clawswap
+_clawswap() {
+  local cur=${COMP_WORDS[COMP_CWORD]}
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=($(compgen -W "up reload" -- "$cur"))
+    return
+  fi
+  case "${COMP_WORDS[1]}" in
+    switch) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "$(git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin 2>/dev/null | grep -v '^HEAD$')" -- "$cur")) ;;
+    update) COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
+    walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
+    test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
+    completion) COMPREPLY=($(compgen -W "install bash zsh fish" -- "$cur")) ;;
+  esac
+}
+complete -F _clawswap clawswap

@@ -21,7 +21,7 @@ defmodule Clawswap.CLI do
     {"watch", "", 0, 0, "Run this project in the daemon and follow its log (the session's clawswap pane does)"},
     {"daemon", "", 0, 0, "The daemon that runs every project's watcher, page and API (clawswap up starts it)"},
     {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
-    {"completion", "<shell>", 1, 1, "Print shell completion for bash, zsh or fish"},
+    {"completion", "install", 1, 2, "Set up Tab completion for your shell (or install bash|zsh|fish); completion bash prints the script"},
     {"help", "", 0, 0, "This list"}
   ]
 
@@ -64,7 +64,10 @@ defmodule Clawswap.CLI do
   defp dispatch("test", rest), do: browser_tests(rest)
   defp dispatch("layout", []), do: layout()
   defp dispatch("reload", []), do: reload()
+  defp dispatch("completion", ["install" | shell]), do: install_completion(List.first(shell))
+  defp dispatch("completion", ["refresh"]), do: refresh_completion()
   defp dispatch("completion", [shell]), do: completion(shell)
+  defp dispatch("completion", args), do: wrong_arguments("completion", "install [bash|zsh|fish]", args)
 
   defp unknown(command, rest) do
     names = Enum.map(@commands, &elem(&1, 0))
@@ -363,6 +366,9 @@ defmodule Clawswap.CLI do
       unless wait_for_daemon(port, 240), do: fail("The clawswap daemon didn't start on port #{port}; see #{log}")
       IO.puts("The clawswap daemon is running on port #{port}")
     end
+
+    # With the new code, so a command added since completes too.
+    System.cmd(Multiplexer.cli(), ["completion", "refresh"], into: IO.stream(), stderr_to_stdout: true)
   end
 
   defp reload_opendeck do
@@ -522,6 +528,27 @@ defmodule Clawswap.CLI do
       nil -> fail("clawswap: no completion for #{shell}; it has #{Enum.join(Clawswap.CLI.Completion.shells(), ", ")}")
       script -> IO.write(script)
     end
+  end
+
+  defp install_completion(shell) do
+    shells = Clawswap.CLI.Completion.shells()
+    shell = shell || Clawswap.CLI.Completion.login_shell()
+
+    cond do
+      shell == nil -> fail("clawswap: which shell? Run clawswap completion install #{Enum.join(shells, "|")}")
+      shell not in shells -> fail("clawswap: no completion for #{shell}; it has #{Enum.join(shells, ", ")}")
+      true -> :ok
+    end
+
+    {path, notes} = Clawswap.CLI.Completion.install(shell, commands())
+    IO.puts("Saved #{shell} completion to #{path}; clawswap reload keeps it up to date")
+    Enum.each(notes, &IO.puts/1)
+    IO.puts("Open a new terminal for Tab to complete clawswap's commands")
+  end
+
+  # clawswap reload runs this once it has compiled, so the commands are the new ones.
+  defp refresh_completion do
+    for path <- Clawswap.CLI.Completion.refresh(commands()), do: IO.puts("Updated the completion in #{path}")
   end
 
   defp pull do
