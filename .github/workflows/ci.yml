@@ -49,6 +49,7 @@ jobs:
       MIX_ENV: test
       CLAWSWAP_HEADLESS: "1"
       ZELLIJ_VERSION: "0.45.1"
+      INOTIFY_TOOLS_VERSION: "4.23.9.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -66,33 +67,36 @@ jobs:
           restore-keys: mix-integration-${{ runner.os }}-${{ env.OTP_VERSION }}-${{ env.ELIXIR_VERSION }}-
 
       # The tests run `clawswap up` in tmux and zellij (and npm ci for examples/react-embed); the watcher
-      # needs inotify-tools to notice file changes. The runner image has tmux. zellij and inotify-tools'
-      # packages are cached, so a run doesn't wait on (or fail with) GitHub's or Ubuntu's mirrors; only a
-      # cache miss downloads them, with timeouts and retries.
+      # needs inotify-tools to notice file changes. The runner image has tmux. zellij and inotify-tools
+      # are cached, so a run doesn't wait on (or fail with) GitHub's or Ubuntu's mirrors; only a
+      # cache miss fetches them (from GitHub), with timeouts and retries.
       - uses: actions/cache@v4
         id: tools
         with:
           path: ~/ci-tools
-          key: ci-tools-${{ runner.os }}-ubuntu-24.04-zellij-${{ env.ZELLIJ_VERSION }}-inotify-tools-v1
+          key: ci-tools-${{ runner.os }}-ubuntu-24.04-zellij-${{ env.ZELLIJ_VERSION }}-inotify-tools-${{ env.INOTIFY_TOOLS_VERSION }}
 
-      - name: Download zellij and inotify-tools
+      - name: Download zellij, build inotify-tools
         if: steps.tools.outputs.cache-hit != 'true'
         timeout-minutes: 5
         run: |
-          mkdir -p ~/ci-tools && cd ~/ci-tools
+          mkdir -p ~/ci-tools/src && cd ~/ci-tools
           fetch() { curl -fsSL --connect-timeout 10 --max-time 120 --retry 5 --retry-all-errors "$@"; }
           fetch "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz" | tar -xz zellij
-          # Straight from the archive's pool, not through apt: no index to update, and a second mirror if the
-          # runner's own doesn't answer.
-          for deb in libinotifytools0_3.22.6.0-4_amd64.deb inotify-tools_3.22.6.0-4_amd64.deb; do
-            fetch -o "$deb" "http://azure.archive.ubuntu.com/ubuntu/pool/universe/i/inotify-tools/$deb" \
-              || fetch -o "$deb" "http://archive.ubuntu.com/ubuntu/pool/universe/i/inotify-tools/$deb"
-          done
+          # From its source on GitHub rather than Ubuntu's mirrors, which the runners sometimes can't even resolve.
+          fetch "https://github.com/inotify-tools/inotify-tools/archive/refs/tags/${INOTIFY_TOOLS_VERSION}.tar.gz" \
+            | tar -xz -C src --strip-components=1
+          cd src
+          ./autogen.sh
+          ./configure --prefix="$HOME/ci-tools/inotify" --disable-shared CFLAGS="-O2 -Wno-error"
+          make -j"$(nproc)"
+          make install
+          cd .. && rm -rf src
 
       - name: Install tmux, zellij and inotify-tools
         run: |
           sudo install -m 755 ~/ci-tools/zellij /usr/local/bin/zellij
-          sudo dpkg -i ~/ci-tools/*.deb
+          sudo install -m 755 ~/ci-tools/inotify/bin/* /usr/local/bin/
           command -v tmux || { sudo apt-get update -o Acquire::Retries=5 && sudo apt-get install -y -o Acquire::Retries=5 tmux; }
           tmux -V
           zellij --version
