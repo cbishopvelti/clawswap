@@ -143,13 +143,16 @@ a key or the API):</p>
 <p>The origin is the daemon's, without the <code>/p/&lt;id&gt;</code>; use the config's <code>port</code> if it isn't 27390. The page only posts while it's loaded, so keep the frame
 loaded once opened (hide it rather than remove it when the menu closes), as the example's <code>BranchMenu</code> does.
 A failed switch, or a pull with nothing new, posts nothing. Without a frame, poll the <a href="api.html#state">API</a>
-and reload when <code>switch.doneAt</code> changes.</p>
+and reload when <code>switch.doneAt</code> changes to a new time. That also catches a switch started from a key or the
+CLI while the menu was never opened.</p>
 
 <h3 id="pull">A Pull button</h3>
 <p>The page has Pull, but it's only reachable once the menu is open. Give your app its own button next to
 Branches: <code>POST /p/&lt;id&gt;/pull</code> pulls the checkout's branch, and <code>GET /p/&lt;id&gt;/state</code>'s
 <code>upstream.behind</code> says how many commits there are to pull. With no framed page to post
-<code>switched</code>, reload when <code>switch.doneAt</code> changes. In plain JavaScript:</p>
+<code>switched</code>, reload when <code>switch.doneAt</code> changes to a new time. A switch that starts drops
+<code>doneAt</code> until it's done, so don't reload on it going away: the page would load while your server is down,
+and the browser's error page doesn't reload again. In plain JavaScript:</p>
 <pre><code>&lt;button id="clawswap-pull"&gt;↓ Pull&lt;/button&gt;
 
 const CLAWSWAP = "http://localhost:27390/p/myapp";
@@ -161,8 +164,9 @@ async function poll() {
   try {
     const state = await (await fetch(`${CLAWSWAP}/state`)).json();
     const run = state.switch, behind = state.upstream?.behind;
-    if (doneAt !== undefined &amp;&amp; (run?.doneAt ?? null) !== doneAt) return location.reload();
-    doneAt = run?.doneAt ?? null;
+    const next = run?.doneAt ?? null; // gone while a switch runs, so only a new time counts
+    if (doneAt !== undefined &amp;&amp; next !== null &amp;&amp; next !== doneAt) return location.reload();
+    if (doneAt === undefined || next !== null) doneAt = next;
     running = run?.phase === "running";
     button.disabled = running;
     button.textContent = running ? `Pulling: ${run.step || "…"}`
