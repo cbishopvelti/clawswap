@@ -6,7 +6,8 @@ defmodule Clawswap.Watcher do
   Options: `project` (from `Clawswap.Config`), `servers` (`%{stop: fn name, note, start: fn name}`, and
   optionally `wait_for_port: fn port, ms` for the wait before a switch is done:
   `Clawswap.Zellij.servers/2` in the session, stand-ins in tests), `run_step` (runs one planned step),
-  `smee_url`, `on_change` (called with the public state after every change; the web layer broadcasts it),
+  `smee_url` (a smee.io channel of its own) or `shared_smee` (the `Clawswap.SharedSmee` to follow instead),
+  `on_change` (called with the public state after every change; the web layer broadcasts it),
   `exit` (restarts the watcher after a switch changed its config), `refresh_git` (false skips git fetch),
   `open_url` (opens a link in the browser; `open_url/1` by default).
   `run_walk` (runs a walkthrough: `Clawswap.Walkthrough.run/3`, or a stand-in in tests),
@@ -15,7 +16,7 @@ defmodule Clawswap.Watcher do
 
   use GenServer
 
-  alias Clawswap.{Config, Git, GitHub, Plan, Ports, Smee, Walkthrough}
+  alias Clawswap.{Config, Git, GitHub, Plan, Ports, SharedSmee, Smee, Walkthrough}
 
   # Without webhooks (or if smee drops a delivery), look anyway this often.
   @fallback_ms 15 * 60_000
@@ -52,7 +53,10 @@ defmodule Clawswap.Watcher do
   """
   def open_claude(server \\ __MODULE__, branch), do: GenServer.call(server, {:open_claude, branch}, 30_000)
 
-  @doc "Follows the smee.io channel at `url` from now on, in place of the one it followed (`clawswap smee` saved a new one)."
+  @doc """
+  Follows the smee.io channel at `url` from now on, in place of the one it followed (`clawswap smee`
+  saved a new one); with nil, the daemon's shared channel (`Clawswap.SharedSmee`).
+  """
   def set_smee(server \\ __MODULE__, url), do: GenServer.call(server, {:set_smee, url}, 30_000)
 
   @doc "Opens `url` in the default browser, on the machine the watcher runs on."
@@ -82,6 +86,7 @@ defmodule Clawswap.Watcher do
 
     project = Keyword.fetch!(opts, :project)
     smee_url = opts[:smee_url]
+    shared = if(smee_url == nil, do: opts[:shared_smee])
 
     state = %{
       project: project,
@@ -101,6 +106,9 @@ defmodule Clawswap.Watcher do
       debounce: nil,
       smee: nil,
       smee_url: smee_url,
+      # The SharedSmee it follows (when it has no channel of its own).
+      shared_smee: opts[:shared_smee],
+      shared: nil,
       view: %{
         project: project.name,
         # Its id in the daemon's URLs (/p/<id>/).
@@ -112,7 +120,7 @@ defmodule Clawswap.Watcher do
         # Whether the list comes from open PRs (a GitHub token was found).
         prs: false,
         # "off" (no channel set), "connecting" (set, not connected yet or lost), "connected".
-        webhook: if(smee_url, do: "connecting", else: "off"),
+        webhook: if(smee_url || shared, do: "connecting", else: "off"),
         webhookError: nil,
         refreshedAt: nil,
         error: nil,
@@ -130,11 +138,16 @@ defmodule Clawswap.Watcher do
     }
 
     state =
-      if smee_url do
-        follow_smee(state, smee_url)
-      else
-        if opts[:quiet] != true, do: log("No smee.io channel set (clawswap smee); looking for new branches every 15 minutes")
-        state
+      cond do
+        smee_url ->
+          follow_smee(state, smee_url)
+
+        shared ->
+          follow_shared(state, shared)
+
+        true ->
+          if opts[:quiet] != true, do: log("No smee.io channel set (clawswap smee); looking for new branches every 15 minutes")
+          state
       end
 
     :timer.send_interval(@fallback_ms, :refresh_now)
@@ -143,6 +156,19 @@ defmodule Clawswap.Watcher do
 
   @impl true
   def handle_call(:state, _from, state), do: {:reply, state.view, state}
+
+  def handle_call({:set_smee, nil}, _from, state) do
+    case state.shared_smee do
+      nil ->
+        {:reply, {:error, 409, "The daemon has no shared smee.io channel"}, state}
+
+      shared ->
+        if state.smee_url, do: log("Following the shared smee.io channel, in place of #{state.smee_url}")
+        # Again even when it already does: the shared channel tries adding a webhook it couldn't add before.
+        state = state |> stop_smee() |> follow_shared(shared) |> changed()
+        {:reply, {:ok, state.view}, state}
+    end
+  end
 
   def handle_call({:set_smee, url}, _from, %{smee_url: url} = state), do: {:reply, {:ok, state.view}, state}
 
@@ -257,18 +283,30 @@ defmodule Clawswap.Watcher do
     %{state | smee: pid, smee_url: url, view: %{state.view | webhook: "connecting", webhookError: nil}}
   end
 
-  defp stop_smee(%{smee: nil} = state), do: state
+  defp follow_shared(state, shared) do
+    %{webhook: webhook, error: error} = SharedSmee.subscribe(shared, Git.github_repo(state.project.root))
+    %{state | shared: shared, smee_url: nil, view: %{state.view | webhook: webhook, webhookError: error}}
+  end
+
+  defp stop_smee(%{smee: nil, shared: nil} = state), do: state
+
+  defp stop_smee(%{smee: nil} = state) do
+    SharedSmee.unsubscribe(state.shared)
+    flush_smee()
+    %{state | shared: nil}
+  end
 
   defp stop_smee(state) do
     GenServer.stop(state.smee)
     flush_smee()
-    %{state | smee: nil}
+    %{state | smee: nil, smee_url: nil}
   end
 
   # What the old listener sent before it stopped isn't about the new channel.
   defp flush_smee do
     receive do
       {:smee, _} -> flush_smee()
+      {:shared_smee, _} -> flush_smee()
     after
       0 -> :ok
     end
@@ -291,9 +329,31 @@ defmodule Clawswap.Watcher do
     {:noreply, changed(%{state | view: %{state.view | webhook: "connecting", webhookError: reason}})}
   end
 
-  def handle_info({:smee, {:delivery, kind}}, state) do
+  def handle_info({:smee, {:delivery, kind, _repo}}, state) do
     log("GitHub: #{kind}")
     {:noreply, soon(state)}
+  end
+
+  def handle_info({:shared_smee, {:delivery, kind}}, state) do
+    log("GitHub: #{kind}")
+    {:noreply, soon(state)}
+  end
+
+  def handle_info({:shared_smee, {:log, text}}, state) do
+    log(text)
+    {:noreply, state}
+  end
+
+  def handle_info({:shared_smee, {:status, %{webhook: webhook, error: error}}}, state) do
+    case state.view do
+      %{webhook: ^webhook, webhookError: ^error} ->
+        {:noreply, state}
+
+      view ->
+        state = changed(%{state | view: %{view | webhook: webhook, webhookError: error}})
+        # Look for anything missed while it wasn't connected.
+        {:noreply, if(webhook == "connected", do: soon(state), else: state)}
+    end
   end
 
   def handle_info({ref, result}, %{refreshing: ref} = state) do

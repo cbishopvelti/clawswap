@@ -198,6 +198,7 @@ defmodule ClawswapWeb.View do
   defp walk_status(%{phase: "failed"} = w), do: %{text: "✕ #{w.name}: #{w.error}", class: "failed"}
 
   defp webhook(%{webhook: "connected"}), do: "webhook on"
+  defp webhook(%{webhook: "off", webhookError: error}) when is_binary(error), do: "webhook off: #{error}"
   defp webhook(%{webhook: "off"}), do: "webhook off: run clawswap smee"
   defp webhook(%{webhookError: error}) when is_binary(error), do: "webhook lost: #{error}"
   defp webhook(_), do: "webhook connecting"

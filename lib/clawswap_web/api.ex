@@ -13,7 +13,8 @@ defmodule ClawswapWeb.Api do
       POST /p/<id>/claude  {"branch": ...}  open the Claude Code thread that made the branch (the checkout's
                                             without one) in the browser; 200 {"url": ...} or 404
       POST /p/<id>/walk    {"name": ...}    202, then follow /state's walk
-      POST /p/<id>/smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
+      POST /p/<id>/smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee <url> sends it),
+                           {"shared": true}  or the daemon's shared one (clawswap smee)
       POST /p/<id>/focus                    the project's page is in view: makes it the focused project, and
                                             selects it (the branch page and the debug panel send it); 200
                                             {project, root, at}
@@ -171,9 +172,10 @@ defmodule ClawswapWeb.Api do
   defp post(conn, {:project, _, "/walk"}, body, project), do: answer(conn, Watcher.walk(watcher(project), string(body["name"])))
 
   defp post(conn, {:project, _, "/smee"}, body, project) do
-    case body["url"] do
-      "http" <> _ = url -> answer(conn, Watcher.set_smee(watcher(project), url))
-      _ -> json(conn, 400, %{error: "Expected {\"url\": \"https://smee.io/...\"}"})
+    case body do
+      %{"url" => "http" <> _ = url} -> answer(conn, Watcher.set_smee(watcher(project), url))
+      %{"shared" => true} -> answer(conn, Watcher.set_smee(watcher(project), nil))
+      _ -> json(conn, 400, %{error: "Expected {\"url\": \"https://smee.io/...\"} or {\"shared\": true}"})
     end
   end
 

@@ -5,11 +5,12 @@ defmodule Clawswap.Smee do
   delivery whose data is the request's headers with `body` and `query` added.
 
   The watcher only takes a delivery as a hint to look again: anyone who knows the channel URL can post to
-  it, so nothing in the payload is acted on.
+  it, so nothing in the payload is acted on. (The repo it names only says which project should look:
+  `Clawswap.SharedSmee` shares one channel between every project.)
 
   The listener sends its owner `{:smee, :open}` each time the stream (re)connects, `{:smee, {:drop,
-  reason}}` when it's lost and `{:smee, {:delivery, github_event}}` for each delivery. It reconnects after
-  an error, waiting longer each time up to a minute.
+  reason}}` when it's lost and `{:smee, {:delivery, github_event, repo}}` for each delivery (`repo`: the
+  owner/name it's about, or nil). It reconnects after an error, waiting longer each time up to a minute.
   """
 
   use GenServer
@@ -48,9 +49,26 @@ defmodule Clawswap.Smee do
 
   @doc "The GitHub event a delivery carries (\"push\", \"create\", \"pull_request\"...), or nil for anything else."
   def github_event(data) do
+    case delivery(data) do
+      {kind, _repo} -> kind
+      nil -> nil
+    end
+  end
+
+  @doc "A delivery's GitHub event and the repo (owner/name) it's about (nil when it names none), or nil for anything else."
+  def delivery(data) do
     case JSON.decode(data) do
-      {:ok, %{"x-github-event" => kind}} when is_binary(kind) -> kind
-      _ -> nil
+      {:ok, %{"x-github-event" => kind} = message} when is_binary(kind) ->
+        repo =
+          case message["body"] do
+            %{"repository" => %{"full_name" => name}} when is_binary(name) -> name
+            _ -> nil
+          end
+
+        {kind, repo}
+
+      _ ->
+        nil
     end
   end
 
@@ -202,7 +220,7 @@ defmodule Clawswap.Smee do
         %{state | delay: 1000}
 
       %{event: "message", data: data}, state ->
-        if kind = github_event(data), do: send(state.owner, {:smee, {:delivery, kind}})
+        with {kind, repo} <- delivery(data), do: send(state.owner, {:smee, {:delivery, kind, repo}})
         state
 
       _, state ->

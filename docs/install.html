@@ -97,17 +97,22 @@ so <code>$PWD</code> gives the link the full path:</p>
     <code>package.json</code> with a <code>dev</code> script (port 5173 for Vite, 3000 for Next), and no servers when it
     can't tell. Check the servers and steps (see <a href="configuration.html">Configuration</a>) and commit it. Prefer
     YAML? Write a <code>clawswap.yml</code> instead.</li>
-  <li><strong>The webhook</strong>, so new branches show up straight away:
+  <li><strong>The webhook</strong>, so new branches show up straight away, sets itself up. Your laptop has no public URL,
+    so GitHub posts to a <a href="https://smee.io">smee.io</a> channel, which the daemon reads as a stream. The daemon
+    keeps <em>one</em> channel for every project (made the first time it starts, and kept in
+    <code>~/.local/state/clawswap/smee.json</code>), and the first time a repo comes in it adds the repo's webhook for
+    that channel. Each event goes to the projects of the repo it's about. It uses the same token as the PR titles
+    (<code>GITHUB_TOKEN</code>, else <code>gh auth token</code>), which needs admin on the repo: <code>gh auth login</code>'s
+    default token has it if you do, and a fine-grained token needs <em>Webhooks: read and write</em>. If GitHub says no,
+    the project's log and page say why, and
     <pre><code>clawswap smee</code></pre>
-    makes a smee.io channel, saves it for this checkout (in <code>.git/clawswap.json</code>, never committed), adds the
-    webhook on GitHub and tells a running watcher to follow the channel, so there's nothing to restart. It uses the same
-    token as the PR titles (<code>GITHUB_TOKEN</code>, else <code>gh auth token</code>), which needs admin on the repo:
-    <code>gh auth login</code>'s default token has it if you do, and a fine-grained token needs <em>Webhooks: read and
-    write</em>. If GitHub says no, it prints what to put in <em>Settings &gt; Webhooks &gt; Add webhook</em> instead: the
-    channel as Payload URL, content type <code>application/json</code>, and the events <em>Branch or tag creation</em>,
-    <em>Branch or tag deletion</em>, <em>Pull requests</em> and <em>Pushes</em>. Run again, it leaves the webhook alone;
-    with a new channel, it offers to remove the old channel's webhook. Pass a URL (<code>clawswap smee &lt;url&gt;</code>) to reuse a channel you
-    already have. Without a webhook the watcher still looks every 15 minutes, and whenever you press a key.</li>
+    tries again and prints what to put in <em>Settings &gt; Webhooks &gt; Add webhook</em> instead: the channel as
+    Payload URL, content type <code>application/json</code>, and the events <em>Branch or tag creation</em>,
+    <em>Branch or tag deletion</em>, <em>Pull requests</em> and <em>Pushes</em>. A checkout set up with a channel of its
+    own before there was a shared one keeps it; <code>clawswap smee</code> moves it onto the shared channel (and offers to
+    remove the old channel's webhook). To give a checkout a channel of its own instead, pass one
+    (<code>clawswap smee &lt;url&gt;</code>, or <code>clawswap smee new</code> for a new one): it's saved in
+    <code>.git/clawswap.json</code>. Without a webhook the watcher still looks every 15 minutes, and whenever you press a key.</li>
   <li><strong>PR titles</strong> (optional). If the <code>gh</code> CLI is logged in, or <code>GITHUB_TOKEN</code> is set,
     the list shows the base branch and then the branches with an open pull request, labelled by PR title. Without a
     token it shows every branch.</li>
