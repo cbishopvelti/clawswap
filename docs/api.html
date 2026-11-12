@@ -55,7 +55,7 @@ Stream Deck keys and the React example all use this API.</p>
   <tr><td><code>POST /p/&lt;id&gt;/walk</code></td><td><code>{"name": "…"}</code></td><td>Runs a <a href="walkthroughs.html">walkthrough</a> in a browser on this machine; 202, then follow the state's <code>walk</code>. 409 while one or a switch is running.</td></tr>
   <tr><td><code>GET /p/&lt;id&gt;/debug/screenshot.png</code></td><td></td><td>The <a href="walkthroughs.html#debug">debug panel</a>'s last screenshot of its Chrome; 404 before the first.</td></tr>
   <tr><td><code>POST /p/&lt;id&gt;/smee</code></td><td><code>{"url": "…"}</code></td><td>Follows this smee.io channel from now on, in place of the one it followed; <code>clawswap smee</code> sends it after saving a new channel.</td></tr>
-  <tr><td><code>POST /p/&lt;id&gt;/focus</code></td><td><code>{}</code></td><td>The project's page is in view: makes it the focused project (<a href="#focus">The focused project</a>); 200 and <code>{"project", "root", "at"}</code>. The branch page and the debug panel send it themselves.</td></tr>
+  <tr><td><code>POST /p/&lt;id&gt;/focus</code></td><td><code>{}</code></td><td>The project's page is in view: makes it the focused project (<a href="#focus">The focused project</a>), and the selected one; 200 and <code>{"project", "root", "at"}</code>. The branch page and the debug panel send it themselves.</td></tr>
   <tr><td><code>GET /p/&lt;id&gt;/log</code></td><td></td><td>The project's log so far, then each new line as it comes, as plain text. The session's <code>clawswap</code> pane follows it; the project stays in the daemon while something does.</td></tr>
 </table>
 
@@ -113,8 +113,10 @@ curl -s -X POST -H 'Content-Type: application/json' -d '{"next":true}' http://12
 
 <h2 id="focus">The focused project</h2>
 <p>The focused project is the one whose page you last looked at, so another tool on your machine (a notes app,
-say) can follow the project you're working on and open files from its <code>root</code>. It isn't the
-selected project, which only changes when something selects one.</p>
+say) can follow the project you're working on and open files from its <code>root</code>. A page coming into view
+selects its project too, so <a href="opendeck.html#projects">Stream Deck keys</a> that follow the selected project
+change with the browser tab you're on. The deck's project key and <code>POST /select</code> can still select
+another; the next tab you look at selects its own again.</p>
 <p>The branch page and the debug panel report it with <code>POST /p/&lt;id&gt;/focus</code>, framed in your app's dev
 chrome or opened on their own: when they load, when their tab comes back into view, and when the page itself takes
 focus. An app that embeds clawswap reports its project with no code of its own. Two browser windows side by side don't tell it which

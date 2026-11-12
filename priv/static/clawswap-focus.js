@@ -1,5 +1,6 @@
-// Tells the daemon which project's page you're looking at (POST /p/<id>/focus), so a tool such as a notes
-// app can follow the project you're working on through GET /focus/events. The branch page and the debug
+// Tells the daemon which project's page you're looking at (POST /p/<id>/focus), which selects it, so the
+// Stream Deck keys that follow the selected project show it, and a tool such as a notes app can follow the
+// project you're working on through GET /focus/events. The branch page and the debug
 // panel load it, framed in your app's dev chrome or opened on their own, so an app that embeds clawswap
 // reports its project with no code of its own: on load, when its tab comes back into view, and when the
 // page itself takes focus.

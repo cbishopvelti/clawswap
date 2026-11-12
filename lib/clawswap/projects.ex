@@ -10,12 +10,13 @@ defmodule Clawswap.Projects do
 
   One project is the selected one: what the API's paths without /p/<id> answer for, and what Stream
   Deck keys that follow the selected project show. It's the first one to come in, until something picks
-  another (`select/1`, `select_next/0`).
+  another (`select/1`, `select_next/0`, or a page coming into view, `focus/1`).
 
   One project may be the focused one: the project whose page you last looked at (`focus/1`, which the
   branch page and the debug panel call when they come into view), so another tool, such as a notes app,
   can follow the project you're working on. Each change goes to `focus_listeners/0`'s registry key as
-  `{:clawswap_focus, focused}`.
+  `{:clawswap_focus, focused}`. Focusing a project selects it too, so the deck's keys show the project
+  whose tab you're on; the deck's project key can still select another until you next change tab.
 
   Options: `on_change` (called with no arguments when the list or the selection changes), `project_opts`
   (more options for each `Clawswap.Project`), `detached_ms` (how long a project stays with no pane
@@ -65,8 +66,8 @@ defmodule Clawswap.Projects do
   def select_next(server \\ __MODULE__), do: GenServer.call(server, :select_next)
 
   @doc """
-  Makes the project the focused one, the project whose page was last in view: `{:ok, focused}` or
-  `{:error, message}`. See `focused/0`.
+  Makes the project the focused one, the project whose page was last in view, and selects it:
+  `{:ok, focused}` or `{:error, message}`. See `focused/0`.
   """
   def focus(id, server \\ __MODULE__), do: GenServer.call(server, {:focus, id})
 
@@ -161,6 +162,9 @@ defmodule Clawswap.Projects do
 
       %{project: project} ->
         state = focus_on(state, %{project: id, root: project.root, at: System.os_time(:millisecond)})
+        # The page you're looking at is the project you're working on: deck keys that follow the
+        # selection show it, so changing browser tab changes the keys.
+        state = if id == state.selected, do: state, else: changed(%{state | selected: id})
         {:reply, {:ok, state.focused}, state}
     end
   end

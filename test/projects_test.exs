@@ -139,8 +139,6 @@ defmodule Clawswap.ProjectsTest do
     assert root == blog.work and is_integer(at)
     assert_receive {:clawswap_focus, %{project: "blog"}}
     assert Projects.focused().project == "blog"
-    # Focus isn't the selection.
-    assert Projects.selected() == "shop"
 
     assert Projects.focus("nope") == {:error, "No project nope"}
     assert Projects.focused().project == "blog"
@@ -151,6 +149,37 @@ defmodule Clawswap.ProjectsTest do
     :ok = Projects.unregister("blog")
     assert_receive {:clawswap_focus, nil}
     assert Projects.focused() == nil
+  end
+
+  test "a page coming into view selects its project, so the deck's keys follow the tab you're on", %{repos: [shop, blog], env: env} do
+    {:ok, _} = Projects.register(shop.work, env)
+    {:ok, _} = Projects.register(blog.work, env)
+    assert Projects.selected() == "shop"
+    flush_changes()
+
+    {:ok, _} = Projects.focus("blog")
+    assert Projects.selected() == "blog"
+    assert Projects.cached(:selected) == "blog"
+    assert_receive :projects_changed
+
+    # The same tab again (its window takes focus, say) changes nothing.
+    {:ok, _} = Projects.focus("blog")
+    refute_receive :projects_changed, 100
+
+    # The deck's project key still selects another, until a tab next comes into view.
+    assert Projects.select_next() == "shop"
+    assert_receive :projects_changed
+    {:ok, _} = Projects.focus("blog")
+    assert Projects.selected() == "blog"
+    assert_receive :projects_changed
+  end
+
+  defp flush_changes do
+    receive do
+      :projects_changed -> flush_changes()
+    after
+      0 -> :ok
+    end
   end
 
   describe "the API" do
@@ -217,7 +246,9 @@ defmodule Clawswap.ProjectsTest do
       # The branch page, framed or not, is on the daemon's own origin; an app's own server may report too.
       assert {200, %{"project" => "blog", "root" => root}} = api(:post, "/p/blog/focus", %{}, [{"origin", "http://localhost:27390"}])
       assert root == blog.work
-      assert {200, %{"focused" => %{"project" => "blog"}}} = api(:get, "/projects")
+      # It's the selected project too: what the deck's keys and the paths without /p/<id> follow.
+      assert {200, %{"focused" => %{"project" => "blog"}, "selected" => "blog"}} = api(:get, "/projects")
+      assert {200, %{"project" => "blog"}} = api(:get, "/state")
       assert {200, %{"project" => "shop"}} = api(:post, "/p/shop/focus", %{}, [{"origin", "http://localhost:4000"}])
       assert {403, _} = api(:post, "/p/shop/focus", %{}, [{"origin", "http://localhost:5000"}])
       assert {404, _} = api(:post, "/p/nope/focus", %{})

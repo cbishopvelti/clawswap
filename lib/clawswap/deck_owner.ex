@@ -8,9 +8,9 @@ defmodule Clawswap.DeckOwner do
   id). The others let it go and offer "Use here". The tab that has it says so again every so often, so a
   closed tab's claim runs out (`@stale_ms`) and the next page to load opens the deck by itself.
 
-  The keys follow the selected project (`Clawswap.Projects.selected/0`), with a key that selects the
-  next one, or are pinned to one project (`set_keys/1`). That choice is kept in `path/0`, so it outlives
-  the daemon.
+  The keys follow the selected project (`Clawswap.Projects.selected/0`, which changes with the tab you're
+  on), with a key that selects the next one, or are pinned to one project (`set_keys/1`). That choice is
+  kept in `path/0`, so it outlives the daemon.
 
   Options: `on_change` (called when the owner or the choice changes), `path`, `name`.
   """
