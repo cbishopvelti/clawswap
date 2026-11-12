@@ -1,6 +1,7 @@
 defmodule Clawswap.Config do
   @moduledoc """
-  The project clawswap runs: its clawswap.exs or clawswap.yml (committed, at the repo root or in a project's subfolder), and the per-checkout state in
+  The project clawswap runs: its clawswap.exs or clawswap.yml (committed, at the repo root or in a project's subfolder),
+  with any override configs `clawswap up <name>` layers over it (see `merge/2`), and the per-checkout state in
   .git/clawswap.json (a smee.io channel of its own, when it doesn't use the daemon's shared one, and the
   commit the steps last ran for, so `up` can catch up a checkout that moved while clawswap wasn't watching).
   """
@@ -19,6 +20,7 @@ defmodule Clawswap.Config do
     config = Map.new(config)
     root = Keyword.fetch!(opts, :root)
     file = opts[:file] || @file_name
+    overrides = opts[:overrides] || []
 
     servers =
       for {name, s} <- config[:servers] || [], into: %{} do
@@ -70,8 +72,10 @@ defmodule Clawswap.Config do
       prepare: (config[:prepare] || []) |> Enum.with_index() |> Enum.map(fn {s, i} -> Plan.normalise_step(s, i) end),
       steps: (config[:steps] || []) |> Enum.with_index() |> Enum.map(fn {s, i} -> Plan.normalise_step(s, i) end),
       notes: for(n <- config[:notes] || [], do: %{message: Map.new(n).message, test: Plan.matcher(Map.new(n)[:when])}),
+      # The override configs layered over `file` (`clawswap up <name>`), from the root, in order.
+      overrides: overrides,
       # A switch that changes these restarts the watcher, so it runs the new config.
-      restart: Plan.matcher([file | List.wrap(config[:restart_when])]),
+      restart: Plan.matcher([file | overrides] ++ List.wrap(config[:restart_when])),
       # Walkthrough scripts, relative to the config's folder (see Clawswap.Walkthrough).
       walkthroughs: config[:walkthroughs] || "walkthroughs",
       # Browser tests (`clawswap test`), relative to the config's folder (see Clawswap.BrowserTests).
@@ -118,14 +122,123 @@ defmodule Clawswap.Config do
   Finds the repo from `cwd` and loads its config: the nearest clawswap.exs or clawswap.yml (or .yaml) from
   `cwd` up to the repo's root, so a project in a subfolder (examples/react-embed, say) has its own. A
   folder with more than one is an error. CLAWSWAP_CONFIG names another file, relative to the root.
+
+  CLAWSWAP_OVERRIDES (which `clawswap up <name>...` sets) lists override configs, comma separated, that
+  are merged over it in order (see `merge/2`): each a file, from `cwd`, or a name, for the
+  clawswap.<name>.exs (or .yml, .yaml) beside the config.
   """
   def load(cwd, host_env \\ System.get_env()) do
     with {:ok, root} <- Git.repo_root(cwd),
          {:ok, file} <- find(cwd, root, host_env),
-         {:ok, config} <- read(Path.expand(file, root)) do
-      {:ok, normalise(config || [], root: root, file: file, base: Git.default_base(root), local_file: Git.git_path(root, "clawswap.json"), env: host_env)}
+         {:ok, config} <- read(Path.expand(file, root)),
+         {:ok, overrides} <- find_overrides(cwd, root, file, host_env),
+         {:ok, config} <- read_overrides(config || [], overrides, root) do
+      {:ok,
+       normalise(config,
+         root: root,
+         file: file,
+         overrides: overrides,
+         base: Git.default_base(root),
+         local_file: Git.git_path(root, "clawswap.json"),
+         env: host_env
+       )}
     end
   end
+
+  @doc "The names CLAWSWAP_OVERRIDES lists."
+  def override_names(host_env) do
+    (env(host_env, "CLAWSWAP_OVERRIDES") || "") |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  @doc "The names of the override configs beside the config `file` (from `root`): what `clawswap up <name>` takes."
+  def override_choices(root, file) do
+    dir = Path.dirname(Path.expand(file, root))
+
+    for path <- Path.wildcard(Path.join(dir, "clawswap.*.{exs,yml,yaml}")),
+        [_, name, _] <- [Regex.run(~r/^clawswap\.(.+)\.(exs|yml|yaml)$/, Path.basename(path))],
+        uniq: true,
+        do: name
+  end
+
+  # Each override's path from the root.
+  defp find_overrides(cwd, root, file, host_env) do
+    host_env
+    |> override_names()
+    |> Enum.reduce_while({:ok, []}, fn name, {:ok, acc} ->
+      case find_override(cwd, root, file, name) do
+        {:ok, path} -> {:cont, {:ok, acc ++ [Path.relative_to(path, root)]}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp find_override(cwd, root, file, name) do
+    path = Path.expand(name, cwd)
+    dir = Path.dirname(Path.expand(file, root))
+
+    if File.regular?(path) do
+      {:ok, path}
+    else
+      case for(ext <- ~w(exs yml yaml), p = Path.join(dir, "clawswap.#{name}.#{ext}"), File.regular?(p), do: p) do
+        [path] ->
+          {:ok, path}
+
+        [] ->
+          choices =
+            case override_choices(root, file) do
+              [] -> "there are none beside #{file}"
+              names -> "there are #{Enum.join(names, ", ")}"
+            end
+
+          {:error, "No override config #{name}: no file #{name}, and no clawswap.#{name}.exs or .yml beside #{file} (#{choices})"}
+
+        paths ->
+          {:error, "#{Enum.map_join(paths, " and ", &Path.relative_to(&1, root))} are both there: keep one"}
+      end
+    end
+  end
+
+  defp read_overrides(config, overrides, root) do
+    Enum.reduce_while(overrides, {:ok, config}, fn file, {:ok, config} ->
+      case read(Path.expand(file, root)) do
+        {:ok, override} -> {:cont, {:ok, merge(config, override || [])}}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  @doc """
+  An override config merged over a config: a keyword list or map in both (the config itself, a server, a
+  pane, the servers) is merged key by key, recursively, with keys new to the override after the config's
+  own; anything else in the override (a list of steps, a command, a port) replaces the config's. A key
+  the override sets to `false` is taken out, so `servers: [api: false]` drops the api server.
+  """
+  def merge(config, override) do
+    if pairs?(override) and (pairs?(config) or config in [nil, []]) do
+      config = Enum.to_list(config || [])
+      override = Enum.to_list(override)
+      key = &to_string(elem(&1, 0))
+      over = Map.new(override, &{key.(&1), &1})
+      dropped = for {k, false} <- override, into: MapSet.new(), do: to_string(k)
+
+      merged =
+        for {k, v} = pair <- config, not MapSet.member?(dropped, key.(pair)) do
+          case over[key.(pair)] do
+            nil -> pair
+            {_, o} -> {k, merge(v, o)}
+          end
+        end
+
+      known = MapSet.new(config, key)
+      merged ++ for({k, v} = pair <- override, v != false, not MapSet.member?(known, key.(pair)), do: {k, v})
+    else
+      override
+    end
+  end
+
+  defp pairs?(map) when is_map(map), do: not is_struct(map)
+  defp pairs?([_ | _] = list), do: Enum.all?(list, &match?({k, _} when is_atom(k) or is_binary(k), &1))
+  defp pairs?(_), do: false
 
   defp find(cwd, root, host_env) do
     case env(host_env, "CLAWSWAP_CONFIG") do

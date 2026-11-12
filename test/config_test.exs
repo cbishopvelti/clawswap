@@ -97,6 +97,86 @@ defmodule Clawswap.ConfigTest do
     end
   end
 
+  test "merges an override config over the config" do
+    config = [
+      name: "shop",
+      port: 27390,
+      servers: [web: [command: "npm run dev", port: 3000], api: [command: "mix phx.server", port: 4000]],
+      panes: [shell: nil],
+      steps: [[run: "npm ci", when: "package-lock.json"]]
+    ]
+
+    override = [
+      port: 27400,
+      servers: [web: [port: 3100], api: false, worker: [command: "mix worker"]],
+      steps: [[run: "npm ci"]]
+    ]
+
+    assert Config.merge(config, override) == [
+             name: "shop",
+             port: 27400,
+             servers: [web: [command: "npm run dev", port: 3100], worker: [command: "mix worker"]],
+             panes: [shell: nil],
+             steps: [[run: "npm ci"]]
+           ]
+
+    # Maps (an .exs may use them) merge too, and keys match whether they're atoms or strings.
+    assert Config.merge([servers: %{"web" => %{command: "a", port: 1}}], servers: [web: [port: 2]]) ==
+             [servers: [{"web", [command: "a", port: 2]}]]
+
+    # A Regex isn't merged into; nor is an empty override, which empties the list.
+    assert [restart_when: %Regex{source: "b"}] = Config.merge([restart_when: ~r/a/], restart_when: ~r/b/)
+    assert Config.merge([steps: [[run: "x"]]], steps: []) == [steps: []]
+  end
+
+  test "loads override configs by name or file, over the config" do
+    %{dir: dir, work: work} = TestRepo.setup()
+
+    try do
+      File.write!("#{work}/clawswap.yml", """
+      servers:
+        web:
+          command: npm run dev
+          port: 3000
+        api:
+          command: mix phx.server
+          port: 4000
+      """)
+
+      File.write!("#{work}/clawswap.staging.yml", """
+      session: shop-staging
+      servers:
+        web:
+          port: 3100
+        api: false
+      """)
+
+      File.write!("#{work}/frontend/more.exs", ~s([port: 27400]))
+      env = Map.put(System.get_env(), "CLAWSWAP_OVERRIDES", "staging, more.exs")
+      assert {:ok, p} = Config.load("#{work}/frontend", env)
+      assert p.overrides == ["clawswap.staging.yml", "frontend/more.exs"]
+      assert p.session == "shop-staging"
+      assert p.port == 27400
+      assert p.server_names == ["web"]
+      assert p.servers["web"] == %{command: "npm run dev", cwd: ".", port: 3100, match: nil}
+      assert p.restart.("clawswap.staging.yml") and p.restart.("frontend/more.exs")
+      assert Config.override_choices(p.root, p.file) == ["staging"]
+
+      # The session's clawswap pane loads the same overrides, and up's command passes them on.
+      assert Clawswap.Multiplexer.watch(p) |> Enum.drop(1) ==
+               ["watch", Path.join(p.root, "clawswap.staging.yml"), Path.join(p.root, "frontend/more.exs")]
+
+      assert ["env", "CLAWSWAP_OVERRIDES=" <> _, "zellij"] = Clawswap.Multiplexer.with_overrides(p, ["zellij"])
+
+      assert {:error, "No override config prod" <> message} = Config.load(work, Map.put(env, "CLAWSWAP_OVERRIDES", "prod"))
+      assert message =~ "there are staging"
+
+      assert {:ok, %{overrides: [], port: 27390}} = Config.load(work, Map.delete(env, "CLAWSWAP_OVERRIDES"))
+    after
+      File.rm_rf!(dir)
+    end
+  end
+
   test "catches up from the last updated commit, or runs everything the first time" do
     %{dir: dir, work: work} = TestRepo.setup()
     project = Config.normalise(TestRepo.bmx_config(), root: work)

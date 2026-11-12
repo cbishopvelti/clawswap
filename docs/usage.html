@@ -46,6 +46,7 @@
   <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config and webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
   <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap up</code></td><td>Starts the daemon if it isn't running, adds the project to it, and opens the zellij or tmux session, or re-attaches to it.</td></tr>
+  <tr><td><code>clawswap up &lt;name|file&gt;...</code></td><td>The same, with <a href="configuration.html#overrides">override configs</a> (<code>clawswap.&lt;name&gt;.yml</code>, say) merged over the config.</td></tr>
   <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
   <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane. The branch can be its full name, its PR number (<code>switch 23</code>), its short name or any part of its name that only one listed branch has.</td></tr>
   <tr><td><code>clawswap pull</code></td><td>Pulls the current branch the same way. Does nothing if it's up to date.</td></tr>
@@ -69,7 +70,8 @@ clawswap switch?"), and a command given the wrong arguments says what it takes.<
 
 <h2 id="completion">Completion</h2>
 <p>Tab completes clawswap's commands (<code>clawswap re</code>, Tab, gives <code>clawswap reload</code>), and for
-<code>switch</code> the branches on origin of the repo you're in (read with git, so pressing Tab doesn't start mix).
+<code>switch</code> the branches on origin of the repo you're in (read with git, so pressing Tab doesn't start mix),
+and for <code>up</code> the <a href="configuration.html#overrides">override configs</a> in the folder you're in.
 Set it up once:</p>
 <pre><code>clawswap completion install        # for the shell $SHELL names; or: clawswap completion install zsh</code></pre>
 <p>That saves the script where the shell looks for it, and says if the shell needs one more line first:</p>
@@ -97,6 +99,8 @@ if nothing answers there) and adds the project to it, so its page is up while th
     starts the servers anyway; fix it and run <code>clawswap update</code>.</li>
   <li>Starts the session: zellij with the generated layout (or the config's own <code>layout</code>), or tmux with the same panes.</li>
 </ol>
+<p><code>clawswap up staging</code> does the same with <code>clawswap.staging.yml</code> (or <code>.exs</code>) merged
+over the config: see <a href="configuration.html#overrides">Override configs</a>.</p>
 <p>When the session is already running, <code>up</code> attaches to it (from inside tmux, it switches to it). A
 session zellij lists as exited is deleted and started fresh, rather than coming back with its panes waiting for Enter.</p>
 

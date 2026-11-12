@@ -8,7 +8,8 @@ defmodule Clawswap.CLI do
   @commands [
     {"doctor", "", 0, 0, "Check what clawswap needs is installed, and print the fix for what isn't"},
     {"init", "", 0, 0, "Write a starter clawswap.exs in this repo"},
-    {"up", "", 0, 0, "Start (or attach to) the zellij or tmux session with every server"},
+    {"up", "[config...]", 0, :any,
+     "Start (or attach to) the zellij or tmux session with every server; with a name (clawswap.<name>.yml) or file, merged over the config"},
     {"status", "", 0, 0, "The branches the keys show, and the last switch"},
     {"switch", "<branch>", 1, 1, "Switch branch (its name, part of it, or its PR number), restarting the servers"},
     {"pull", "", 0, 0, "Pull the current branch the same way (nothing happens if it's up to date)"},
@@ -18,7 +19,7 @@ defmodule Clawswap.CLI do
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
     {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
     {"layout", "", 0, 0, "Print the layout up opens (zellij's layout, or tmux's commands)"},
-    {"watch", "", 0, 0, "Run this project in the daemon and follow its log (the session's clawswap pane does)"},
+    {"watch", "[config...]", 0, :any, "Run this project in the daemon and follow its log (the session's clawswap pane does)"},
     {"daemon", "", 0, 0, "The daemon that runs every project's watcher, page and API (clawswap up starts it)"},
     {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
     {"completion", "install", 1, 2, "Set up Tab completion for your shell (or install bash|zsh|fish); completion bash prints the script"},
@@ -51,8 +52,8 @@ defmodule Clawswap.CLI do
 
   defp dispatch("doctor", []), do: Clawswap.Doctor.main()
   defp dispatch("init", []), do: init()
-  defp dispatch("up", []), do: up()
-  defp dispatch("watch", []), do: watch()
+  defp dispatch("up", rest), do: with_overrides(rest, &up/0)
+  defp dispatch("watch", rest), do: with_overrides(rest, &watch/0)
   defp dispatch("daemon", []), do: daemon()
   defp dispatch("status", []), do: status()
   defp dispatch("switch", [branch]), do: switch(branch)
@@ -146,8 +147,18 @@ defmodule Clawswap.CLI do
 
   # Gets the session ready and leaves the multiplexer's command for bin/clawswap to run, since zellij and
   # tmux need the terminal (CLAWSWAP_EXEC is the file it reads it from).
+  # `up` and `watch` name the override configs to layer over the project's config. They go in
+  # CLAWSWAP_OVERRIDES, which Config.load reads, here and in the daemon (it gets this environment).
+  defp with_overrides([], fun), do: fun.()
+
+  defp with_overrides(names, fun) do
+    System.put_env("CLAWSWAP_OVERRIDES", Enum.join(names, ","))
+    fun.()
+  end
+
   defp up do
     project = project!()
+    if project.overrides != [], do: IO.puts("#{project.file} with #{Enum.join(project.overrides, ", ")} over it")
     mux = Multiplexer.pick(project)
 
     case mux.check() do
@@ -162,7 +173,7 @@ defmodule Clawswap.CLI do
 
     case System.get_env("CLAWSWAP_EXEC") do
       nil -> fail("Run this through bin/clawswap, which starts the session: " <> Enum.join(command, " "))
-      file -> File.write!(file, Enum.join([project.root | command], "\n") <> "\n")
+      file -> File.write!(file, Enum.join([project.root | Multiplexer.with_overrides(project, command)], "\n") <> "\n")
     end
   end
 
