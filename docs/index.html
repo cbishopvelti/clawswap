@@ -69,8 +69,9 @@ one's merge status, and lights up when the branch you're on has new commits on G
     <code>clawswap</code> pane shows the project's log, and a project leaves the daemon when its session ends
     (<a href="usage.html#several">Several projects</a>).</li>
   <li><strong>The webhook.</strong> GitHub posts branch, push and pull-request events to a
-    <a href="https://smee.io">smee.io</a> channel; the watcher follows the channel and looks again when one arrives.
-    Without it, it looks every 15 minutes and whenever you press a key.</li>
+    <a href="https://smee.io">smee.io</a> channel. The daemon keeps one channel for every project and adds each repo's
+    webhook for it by itself; each event goes to the watchers of the repo it's about, which look again. Without it,
+    they look every 15 minutes and whenever you press a key.</li>
   <li><strong>The controls.</strong> Stream Deck keys (an OpenDeck plugin, or the page itself over WebHID), each project's
     <a href="https://hologram.page">Hologram</a> page (on its own or in an iframe in your app), your own control
     built on the API, and the CLI all drive the same daemon.</li>
@@ -81,11 +82,11 @@ one's merge status, and lights up when the branch you're on has new commits on G
 <pre><code>cd &lt;path-to-your-project&gt;
 clawswap doctor   # checks what clawswap needs is installed, and prints the fix for what isn't
 clawswap init     # writes a starter clawswap.exs from what it finds
-clawswap smee     # optional: a webhook channel, so new branches show up straight away
 clawswap up       # starts the daemon if it isn't running, and opens the session; the page is at
                   # http://127.0.0.1:27390/p/&lt;project&gt;, and every project's at http://127.0.0.1:27390</code></pre>
 <p>Then pick a branch on the page, press a key, or run <code>clawswap switch &lt;branch&gt;</code>. Run
-<code>clawswap up</code> in another project and it joins the same daemon.</p>
+<code>clawswap up</code> in another project and it joins the same daemon. The GitHub webhook that makes new branches
+show up straight away is set up for you (<a href="install.html#project">Install</a>).</p>
 
 <h2 id="elixir">All Elixir</h2>
 <p>clawswap is written in Elixir. The daemon is an OTP application, its pages are Hologram pages served by

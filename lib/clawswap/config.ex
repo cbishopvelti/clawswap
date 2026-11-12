@@ -2,8 +2,8 @@ defmodule Clawswap.Config do
   @moduledoc """
   The project clawswap runs: its clawswap.exs or clawswap.yml (committed, at the repo root or in a project's subfolder),
   with any override configs `clawswap up <name>` layers over it (see `merge/2`), and the per-checkout state in
-  .git/clawswap.json (the smee.io channel, and the commit the steps last ran for, so `up` can catch up a
-  checkout that moved while clawswap wasn't watching).
+  .git/clawswap.json (a smee.io channel of its own, when it doesn't use the daemon's shared one, and the
+  commit the steps last ran for, so `up` can catch up a checkout that moved while clawswap wasn't watching).
   """
 
   alias Clawswap.{Git, Plan}
@@ -290,6 +290,10 @@ defmodule Clawswap.Config do
 
   def write_local(project, changes) do
     File.write!(project.local_file, JSON.encode!(Map.merge(read_local(project), changes)) <> "\n")
+  end
+
+  def drop_local(project, key) do
+    File.write!(project.local_file, JSON.encode!(Map.delete(read_local(project), key)) <> "\n")
   end
 
   @doc "Remembers that the steps have run for this commit."

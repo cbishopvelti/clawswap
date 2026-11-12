@@ -21,7 +21,7 @@ defmodule Clawswap.SmeeTest do
         {:ok, socket} = :gen_tcp.accept(listen)
         {:ok, request} = :gen_tcp.recv(socket, 0)
         send(test, {:request, request})
-        delivery = JSON.encode!(%{"x-github-event" => "create", "body" => %{"ref" => "claude/x"}})
+        delivery = JSON.encode!(%{"x-github-event" => "create", "body" => %{"ref" => "claude/x", "repository" => %{"full_name" => "me/app"}}})
         :gen_tcp.send(socket, "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
 
         for part <- ["event: ready\ndata: {}\n\n", "data: #{delivery}\n\n"],
@@ -35,7 +35,7 @@ defmodule Clawswap.SmeeTest do
 
     {:ok, pid} = Smee.start_link(url: "http://127.0.0.1:#{port}/chan", owner: self(), log: &send(test, {:log, &1}))
     assert_receive {:smee, :open}, 3000
-    assert_receive {:smee, {:delivery, "create"}}, 3000
+    assert_receive {:smee, {:delivery, "create", "me/app"}}, 3000
     assert_received {:request, "GET /chan " <> _}
     GenServer.stop(pid)
     send(server, :done)

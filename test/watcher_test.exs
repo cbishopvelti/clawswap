@@ -233,4 +233,34 @@ defmodule Clawswap.WatcherTest do
     assert {:ok, %{webhook: "connected"}} = Watcher.set_smee(w, new)
     refute_received {:exit, _}
   end
+
+  test "follows the daemon's shared channel, and moves onto it from a channel of its own", %{start: start} do
+    file = Path.join(System.tmp_dir!(), "clawswap-watcher-smee-#{System.unique_integer([:positive])}.json")
+    on_exit(fn -> File.rm(file) end)
+
+    hub =
+      start_supervised!(
+        {Clawswap.SharedSmee,
+         name: nil,
+         file: file,
+         new_channel: fn -> {:ok, "https://smee.io/shared"} end,
+         ensure_hook: fn _, _ -> {:ok, :exists} end,
+         listen: fn _ -> {:ok, spawn(fn -> Process.sleep(:infinity) end)} end}
+      )
+
+    w = start.(smee_url: fake_channel("own"), shared_smee: hub)
+    assert_receive {:channel, "own"}, 3000
+
+    # The test repo's origin is a folder, not GitHub, so the shared channel has nothing to send it.
+    assert {:ok, %{webhook: "off", webhookError: "origin isn't a GitHub repo"}} = Watcher.set_smee(w, nil)
+    assert [{_, {nil, _}}] = Map.to_list(:sys.get_state(hub).subs)
+
+    # What the shared channel says is what the page shows; connecting looks again for what was missed.
+    Watcher.refresh(w)
+    send(w, {:shared_smee, {:status, %{webhook: "connected", error: nil}}})
+    assert %{webhook: "connected", webhookError: nil} = Watcher.state(w)
+    send(w, {:shared_smee, {:log, "hello"}})
+    send(w, {:shared_smee, {:delivery, "push"}})
+    assert Watcher.state(w).webhook == "connected"
+  end
 end

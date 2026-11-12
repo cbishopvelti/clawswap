@@ -1,7 +1,7 @@
 defmodule Clawswap.CLI do
   @moduledoc "clawswap's commands. See README.md."
 
-  alias Clawswap.{BrowserTests, Config, Git, GitHub, Multiplexer, Plan, Ports, Smee, Starter, Walkthrough, Watcher}
+  alias Clawswap.{BrowserTests, Config, Git, GitHub, Multiplexer, Plan, Ports, SharedSmee, Smee, Starter, Walkthrough, Watcher}
 
   # Each command: its name, the arguments it takes (as usage shows them), how many it takes at least and at
   # most (:any for no limit), and what it does.
@@ -14,7 +14,7 @@ defmodule Clawswap.CLI do
     {"switch", "<branch>", 1, 1, "Switch branch (its name, part of it, or its PR number), restarting the servers"},
     {"pull", "", 0, 0, "Pull the current branch the same way (nothing happens if it's up to date)"},
     {"update", "[rev]", 0, 1, "Run the steps for what changed since they last ran (or since rev), or --all"},
-    {"smee", "[url]", 0, 1, "Set up the smee.io channel and the GitHub webhook for it"},
+    {"smee", "[url]", 0, 1, "Add this repo's GitHub webhook for the shared smee.io channel (up does it), or use a channel of its own"},
     {"walk", "[name...]", 0, :any, "Run walkthroughs in Chrome (default: the ones this branch added); --headless"},
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
     {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
@@ -676,18 +676,47 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Makes a smee.io channel for the GitHub webhook, saves it for this checkout, adds the webhook on GitHub
-  # when the token may, and tells a running watcher to follow the new channel.
-  defp smee(url) do
+  # Without a url: adds the repo's webhook for the daemon's shared channel (making the channel if the
+  # daemon hasn't yet), stops using a channel of the checkout's own, and tells a running watcher. The
+  # daemon adds the webhook by itself the first time a repo comes in, so this is for trying again (or
+  # moving a checkout that had a channel of its own onto the shared one).
+  defp smee(nil) do
     project = project!()
     old = Config.read_local(project)["smee"]
 
     channel =
-      url ||
+      case SharedSmee.ensure_channel() do
+        {:ok, channel} -> channel
+        {:error, message} -> fail(message)
+      end
+
+    if old, do: Config.drop_local(project, "smee")
+    IO.puts("The shared channel is #{channel} (kept in #{SharedSmee.file()}).")
+
+    webhook(project, channel, old)
+
+    case tell_watcher("/smee", %{shared: true}) do
+      :ok -> IO.puts("The watcher is following it now.")
+      {:error, :not_running} -> IO.puts("The watcher follows it when it starts (clawswap up).")
+      {:error, message} -> IO.puts("The watcher didn't take it (#{message}); it follows it when it next starts.")
+    end
+  end
+
+  # A channel of the checkout's own (given, or new with `new`): saved for this checkout, the webhook added
+  # on GitHub when the token may, and a running watcher told to follow it.
+  defp smee(url) do
+    project = project!()
+    old = Config.read_local(project)["smee"] || SharedSmee.channel()
+
+    channel =
+      if url == "new" do
         case Smee.new_channel() do
           {:ok, channel} -> channel
           {:error, message} -> fail(message)
         end
+      else
+        url
+      end
 
     Config.write_local(project, %{"smee" => channel})
     IO.puts("Saved #{channel} in #{project.local_file}.")

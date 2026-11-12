@@ -39,10 +39,13 @@ ln -sf "$PWD/bin/clawswap" ~/.local/bin/clawswap   # any folder on your PATH
 cd <path-to-your-project>
 clawswap doctor   # checks what clawswap needs is installed, and prints the fix for what isn't
 clawswap init     # writes a starter clawswap.exs from what it finds; check it and commit it
-clawswap smee     # optional: a webhook (via smee.io), so new branches show up straight away
 clawswap up       # starts the daemon if it isn't running, and opens the session; the page is at
                   # http://127.0.0.1:27390/p/<project>, and every project's at http://127.0.0.1:27390
 ```
+
+New branches show up straight away with no setup of your own: the daemon keeps one smee.io channel for every
+project, and adds each repo's GitHub webhook for it the first time the repo comes in (with your `gh` login, or
+`GITHUB_TOKEN`). If GitHub says no, `clawswap smee` tries again and prints what to add by hand.
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:
 `clawswap switch 23`). `clawswap up staging` runs it with `clawswap.staging.yml` merged over the config

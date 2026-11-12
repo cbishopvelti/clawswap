@@ -293,16 +293,30 @@ defmodule Clawswap.Doctor do
         end
       end
 
-    if channel,
-      do: check("Webhook", :ok, channel, nil),
-      else:
-        check(
-          "Webhook",
-          :optional,
-          nil,
-          "New branches show up straight away with GitHub's webhook; without it the watcher looks every 15 minutes.",
-          "clawswap smee, then add the webhook it prints on GitHub"
-        )
+    cond do
+      channel ->
+        check("Webhook", :ok, "#{channel} (this checkout's own channel)", nil)
+
+      shared = shared_channel(sys) ->
+        check("Webhook", :ok, "#{shared} (the shared channel; the daemon adds the repo's webhook for it)", nil)
+
+      true ->
+        check("Webhook", :ok, "the shared smee.io channel (the daemon makes it, and adds the repo's webhook for it)", nil)
+    end
+  end
+
+  # The daemon's shared channel, as Clawswap.SharedSmee keeps it (this module stays stdlib-only).
+  defp shared_channel(sys) do
+    state = if sys.env["XDG_STATE_HOME"] not in [nil, ""], do: sys.env["XDG_STATE_HOME"], else: Path.join(sys.env["HOME"] || "~", ".local/state")
+    file = Path.join([state, "clawswap", "smee.json"])
+
+    with true <- sys.exists?.(file),
+         {:ok, text} <- File.read(file),
+         {:ok, %{"channel" => "http" <> _ = url}} <- JSON.decode(text) do
+      url
+    else
+      _ -> nil
+    end
   end
 
   @doc "The checks as doctor prints them."

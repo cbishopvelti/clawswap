@@ -125,14 +125,20 @@ defmodule Clawswap.DoctorTest do
       %{root: root, sys: %{real | repo: root, cmd: cmd, exists?: &File.exists?/1, tool: Path.expand("../", __DIR__)}}
     end
 
-    test "wants a config, and suggests the webhook", %{root: root, sys: sys} do
+    test "wants a config, and says which smee.io channel the webhook uses", %{root: root, sys: sys} do
+      sys = %{sys | env: Map.merge(sys.env, %{"XDG_STATE_HOME" => Path.join(root, "state"), "CLAWSWAP_SMEE" => ""})}
       assert find(sys, "Config").fix == "clawswap init, in #{root}"
-      assert levels(sys)["Webhook"] == :optional
+      assert levels(sys)["Webhook"] == :ok
+      assert find(sys, "Webhook").found =~ "the shared smee.io channel"
+
+      File.mkdir_p!(Path.join([root, "state", "clawswap"]))
+      File.write!(Path.join([root, "state", "clawswap", "smee.json"]), ~s({"channel": "https://smee.io/shared"}))
+      assert find(sys, "Webhook").found =~ "https://smee.io/shared (the shared channel"
 
       File.write!(Path.join(root, "clawswap.yml"), "servers: {}\n")
       File.write!(Path.join([root, ".git", "clawswap.json"]), ~s({"smee": "https://smee.io/abc"}))
       assert find(sys, "Config").found == "clawswap.yml"
-      assert find(sys, "Webhook").found == "https://smee.io/abc"
+      assert find(sys, "Webhook").found == "https://smee.io/abc (this checkout's own channel)"
     end
 
     test "knows the config's names" do
