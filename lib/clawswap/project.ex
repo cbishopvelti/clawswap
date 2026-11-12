@@ -10,7 +10,7 @@ defmodule Clawswap.Project do
 
   use Supervisor
 
-  alias Clawswap.{Config, Multiplexer, ProjectLog, Watcher}
+  alias Clawswap.{Config, Multiplexer, ProjectLog, SharedSmee, Watcher}
   alias Clawswap.Walkthrough.Debugger
 
   @registry Clawswap.Registry
@@ -35,6 +35,7 @@ defmodule Clawswap.Project do
     on_change = opts[:on_change] || fn _ -> :ok end
     on_debug = opts[:on_debug] || fn _ -> :ok end
     reload = opts[:reload] || fn -> :ok end
+    # A channel of its own (CLAWSWAP_SMEE, or `clawswap smee <url>`), else the daemon's shared one.
     smee = project.host_env["CLAWSWAP_SMEE"] || Config.read_local(project)["smee"]
 
     watcher = [
@@ -42,6 +43,7 @@ defmodule Clawswap.Project do
       group_leader: {:log, id},
       project: project,
       smee_url: if(smee in [nil, ""], do: nil, else: smee),
+      shared_smee: if(SharedSmee.running?(), do: SharedSmee),
       servers: Multiplexer.pick(project).servers(project, &Watcher.log/1),
       run_step: Watcher.step_runner(project),
       on_change: on_change,

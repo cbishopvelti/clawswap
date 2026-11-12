@@ -55,7 +55,7 @@
   <tr><td><code>clawswap walk [name...]</code></td><td>Plays <a href="walkthroughs.html">walkthroughs</a> in Chrome: the ones named, else the ones this branch added or changed. <code>--headless</code> runs them without a window and exits 1 if one fails.</td></tr>
   <tr><td><code>clawswap test [path...]</code></td><td>Runs the project's <a href="testing.html">browser tests</a> (Wallaby) against the session's servers. <code>--watch</code> shows the windows, <code>--only tag</code> picks by tag.</td></tr>
   <tr><td><code>clawswap browser</code></td><td>Opens a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> at your app, that walkthroughs then play in.</td></tr>
-  <tr><td><code>clawswap smee [url]</code></td><td>Sets up the smee.io channel and the GitHub webhook for it, and points a running watcher at it (see <a href="install.html#project">Install</a>).</td></tr>
+  <tr><td><code>clawswap smee [url]</code></td><td>Adds the repo's GitHub webhook for the daemon's shared smee.io channel (<code>up</code> does this by itself; this tries again, or prints the steps to do it by hand), and points a running watcher at it. With a URL, or <code>new</code>, the checkout gets a channel of its own (see <a href="install.html#project">Install</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap completion install</code></td><td>Sets up Tab completion for your shell; <code>clawswap completion &lt;shell&gt;</code> prints the script for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
   <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
@@ -158,7 +158,7 @@ and each project comes into it with a watcher of its own.</p>
 it one when you'd rather it didn't share.</p>
 
 <h2 id="state">What clawswap keeps per checkout</h2>
-<p><code>.git/clawswap.json</code> holds the smee.io channel and the commit the steps last ran for. It lives
+<p><code>.git/clawswap.json</code> holds the commit the steps last ran for, and a smee.io channel of the checkout's own if you gave it one. It lives
 inside <code>.git</code>, so it's never committed and needs no <code>.gitignore</code> entry; worktrees get their own.
 The generated layout sits next to it as <code>.git/clawswap.kdl</code> (zellij only).</p>
 <div class="pager"><span><a href="install.html">← Install</a></span><span><a href="configuration.html">Configuration →</a></span></div>

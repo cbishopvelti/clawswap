@@ -26,7 +26,7 @@ defmodule Clawswap.Application do
   end
 
   @doc """
-  Starts the daemon on `port`: the projects, the Stream Deck's owner and the endpoint, under the app's
+  Starts the daemon on `port`: the projects, the Stream Deck's owner, the shared smee.io channel and the endpoint, under the app's
   supervisor. Options: `idle_ms` (the daemon stops after that long with no projects; nil for never).
   """
   def start_daemon(port, opts \\ []) do
@@ -48,6 +48,8 @@ defmodule Clawswap.Application do
        project_opts: [on_change: &ClawswapWeb.View.broadcast/2, on_debug: &ClawswapWeb.DebugView.broadcast/2]}
 
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, {Clawswap.DeckOwner, on_change: &ClawswapWeb.View.deck_changed/0})
+    # Before the projects, whose watchers follow it.
+    {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, Clawswap.SharedSmee)
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, projects)
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, ClawswapWeb.Endpoint)
     Clawswap.Watcher.log("clawswap daemon on http://127.0.0.1:#{port}")

@@ -181,7 +181,7 @@ that points its own name at 127.0.0.1 gets 403.</p></div>
 <h2 id="ports">Ports</h2>
 <p>clawswap opens one port: the daemon's, <code>27390</code> by default (<code>port</code>, or <code>CLAWSWAP_PORT</code>).
 Phoenix serves the page (Hologram), the JSON API and the settings editor all from it, on <code>127.0.0.1</code> only.
-GitHub's events don't need one: the watcher connects out to smee.io and reads them as a stream. The default is out
+GitHub's events don't need one: the daemon connects out to smee.io and reads them as a stream. The default is out
 of the way of the ports dev servers usually take (3000, 4000, 5173, 8000, 8080…), so it doesn't take the one your app wants.</p>
 <p>A <code>port</code> under <code>servers</code> is your app's, not clawswap's: your app picks it, and clawswap
 frees it before a switch, waits for it to listen again before calling the switch done, and lets that origin call the API. Others come up only in particular cases:</p>
@@ -202,7 +202,7 @@ frees it before a switch, waits for it to listen again before calling the switch
   <tr><td><code>CLAWSWAP_SESSION</code></td><td><code>session</code></td></tr>
   <tr><td><code>CLAWSWAP_MULTIPLEXER</code></td><td><code>multiplexer</code> (<code>zellij</code> or <code>tmux</code>)</td></tr>
   <tr><td><code>CLAWSWAP_BROWSER_PORT</code></td><td>The dev Chrome's debugging port (27392). See <a href="#ports">ports</a>.</td></tr>
-  <tr><td><code>CLAWSWAP_SMEE</code></td><td>The smee.io channel saved by <code>clawswap smee</code>.</td></tr>
+  <tr><td><code>CLAWSWAP_SMEE</code></td><td>A smee.io channel of the project's own, in place of the daemon's shared one (as <code>clawswap smee &lt;url&gt;</code> saves).</td></tr>
   <tr><td><code>CLAWSWAP_CONFIG</code></td><td>Another config file, relative to the repo root; read as YAML when it ends in <code>.yml</code> or <code>.yaml</code>.</td></tr>
   <tr><td><code>GITHUB_TOKEN</code></td><td>The token for pull requests (else the <code>gh</code> CLI's, if it's logged in).</td></tr>
 </table>
