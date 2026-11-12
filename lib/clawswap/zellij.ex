@@ -6,7 +6,7 @@ defmodule Clawswap.Zellij do
 
   alias Clawswap.{Ports, Run}
 
-  import Clawswap.Multiplexer, only: [keep: 0, cli: 0]
+  import Clawswap.Multiplexer, only: [keep: 0]
 
   def version do
     with {:ok, out} <- Run.capture("zellij", ["--version"]),
@@ -81,7 +81,7 @@ defmodule Clawswap.Zellij do
 
     servers = project.server_names |> Enum.with_index() |> Enum.map(fn {n, i} -> pane.(n, project.servers[n], i == 0) end)
     # From the config's folder, so the watcher loads the same config.
-    watcher = pane.("clawswap", %{command: [cli(), "watch"], cwd: Path.dirname(project.file)}, servers == [])
+    watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)}, servers == [])
     side = [watcher | Enum.map(project.pane_names, &pane.(&1, project.panes[&1], false))]
     column = fn panes, size -> ~s(pane split_direction="horizontal"#{if size, do: ~s( size="#{size}")} {\n#{indent(Enum.join(panes, "\n"), 4)}\n}) end
 

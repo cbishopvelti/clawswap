@@ -53,6 +53,46 @@ YAML in <code>clawswap.yml</code> (or <code>clawswap.yaml</code>) instead; see <
   <li><strong>Committed.</strong> Commit the config. If a switch changes it, the daemon restarts that project to load the new one.</li>
 </ul>
 
+<h2 id="overrides">Override configs</h2>
+<p>To run the project a different way now and then (a staging API, other ports, one server fewer), keep the
+differences in an override config beside the config, named <code>clawswap.&lt;name&gt;.exs</code> or
+<code>clawswap.&lt;name&gt;.yml</code>, and name it to <code>up</code>:</p>
+<pre><code>clawswap up staging          # clawswap.yml, with clawswap.staging.yml merged over it
+clawswap up staging local.yml  # several, merged in order; a file is a path from where you are</code></pre>
+<p>An override has only what it changes. With this <code>clawswap.yml</code>:</p>
+<pre><code>servers:
+  web: {command: npm run dev, port: 3000}
+  api: {command: mix phx.server, port: 4000}
+steps:
+  - {run: npm ci, when: package-lock.json}</code></pre>
+<p>a <code>clawswap.staging.yml</code> of</p>
+<pre><code>session: shop-staging
+servers:
+  web:
+    command: npm run dev -- --mode staging
+  api: false</code></pre>
+<p>runs <code>web</code> in staging mode on port 3000, without <code>api</code>, keeping the steps, in a session of its own.</p>
+<ul>
+  <li><strong>Merged key by key.</strong> The config and each server or pane in it merge with the override's, all the
+    way down. A key only the override has is added after the config's.</li>
+  <li><strong>Lists and values are replaced.</strong> A <code>steps</code>, <code>prepare</code>, <code>notes</code>
+    or <code>origins</code> list in the override replaces the config's whole (<code>steps: []</code> runs none), as does
+    a command, port or Regex.</li>
+  <li><strong><code>false</code> takes a key out.</strong> <code>api: false</code> under <code>servers</code> drops
+    that server; <code>layout: false</code> goes back to the generated layout.</li>
+  <li><strong>Either format.</strong> A YAML override works over a <code>clawswap.exs</code> and the other way round.</li>
+  <li><strong>The session's commands follow.</strong> The session's <code>clawswap</code> pane runs the project with the
+    same overrides, a switch that changes an override restarts the project, and the session is started with
+    <code>CLAWSWAP_OVERRIDES</code> set, so <code>clawswap switch</code> in its panes reaches the same project. (With
+    tmux, only when no tmux server was running yet; otherwise give the names to another command with
+    <code>CLAWSWAP_OVERRIDES=staging clawswap switch …</code>.)</li>
+  <li><strong>Run it beside the plain one</strong> by giving the override its own <code>session</code> (two sessions
+    can't share a name), and other server <code>port</code>s if both run at once. Without a <code>session</code>, it
+    takes the plain one's place in the daemon.</li>
+  <li><strong>The <a href="#editor">settings page</a> edits the config itself</strong>, not the override.</li>
+</ul>
+<p>Tab completes the override names in the folder you're in after <code>clawswap up</code>.</p>
+
 <h2 id="example">An example</h2>
 <pre><code>[
   servers: [
@@ -204,6 +244,7 @@ frees it before a switch, waits for it to listen again before calling the switch
   <tr><td><code>CLAWSWAP_BROWSER_PORT</code></td><td>The dev Chrome's debugging port (27392). See <a href="#ports">ports</a>.</td></tr>
   <tr><td><code>CLAWSWAP_SMEE</code></td><td>The smee.io channel saved by <code>clawswap smee</code>.</td></tr>
   <tr><td><code>CLAWSWAP_CONFIG</code></td><td>Another config file, relative to the repo root; read as YAML when it ends in <code>.yml</code> or <code>.yaml</code>.</td></tr>
+  <tr><td><code>CLAWSWAP_OVERRIDES</code></td><td><a href="#overrides">Override configs</a> to merge over the config, comma separated (names or files), as <code>clawswap up name...</code> gives them.</td></tr>
   <tr><td><code>GITHUB_TOKEN</code></td><td>The token for pull requests (else the <code>gh</code> CLI's, if it's logged in).</td></tr>
 </table>
 <div class="pager"><span><a href="usage.html">← Use</a></span><span><a href="switching.html">Switching →</a></span></div>

@@ -7,7 +7,7 @@ defmodule Clawswap.Tmux do
 
   alias Clawswap.{Ports, Run}
 
-  import Clawswap.Multiplexer, only: [keep: 0, cli: 0]
+  import Clawswap.Multiplexer, only: [keep: 0]
 
   def version do
     with {:ok, out} <- Run.capture("tmux", ["-V"]),
@@ -51,7 +51,7 @@ defmodule Clawswap.Tmux do
 
     servers = Enum.map(project.server_names, &pane.(&1, project.servers[&1]))
     # From the config's folder, so the watcher loads the same config.
-    watcher = pane.("clawswap", %{command: [cli(), "watch"], cwd: Path.dirname(project.file)})
+    watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)})
     side = [watcher | Enum.map(project.pane_names, &pane.(&1, project.panes[&1]))]
     t = target(project) <> ":"
     name = fn {n, _} -> ["set-option", "-p", "-t", t, "@clawswap", n] end

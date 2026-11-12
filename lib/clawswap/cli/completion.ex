@@ -1,8 +1,8 @@
 defmodule Clawswap.CLI.Completion do
   @moduledoc """
   Shell completion scripts for bin/clawswap (`clawswap completion bash|zsh|fish`). They complete the
-  commands, and for `switch` the branches on origin, read with git in the repo you're in so completing
-  doesn't have to start mix.
+  commands, for `switch` the branches on origin, read with git in the repo you're in so completing
+  doesn't have to start mix, and for `up` the override configs (clawswap.<name>.yml) in the folder you're in.
 
   `clawswap completion install` saves the script where the shell finds it, and `clawswap reload` writes the
   saved ones again, so a new command completes once clawswap has reloaded.
@@ -13,6 +13,9 @@ defmodule Clawswap.CLI.Completion do
 
   # The branches on origin of the repo you're in, without origin/ and HEAD.
   @branches ~S"git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin 2>/dev/null | grep -v '^HEAD$'"
+
+  # The override configs' names in the folder you're in: clawswap.<name>.exs, .yml or .yaml.
+  @overrides ~S"find . -maxdepth 1 -name 'clawswap.*' 2>/dev/null | sed -nE 's#^\./clawswap\.(.+)\.(exs|yml|yaml)$#\1#p'"
 
   @doc "The script for `shell`, completing `commands` (`{name, summary}`), or nil for a shell it doesn't know."
   def script(shell, commands)
@@ -31,6 +34,7 @@ defmodule Clawswap.CLI.Completion do
       fi
       case "${COMP_WORDS[1]}" in
         switch) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "$(#{@branches})" -- "$cur")) ;;
+        up|watch) COMPREPLY=($(compgen -W "$(#{@overrides})" -- "$cur")) ;;
         update) COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
         walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
         test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
@@ -59,6 +63,7 @@ defmodule Clawswap.CLI.Completion do
       fi
       case $words[2] in
         switch) (( CURRENT == 3 )) && compadd -- ${(f)"$(#{@branches})"} ;;
+        up|watch) compadd -- ${(f)"$(#{@overrides})"} ;;
         update) compadd -- --all ;;
         walk) compadd -- --headless ;;
         test) compadd -- --watch --headless --only --exclude --seed ;;
@@ -80,6 +85,7 @@ defmodule Clawswap.CLI.Completion do
     complete -c clawswap -f
     #{subcommands}
     complete -c clawswap -n '__fish_seen_subcommand_from switch' -a '(#{String.replace(@branches, "'", "\\'")})'
+    complete -c clawswap -n '__fish_seen_subcommand_from up watch' -a '(#{String.replace(@overrides, "'", "\\'")})'
     complete -c clawswap -n '__fish_seen_subcommand_from update' -a --all
     complete -c clawswap -n '__fish_seen_subcommand_from walk' -a --headless
     complete -c clawswap -n '__fish_seen_subcommand_from test' -a '--watch --headless --only --exclude --seed'

@@ -18,6 +18,22 @@ defmodule Clawswap.Multiplexer do
   def cli, do: Path.join(@tool, "bin/clawswap")
 
   @doc """
+  The session's clawswap pane's command: `clawswap watch`, with the override configs `up` was given (as
+  full paths, since the pane runs in the config's folder), so it runs the same project.
+  """
+  def watch(project), do: [cli(), "watch" | Enum.map(project[:overrides] || [], &Path.expand(&1, project.root))]
+
+  @doc """
+  `up`'s command for the session, run with CLAWSWAP_OVERRIDES set when there are override configs, so the
+  clawswap commands run in the session's panes load the same project. (tmux passes it on only when its
+  server starts with the session; otherwise its panes get the server's environment.)
+  """
+  def with_overrides(%{overrides: [_ | _] = overrides} = project, command),
+    do: ["env", "CLAWSWAP_OVERRIDES=" <> Enum.map_join(overrides, ",", &Path.expand(&1, project.root)) | command]
+
+  def with_overrides(_project, command), do: command
+
+  @doc """
   The config's `multiplexer` (or CLAWSWAP_MULTIPLEXER) when it names one. Otherwise: the one clawswap runs
   inside (so the watcher drives the session it's in), zellij for a config with its own zellij `layout`,
   then zellij if it's installed and new enough, then tmux if it's installed.
