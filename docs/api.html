@@ -119,8 +119,10 @@ change with the browser tab you're on. The deck's project key and <code>POST /se
 another; the next tab you look at selects its own again.</p>
 <p>The branch page and the debug panel report it with <code>POST /p/&lt;id&gt;/focus</code>, framed in your app's dev
 chrome or opened on their own: when they load, when their tab comes back into view, and when the page itself takes
-focus. An app that embeds clawswap reports its project with no code of its own. Two browser windows side by side don't tell it which
-one you moved to: it follows tabs, not windows.</p>
+focus. An app that frames clawswap's page reports its project with no code of its own, as long as the frame is
+loaded (<a href="page.html#iframe">The page in an iframe</a>); one with no frame can load
+<code>/clawswap-focus.js</code> with <code>data-project</code> set to its project's id. Two browser windows side by side
+don't tell it which one you moved to: it follows tabs, not windows.</p>
 <pre><code>curl -sN http://127.0.0.1:27390/focus/events
 data: {"project":"bmx","root":"/home/you/bmx","at":1794440000000}</code></pre>
 

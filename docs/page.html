@@ -118,8 +118,9 @@ Vite + React app does both. (It's a test target, so it's JavaScript; clawswap it
 <p>The simplest: a button in your top bar that opens a dropdown with the page in it.</p>
 <pre><code>&lt;iframe src="http://localhost:27390/p/myapp" title="clawswap"&gt;&lt;/iframe&gt;</code></pre>
 <p>where <code>myapp</code> is the project's id (its session's name, in lower case).</p>
-<p>The example's <code>BranchMenu</code> keeps the frame loaded once it has been opened (it's only hidden when the menu
-closes), so it keeps following a switch while closed, and adds reload, open-in-a-tab and close buttons. Things to know:</p>
+<p>The example's <code>BranchMenu</code> loads the frame with your page and only hides it while the menu is closed, so it
+follows a switch whether the menu is open or not, and tells clawswap when your tab comes into view (Focus, below). It
+adds reload, open-in-a-tab and close buttons. Things to know:</p>
 <ul>
   <li><strong>Framing.</strong> Neither clawswap's endpoint nor Hologram sets <code>X-Frame-Options</code> or
     <code>frame-ancestors</code>, so the page frames.</li>
@@ -130,8 +131,9 @@ closes), so it keeps following a switch while closed, and adds reload, open-in-a
     the watcher and follows the switch to the end. Whether your app's page reloads is up to it: see below.</li>
   <li><strong>Focus.</strong> The framed page tells the daemon when its tab comes into view, so the Stream Deck keys
     that follow the selected project, and tools that follow <a href="api.html#focus">the focused project</a>, show the
-    project you're looking at. The frame has to have loaded: a Branches menu that loads it when first opened reports
-    from then on.</li>
+    project you're looking at. It can only while it's loaded, so load the frame with your page and hide it, rather
+    than adding it when the menu first opens. An app with no frame at all can put this in its dev layout instead:
+    <pre><code>&lt;script src="http://localhost:27390/clawswap-focus.js" data-project="myapp" defer&gt;&lt;/script&gt;</code></pre></li>
 </ul>
 
 <h3 id="reload">Reloading your app after a switch</h3>
@@ -169,10 +171,10 @@ new EventSource(`${CLAWSWAP}/events`).onmessage = (e) =&gt; {
 <pre><code>addEventListener("message", (e) =&gt; {
   if (e.origin === "http://localhost:27390" &amp;&amp; e.data?.clawswap === "switched") location.reload();
 });</code></pre>
-<p>That's enough on its own only while the frame is loaded (keep it loaded once opened: hide it rather than remove
-it when the menu closes, as the example's <code>BranchMenu</code> does). A reload unloads the frame, so after one, a
-switch from a key or the CLI goes unheard until the menu is opened again: listen on <code>/events</code> too. The
-origin is the daemon's, without the <code>/p/&lt;id&gt;</code>.</p>
+<p>That's enough on its own only while the frame is loaded: load it with the page and hide it rather than remove it
+when the menu closes, as the example's <code>BranchMenu</code> does. A frame that's only added when the menu first
+opens misses a switch from a key or the CLI after each reload until the menu is opened again, so listen on
+<code>/events</code> too. The origin is the daemon's, without the <code>/p/&lt;id&gt;</code>.</p>
 
 <h3 id="pull">A Pull button</h3>
 <p>The page has Pull, but it's only reachable once the menu is open. Give your app its own button next to

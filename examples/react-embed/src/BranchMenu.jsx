@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { CLAWSWAP_URL } from "./useClawswap.js";
 
 // The watcher's own Hologram page in an iframe, as a dropdown from a button in the top bar (like bmx's
-// branch menu). The frame stays loaded once opened, so it keeps following a switch while the menu is
-// closed. A click outside or Escape closes it.
+// branch menu). The frame loads with the page and is only hidden while the menu is closed, so it keeps
+// following a switch, and it tells clawswap when this tab comes into view, so the Stream Deck's keys show
+// this project as soon as you switch to the tab, menu opened or not. A click outside or Escape closes it.
 export default function BranchMenu() {
   const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
   const [frameKey, setFrameKey] = useState(0);
   const ref = useRef(null);
 
@@ -37,24 +37,19 @@ export default function BranchMenu() {
         className={open ? "on" : ""}
         aria-expanded={open}
         title="Switch branch"
-        onClick={() => {
-          setOpen(!open);
-          setLoaded(true);
-        }}
+        onClick={() => setOpen(!open)}
       >
         ⎇ Branches ▾
       </button>
-      {loaded && (
-        <div className="branch-menu-panel" hidden={!open}>
-          <div className="branch-menu-bar">
-            <span>clawswap</span>
-            <button title="Reload the menu" onClick={() => setFrameKey((k) => k + 1)}>↻</button>
-            <a href={CLAWSWAP_URL} target="_blank" rel="noreferrer" title="Open the full page">↗</a>
-            <button title="Close" onClick={() => setOpen(false)}>✕</button>
-          </div>
-          <iframe key={frameKey} src={CLAWSWAP_URL} title="clawswap" />
+      <div className="branch-menu-panel" hidden={!open}>
+        <div className="branch-menu-bar">
+          <span>clawswap</span>
+          <button title="Reload the menu" onClick={() => setFrameKey((k) => k + 1)}>↻</button>
+          <a href={CLAWSWAP_URL} target="_blank" rel="noreferrer" title="Open the full page">↗</a>
+          <button title="Close" onClick={() => setOpen(false)}>✕</button>
         </div>
-      )}
+        <iframe key={frameKey} src={CLAWSWAP_URL} title="clawswap" />
+      </div>
     </div>
   );
 }
