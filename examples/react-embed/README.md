@@ -50,11 +50,13 @@ the watcher's page, or run `clawswap walk branches-menu`, to watch Chrome open t
   same site (ports don't count), so the framed page gets its cookie. Mixing `localhost` and `127.0.0.1`
   makes them cross-site, so use `localhost` for both (Vite is pinned to it in `vite.config.js`).
 - **Restarts.** A switch kills this dev server, so the app reloads and its state resets, while the
-  framed page (kept loaded while the menu is closed) keeps its own connection to the watcher and follows
-  the switch to the end.
+  framed page (loaded with the app and only hidden while the menu is closed) keeps its own connection to
+  the watcher and follows the switch to the end.
 - **Reload.** When the switch is done the framed page posts `{clawswap: "switched", branch}` to the app,
   and `BranchMenu` reloads on it. Vite reloads by itself too; the listener is what an app without that
   (Phoenix, say) needs. See [docs/page.html#reload](../../docs/page.html#reload).
+- **Focus.** The hidden frame tells clawswap when this tab comes into view, so Stream Deck keys that follow
+  the selected project show this one as soon as you switch to the tab, without opening the menu.
 - **Another port or id.** Set `VITE_CLAWSWAP_URL` (in `.env.local`) when `clawswap.exs`'s `port` isn't 27390,
   or its session (the id in `/p/<id>`) isn't `react-embed`.
 

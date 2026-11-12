@@ -14,8 +14,9 @@ defmodule ClawswapWeb.Api do
                                             without one) in the browser; 200 {"url": ...} or 404
       POST /p/<id>/walk    {"name": ...}    202, then follow /state's walk
       POST /p/<id>/smee    {"url": ...}     follow this smee.io channel from now on (clawswap smee sends it)
-      POST /p/<id>/focus                    the project's page is in view: makes it the focused project
-                                            (the branch page and the debug panel send it); 200 {project, root, at}
+      POST /p/<id>/focus                    the project's page is in view: makes it the focused project, and
+                                            selects it (the branch page and the debug panel send it); 200
+                                            {project, root, at}
       GET  /p/<id>/debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
       GET  /p/<id>/log                      the project's log, then each new line as it comes (the
                                             session's clawswap pane follows it; the project stays while one does)

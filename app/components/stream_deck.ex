@@ -8,7 +8,9 @@ defmodule ClawswapWeb.StreamDeck do
 
   The keys follow the selected project, with a key before the walkthrough's that selects the next one
   (when there's more than one), or are pinned to one project: the menu beside the deck picks, for the
-  deck wherever it's driven from (`Clawswap.DeckOwner`). So the deck shows the same on every page.
+  deck wherever it's driven from (`Clawswap.DeckOwner`). So the deck shows the same on every page. A
+  project's page coming into view selects it (`Clawswap.Projects.focus/1`), so keys that follow the
+  selection show the project whose tab you're on, while the tab that has the deck keeps driving it.
 
   One browser tab has the deck at a time (`Clawswap.DeckOwner`): the one Connect (or "Use here") was last
   pressed in, which says so again every 20 seconds while it has it. The others let it go and offer "Use
