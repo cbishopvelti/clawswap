@@ -108,6 +108,41 @@ defmodule Clawswap.SharedSmeeTest do
     assert_receive {:ensure_hook, "me/app"}, 1000
   end
 
+  test "without a token it listens all the same, and a delivery shows a webhook added by hand works", %{start: start} do
+    hub = start.(ensure_hook: fn _, _ -> {:error, :no_token} end)
+    assert_receive {:listening, "https://smee.io/shared"}, 1000
+    send(hub, {:smee, :open})
+
+    {_, _} = subscriber(hub, :app, "me/app")
+
+    assert_receive {:got, :app, {:shared_smee, {:log, "Couldn't check me/app's GitHub webhook (no GitHub token); listening on https://smee.io/shared" <> _}}},
+                   1000
+
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "unchecked", error: "no GitHub token to check it; listening on https://smee.io/shared"}}}},
+                   1000
+
+    send(hub, {:smee, {:delivery, "ping", "me/app"}})
+    assert_receive {:got, :app, {:shared_smee, {:delivery, "ping"}}}, 1000
+    assert_receive {:got, :app, {:shared_smee, {:log, "Got a delivery from me/app's GitHub webhook, so it works"}}}, 1000
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "connected", error: nil}}}}, 1000
+
+    # It stays working: no more checks, and a second delivery says nothing new.
+    {_, status} = subscriber(hub, :again, "me/app")
+    assert status == %{webhook: "connected", error: nil}
+    send(hub, {:smee, {:delivery, "push", "me/app"}})
+    refute_receive {:got, :app, {:shared_smee, {:log, _}}}, 100
+  end
+
+  test "a delivery also clears a webhook that couldn't be added", %{start: start} do
+    hub = start.(ensure_hook: fn _, _ -> {:error, "GitHub answered 404"} end)
+    send(hub, {:smee, :open})
+    {_, _} = subscriber(hub, :app, "me/app")
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "off"}}}}, 1000
+
+    send(hub, {:smee, {:delivery, "push", "Me/App"}})
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "connected", error: nil}}}}, 1000
+  end
+
   test "a checkout whose origin isn't on GitHub has no webhook", %{start: start} do
     hub = start.([])
     assert {_, %{webhook: "off", error: "origin isn't a GitHub repo"}} = subscriber(hub, :local, nil)

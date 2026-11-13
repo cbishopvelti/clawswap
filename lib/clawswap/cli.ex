@@ -749,7 +749,8 @@ defmodule Clawswap.CLI do
       {:error, message} ->
         IO.puts("""
         Couldn't add the webhook on GitHub: #{message}.
-        Add it by hand (repo Settings > Webhooks > Add webhook):
+        If you added it by hand, check its Payload URL is the one below; the watcher listens all the same,
+        and shows the webhook on once a delivery comes in. Otherwise add it (repo Settings > Webhooks > Add webhook):
           Payload URL:  #{channel}
           Content type: application/json
           Events:       Let me select individual events > Branch or tag creation, Branch or tag deletion,

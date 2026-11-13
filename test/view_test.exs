@@ -35,6 +35,13 @@ defmodule ClawswapWeb.ViewTest do
     assert View.page(%{@state | current: %{branch: "claude/a", sha: "3"}}).on == "Add A"
   end
 
+  test "an unchecked webhook says where it listens, and isn't shown as a fault" do
+    view = View.page(%{@state | webhook: "unchecked", webhookError: "no GitHub token to check it; listening on https://smee.io/x"})
+    assert view.webhook == "webhook unchecked: no GitHub token to check it; listening on https://smee.io/x"
+    assert view.webhook_class == "unchecked"
+    assert View.page(%{@state | webhook: "connected"}).webhook_class == "ok"
+  end
+
   test "follows a switch" do
     view = View.page(%{@state | switch: %{target: "claude/a", pull: false, phase: "running", step: "npm install", error: nil}})
     assert view.busy

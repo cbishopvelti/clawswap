@@ -10,7 +10,9 @@ defmodule Clawswap.SharedSmee do
   As with a channel of its own, a delivery is only a hint to look again.
 
   A subscriber gets `{:shared_smee, {:status, %{webhook, error}}}` whenever its webhook's state changes
-  (`webhook`: "connecting", "connected" or "off", as the watcher's view has it), `{:shared_smee,
+  (`webhook`: "connecting", "connected", "unchecked" or "off", as the watcher's view has it; "unchecked"
+  when there's no token to look for the webhook with, though it listens all the same, and a webhook added
+  by hand that sends to the channel works: its first delivery makes it "connected"), `{:shared_smee,
   {:delivery, github_event}}` for each delivery about its repo, and `{:shared_smee, {:log, text}}` for what
   its project's log should say (the webhook was added, or couldn't be).
 
@@ -54,13 +56,14 @@ defmodule Clawswap.SharedSmee do
   end
 
   @doc """
-  Adds `repo`'s webhook for `channel` with the GitHub token, when it may: `{:ok, :created | :exists}` or
+  Adds `repo`'s webhook for `channel` with the GitHub token, when it may: `{:ok, :created | :exists}`,
+  `{:error, :no_token}` (it can't even look, so a webhook added by hand may well be there) or
   `{:error, message}`.
   """
   def ensure_hook(repo, channel) do
     case GitHub.token() do
       nil ->
-        {:error, "no GitHub token (log in with gh auth login, or set GITHUB_TOKEN)"}
+        {:error, :no_token}
 
       token ->
         with {:ok, outcome, _removed} <- GitHub.ensure_hook(repo, token, channel, nil, fn _ -> false end), do: {:ok, outcome}
@@ -152,8 +155,16 @@ defmodule Clawswap.SharedSmee do
         {:ok, :exists} ->
           {:ok, nil}
 
+        {:error, :no_token} ->
+          {:unchecked,
+           "Couldn't check #{repo}'s GitHub webhook (no GitHub token); listening on #{state.channel} all the same, " <>
+             "so a webhook added by hand that sends there works. Log in with gh auth login (or set GITHUB_TOKEN) " <>
+             "and run clawswap smee to have it added"}
+
         {:error, message} ->
-          {{:error, message}, "Couldn't add #{repo}'s GitHub webhook (#{message}); looking for new branches every 15 minutes. clawswap smee tries again"}
+          {{:error, message},
+           "Couldn't add #{repo}'s GitHub webhook (#{message}); listening on #{state.channel} all the same, so add one " <>
+             "by hand that sends there, or run clawswap smee to try again. Looking for new branches every 15 minutes meanwhile"}
       end
 
     if note, do: log(note)
@@ -169,12 +180,30 @@ defmodule Clawswap.SharedSmee do
   def handle_info({:smee, {:delivery, kind, repo}}, state) do
     pids = if repo, do: subscribers(state, repo), else: Map.keys(state.subs)
     Enum.each(pids, &send(&1, {:shared_smee, {:delivery, kind}}))
-    {:noreply, state}
+    {:noreply, delivered(state, repo)}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, _}, state), do: {:noreply, drop_sub(state, pid)}
 
   def handle_info(_, state), do: {:noreply, state}
+
+  # A delivery about a repo means its webhook works, whether or not it could be checked or added (one added
+  # by hand, with no token to look for it with).
+  defp delivered(state, nil), do: state
+
+  defp delivered(state, repo) do
+    case state.hooks[key(repo)] do
+      # Not yet known (or still being checked, which says for itself).
+      hook when hook in [nil, :ok, :pending] ->
+        state
+
+      _ ->
+        note = "Got a delivery from #{repo}'s GitHub webhook, so it works"
+        log(note)
+        for pid <- subscribers(state, repo), do: send(pid, {:shared_smee, {:log, note}})
+        tell(put_in(state.hooks[key(repo)], :ok), repo)
+    end
+  end
 
   defp make_channel(state) do
     me = self()
@@ -212,6 +241,8 @@ defmodule Clawswap.SharedSmee do
     case state.hooks[key(repo)] do
       {:error, message} -> %{webhook: "off", error: message}
       :ok -> %{webhook: state.stream, error: state.stream_error}
+      :unchecked when state.stream == "connected" -> %{webhook: "unchecked", error: "no GitHub token to check it; listening on #{state.channel}"}
+      :unchecked -> %{webhook: "connecting", error: state.stream_error}
       _ -> %{webhook: "connecting", error: nil}
     end
   end
