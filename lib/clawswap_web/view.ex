@@ -91,7 +91,7 @@ defmodule ClawswapWeb.View do
       on: on(state, current),
       dirty: state.dirty,
       webhook: webhook(state),
-      webhook_class: if(state.webhook == "connected", do: "ok", else: "off"),
+      webhook_class: webhook_class(state.webhook),
       busy: running,
       # When the last switch or pull was asked for (nil before one): the page keeps a click's spinner
       # until this changes, so it knows the watcher has heard of it.
@@ -198,10 +198,17 @@ defmodule ClawswapWeb.View do
   defp walk_status(%{phase: "failed"} = w), do: %{text: "✕ #{w.name}: #{w.error}", class: "failed"}
 
   defp webhook(%{webhook: "connected"}), do: "webhook on"
+  defp webhook(%{webhook: "unchecked", webhookError: error}) when is_binary(error), do: "webhook unchecked: #{error}"
+  defp webhook(%{webhook: "unchecked"}), do: "webhook unchecked"
   defp webhook(%{webhook: "off", webhookError: error}) when is_binary(error), do: "webhook off: #{error}"
   defp webhook(%{webhook: "off"}), do: "webhook off: run clawswap smee"
   defp webhook(%{webhookError: error}) when is_binary(error), do: "webhook lost: #{error}"
   defp webhook(_), do: "webhook connecting"
+
+  # Unchecked isn't a fault (it listens all the same), so it isn't shown as one.
+  defp webhook_class("connected"), do: "ok"
+  defp webhook_class("unchecked"), do: "unchecked"
+  defp webhook_class(_), do: "off"
 
   defp pull_label(%{pull: true, phase: "running", step: step}, _, _), do: "Pulling: #{step || "..."}"
   defp pull_label(_, nil, _), do: "Pull"
