@@ -122,6 +122,9 @@ option { background: var(--card); color: var(--fg); }
 .deck-elsewhere { color: var(--muted); }
 .deck-keys { font: inherit; font-size: 13px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 .all-projects { text-decoration: none; color: var(--muted); }
+/* The front page's way back to the project you came from (ClawswapWeb.ProjectsPage). */
+.projects .back { text-decoration: none; color: var(--muted); font-size: 14px; white-space: nowrap; }
+.projects .back:hover { color: var(--fg); }
 
 /* The daemon's front page: a row for each project. */
 .projects li.project { display: flex; align-items: baseline; gap: 12px; background: var(--card); border: 1px solid var(--line);
