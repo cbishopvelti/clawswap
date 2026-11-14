@@ -14,9 +14,7 @@ _clawswap() {
   case $words[2] in
     switch) (( CURRENT == 3 )) && compadd -- ${(f)"$(git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin 2>/dev/null | grep -v '^HEAD$')"} ;;
     up|watch) compadd -- ${(f)"$(find . -maxdepth 1 -name 'clawswap.*' 2>/dev/null | sed -nE 's#^\./clawswap\.(.+)\.(exs|yml|yaml)$#\1#p')"} ;;
-    update) compadd -- --all ;;
-    walk) compadd -- --headless ;;
-    test) compadd -- --watch --headless --only --exclude --seed ;;
+    
     completion) compadd -- install bash zsh fish ;;
     help) (( CURRENT == 3 )) && _describe command commands ;;
   esac

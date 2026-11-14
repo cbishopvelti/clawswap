@@ -15,7 +15,7 @@ defmodule Clawswap.Config do
   @file_names [@file_name, "clawswap.yml", "clawswap.yaml"]
   def file_names, do: @file_names
 
-  @doc "The config as the rest of clawswap uses it, with the defaults filled in. See README.md for each field."
+  @doc "The config as the rest of clawswap uses it, with the defaults filled in. See docs/configuration.html for each field."
   def normalise(config, opts) do
     config = Map.new(config)
     root = Keyword.fetch!(opts, :root)
@@ -93,23 +93,26 @@ defmodule Clawswap.Config do
   end
 
   @doc """
-  The address of one of the project's servers by its name (the first with a port when it's nil), or of
+  The address of one of the project's servers by its name (the first with a port when it's nil), on the
+  port it's actually on (`Clawswap.Ports.server_port/2`), or of
   the project's clawswap page with `:clawswap` (the daemon's /p/<id>), plus `path`. Walkthroughs' and
   browser tests' `url/2`.
   """
   def url(project, server, path) when server in [:clawswap, "clawswap"], do: "http://localhost:#{project.port}/p/#{project.id}#{path}"
 
   def url(project, server, path) do
-    port =
+    name =
       cond do
         server == nil ->
-          Enum.find_value(project.server_names, &project.servers[&1].port) || raise "None of the servers has a port"
+          Enum.find(project.server_names, &project.servers[&1].port) || raise "None of the servers has a port"
 
         true ->
           (project.servers[to_string(server)] || raise("No server called #{server}")).port || raise "Server #{server} has no port"
+          to_string(server)
       end
 
-    "http://localhost:#{port}#{path}"
+    # The port it's on, which isn't the configured one when that was taken and it moved to the next.
+    "http://localhost:#{Clawswap.Ports.server_port(project, name)}#{path}"
   end
 
   defp env(env, name), do: env[name] |> then(&if(&1 == "", do: nil, else: &1))

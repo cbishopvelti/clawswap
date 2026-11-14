@@ -4,7 +4,7 @@ defmodule ClawswapWeb.Api do
   name); the same paths without it answer for the selected project (`Clawswap.Projects.selected/0`), so a
   Stream Deck key or a script that names no project follows whichever is selected.
 
-      GET  /p/<id>/state                    the watcher's state (see README.md)
+      GET  /p/<id>/state                    the watcher's state (see docs/api.html)
       GET  /p/<id>/events                   the same state as Server-Sent Events: now, then each time it
                                             changes, so a page can listen rather than poll /state
       POST /p/<id>/switch  {"branch": ...}  202, then follow /state's switch
@@ -77,7 +77,7 @@ defmodule ClawswapWeb.Api do
     origin = conn |> get_req_header("origin") |> List.first()
     own = ["http://localhost:#{port}", "http://127.0.0.1:#{port}"]
     origins = if is_map(project), do: MapSet.union(project.origins, MapSet.new(own)), else: MapSet.new(own)
-    allowed = origin && MapSet.member?(origins, origin) && origin
+    allowed = origin && (MapSet.member?(origins, origin) || moved_server_origin?(project, origin)) && origin
 
     conn = if allowed, do: conn |> put_resp_header("access-control-allow-origin", allowed) |> put_resp_header("vary", "Origin"), else: conn
 
@@ -100,6 +100,18 @@ defmodule ClawswapWeb.Api do
         dispatch(conn, route, project)
     end
   end
+
+  # A page from one of the project's servers that took another port because its own was taken (Vite moves
+  # to the next one). Only looked for when the origin isn't one of the project's, as it reads /proc.
+  defp moved_server_origin?(project, origin) when is_map(project) do
+    Enum.any?(project.server_names, fn name ->
+      port = project.servers[name][:port]
+      moved = port && Clawswap.Ports.server_port(project, name)
+      moved != port and origin in ["http://localhost:#{moved}", "http://127.0.0.1:#{moved}"]
+    end)
+  end
+
+  defp moved_server_origin?(_, _), do: false
 
   defp dispatch(conn, {:daemon, "/daemon"}, _), do: json(conn, 200, %{clawswap: "daemon", port: Clawswap.Application.port(), pid: System.pid()})
   defp dispatch(conn, {:daemon, "/projects"}, _), do: json(conn, 200, %{projects: Projects.list(), selected: Projects.selected(), focused: Projects.focused()})

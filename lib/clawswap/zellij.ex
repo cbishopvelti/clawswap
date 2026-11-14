@@ -69,17 +69,25 @@ defmodule Clawswap.Zellij do
   other panes on the right. The watcher finds the servers' panes by these names.
   """
   def layout(project) do
+    run = fn name, cwd, [program | args], focus ->
+      ~s(pane name=#{kdl(name)} command=#{kdl(program)} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"} {\n) <>
+        ~s(    args #{Enum.map_join(args, " ", &kdl/1)}\n})
+    end
+
     pane = fn
       # A pane with no command opens zellij's default shell there.
       name, %{command: nil, cwd: cwd}, focus ->
         ~s(pane name=#{kdl(name)} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"})
 
       name, %{command: command, cwd: cwd}, focus ->
-        ~s(pane name=#{kdl(name)} command=#{kdl(keep())} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"} {\n) <>
-          ~s(    args #{command |> List.wrap() |> Enum.map_join(" ", &kdl/1)}\n})
+        run.(name, cwd, [keep() | List.wrap(command)], focus)
     end
 
-    servers = project.server_names |> Enum.with_index() |> Enum.map(fn {n, i} -> pane.(n, project.servers[n], i == 0) end)
+    servers =
+      project.server_names
+      |> Enum.with_index()
+      |> Enum.map(fn {n, i} -> run.(n, project.servers[n].cwd, Clawswap.Multiplexer.server_command(project, n), i == 0) end)
+
     # From the config's folder, so the watcher loads the same config.
     watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)}, servers == [])
     side = [watcher | Enum.map(project.pane_names, &pane.(&1, project.panes[&1], false))]
@@ -141,7 +149,7 @@ defmodule Clawswap.Zellij do
       # Through bin/keep, as in the layout, so the pane stays when the server stops.
       start: fn name ->
         server = project.servers[name]
-        replace.(name, [keep() | List.wrap(server.command)], Path.expand(server.cwd, project.root))
+        replace.(name, Clawswap.Multiplexer.server_command(project, name), Path.expand(server.cwd, project.root))
         :ok
       end
     }

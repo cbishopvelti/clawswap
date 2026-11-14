@@ -23,7 +23,7 @@ defmodule Clawswap.Starter do
     {servers, steps} = parts(detect(root), root)
 
     """
-    # clawswap's settings for this repo. See https://github.com/cbishopvelti/clawswap#configuration
+    # clawswap's settings for this repo. See https://cbishopvelti.github.io/clawswap/configuration.html
     [
       # base: "main",            # the branch listed first (default: origin's default branch)
       # port: 27390,              # the daemon's pages and API; projects on the same port share one daemon

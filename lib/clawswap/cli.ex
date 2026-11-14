@@ -14,7 +14,7 @@ defmodule Clawswap.CLI do
     {"switch", "<branch>", 1, 1, "Switch branch (its name, part of it, or its PR number), restarting the servers"},
     {"pull", "", 0, 0, "Pull the current branch the same way (nothing happens if it's up to date)"},
     {"update", "[rev]", 0, 1, "Run the steps for what changed since they last ran (or since rev), or --all"},
-    {"smee", "[url]", 0, 1, "Add this repo's GitHub webhook for the shared smee.io channel (up does it), or use a channel of its own"},
+    {"smee", "[url]", 0, 1, "Add this repo's GitHub webhook for the shared smee.io channel (up does it); a url or --new: a channel of its own"},
     {"walk", "[name...]", 0, :any, "Run walkthroughs in Chrome (default: the ones this branch added); --headless"},
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
     {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
@@ -26,24 +26,24 @@ defmodule Clawswap.CLI do
     {"help", "[command]", 0, 1, "This list, or one command's usage and options (so does clawswap <command> --help)"}
   ]
 
-  # The options a command takes, as its help shows them: the flag (with its value, if it takes one) and what
-  # it does. A command that isn't here takes none.
-  @flags %{
-    "update" => [{"--all", "Run every step, whatever changed"}],
-    "walk" => [{"--headless", "Play them in a Chrome with no window"}],
+  # The options each command takes: its OptionParser type, the value it takes as help shows it (if any), and
+  # what it does. A command not here takes none, and every command turns down an option it doesn't take
+  # (suggesting the closest one), so a typo never runs. --help and -h are every command's, before these.
+  @options %{
+    "update" => [all: {:boolean, "Run every step, whatever changed"}],
+    "smee" => [new: {:boolean, "Make a new smee.io channel of this checkout's own"}],
+    "walk" => [headless: {:boolean, "Play them in a Chrome with no window, and exit 1 if one fails"}],
     "test" => [
-      {"--watch", "Show Chrome while the tests drive it"},
-      {"--headless", "Run Chrome with no window (the default, unless the config says otherwise)"},
-      {"--only <tag>", "Run only the tests with this tag (again for more tags)"},
-      {"--exclude <tag>", "Skip the tests with this tag (again for more tags)"},
-      {"--seed <n>", "ExUnit's seed, to run them in the same order again"},
-      {"--max-cases <n>", "How many test modules run at once"}
-    ],
-    "completion" => [
-      {"install [shell]", "Install the script where your shell (or the one named) looks for it"},
-      {"bash|zsh|fish", "Print that shell's script"}
+      watch: {:boolean, "Show Chrome while the tests drive it"},
+      headless: {:boolean, "Run Chrome with no window (the default, unless the config says otherwise)"},
+      only: {:keep, "tag", "Run only the tests with this tag (again for more tags)"},
+      exclude: {:keep, "tag", "Skip the tests with this tag (again for more tags)"},
+      seed: {:integer, "n", "ExUnit's seed, to run them in the same order again"},
+      max_cases: {:integer, "n", "How many test modules run at once"}
     ]
   }
+
+  @switches Map.new(@options, fn {command, options} -> {command, for({key, spec} <- options, do: {key, elem(spec, 0)})} end)
 
   @usage "Usage: clawswap <command>\n" <>
            Enum.map_join(@commands, fn {name, args, _, _, summary} ->
@@ -57,17 +57,68 @@ defmodule Clawswap.CLI do
   def usage(command) do
     with {name, args, _, _, summary} <- List.keyfind(@commands, command, 0) do
       options =
-        case Map.get(@flags, name, []) do
+        case Map.get(@options, name, []) do
           [] ->
             ""
 
-          flags ->
-            width = flags |> Enum.map(&String.length(elem(&1, 0))) |> Enum.max()
-            "\nOptions:\n" <> Enum.map_join(flags, fn {flag, what} -> "  " <> String.pad_trailing(flag, width + 2) <> what <> "\n" end)
+          options ->
+            rows =
+              for {key, spec} <- options do
+                value = if tuple_size(spec) == 3, do: " <#{elem(spec, 1)}>", else: ""
+                {flag(key) <> value, elem(spec, tuple_size(spec) - 1)}
+              end
+
+            width = rows |> Enum.map(&String.length(elem(&1, 0))) |> Enum.max()
+            "\nOptions:\n" <> Enum.map_join(rows, fn {flag, what} -> "  " <> String.pad_trailing(flag, width + 2) <> what <> "\n" end)
         end
 
       "Usage: clawswap #{String.trim("#{name} #{args}")}\n\n#{summary}\n" <> options
     end
+  end
+
+  @doc "The options `command` takes, as they're typed (`--max-cases`)."
+  def flags(command), do: for({name, _} <- Map.get(@switches, command, []), do: flag(name))
+
+  defp flag(name), do: "--" <> String.replace(to_string(name), "_", "-")
+
+  @doc """
+  Reads `args` for `command` with OptionParser: `{:ok, args, opts}`, or `{:error, message}` for an option
+  the command doesn't take (with the closest it does), an option's bad value, or the wrong number of arguments.
+  """
+  def parse(command, args) do
+    {_, usage, min, max, _} = List.keyfind(@commands, command, 0)
+    {opts, rest, invalid} = OptionParser.parse(args, strict: Map.get(@switches, command, []))
+
+    cond do
+      invalid != [] -> {:error, bad_option(command, hd(invalid))}
+      length(rest) < min or (max != :any and length(rest) > max) -> {:error, wrong_arguments(command, usage, rest)}
+      true -> {:ok, rest, opts}
+    end
+  end
+
+  defp bad_option(command, {option, value}) do
+    flags = flags(command)
+    name = option |> String.split("=") |> hd()
+
+    cond do
+      name in flags ->
+        type = Enum.find_value(@switches[command], fn {key, type} -> flag(key) == name && type end)
+        "clawswap: #{command} #{name} takes #{if type == :integer, do: "a number", else: "no value"}, not #{inspect(value)}"
+
+      flags == [] ->
+        "clawswap: #{command} takes no options (got #{option}). Usage: #{usage_line(command)}"
+
+      hint = Clawswap.CLI.Forgive.closest(String.trim_leading(name, "-"), Enum.map(flags, &String.trim_leading(&1, "-"))) ->
+        "clawswap: #{command} has no option #{name}. Did you mean --#{hint}? (it takes #{Enum.join(flags, ", ")})"
+
+      true ->
+        "clawswap: #{command} has no option #{name}; it takes #{Enum.join(flags, ", ")}"
+    end
+  end
+
+  defp usage_line(command) do
+    {_, usage, _, _, _} = List.keyfind(@commands, command, 0)
+    "clawswap " <> String.trim("#{command} #{usage}")
   end
 
   def main(args) do
@@ -79,43 +130,47 @@ defmodule Clawswap.CLI do
   end
 
   defp run(command, rest) do
-    case List.keyfind(@commands, command, 0) do
-      nil -> unknown(command, rest)
-      _ -> if help_flag?(rest), do: IO.write(usage(command)), else: check_arguments(command, rest)
+    cond do
+      not List.keymember?(@commands, command, 0) ->
+        unknown(command, rest)
+
+      help_flag?(rest) ->
+        IO.write(usage(command))
+
+      true ->
+        case parse(command, rest) do
+          {:ok, args, opts} -> dispatch(command, args, opts)
+          {:error, message} -> fail(message)
+        end
     end
   end
 
   # --help or -h among a command's arguments (before a --, after which they're the command's own).
   defp help_flag?(args), do: args |> Enum.take_while(&(&1 != "--")) |> Enum.any?(&(&1 in ["--help", "-h"]))
 
-  defp check_arguments(command, rest) do
-    case List.keyfind(@commands, command, 0) do
-      {_, usage, min, max, _} when length(rest) < min or (max != :any and length(rest) > max) -> wrong_arguments(command, usage, rest)
-      _ -> dispatch(command, rest)
-    end
-  end
+  defp dispatch("help", [], _), do: IO.write(@usage)
+  defp dispatch("help", [command], _), do: help(command)
 
-  defp dispatch("help", []), do: IO.write(@usage)
-  defp dispatch("help", [command]), do: help(command)
-  defp dispatch("doctor", []), do: Clawswap.Doctor.main()
-  defp dispatch("init", []), do: init()
-  defp dispatch("up", rest), do: with_overrides(rest, &up/0)
-  defp dispatch("watch", rest), do: with_overrides(rest, &watch/0)
-  defp dispatch("daemon", []), do: daemon()
-  defp dispatch("status", []), do: status()
-  defp dispatch("switch", [branch]), do: switch(branch)
-  defp dispatch("pull", []), do: pull()
-  defp dispatch("update", rest), do: update(List.first(rest))
-  defp dispatch("smee", rest), do: smee(List.first(rest))
-  defp dispatch("walk", rest), do: walk(rest)
-  defp dispatch("browser", []), do: browser()
-  defp dispatch("test", rest), do: browser_tests(rest)
-  defp dispatch("layout", []), do: layout()
-  defp dispatch("reload", []), do: reload()
-  defp dispatch("completion", ["install" | shell]), do: install_completion(List.first(shell))
-  defp dispatch("completion", ["refresh"]), do: refresh_completion()
-  defp dispatch("completion", [shell]), do: completion(shell)
-  defp dispatch("completion", args), do: wrong_arguments("completion", "install [bash|zsh|fish]", args)
+  defp dispatch("doctor", [], _), do: Clawswap.Doctor.main()
+  defp dispatch("init", [], _), do: init()
+  defp dispatch("up", rest, _), do: with_overrides(rest, &up/0)
+  defp dispatch("watch", rest, _), do: with_overrides(rest, &watch/0)
+  defp dispatch("daemon", [], _), do: daemon()
+  defp dispatch("status", [], _), do: status()
+  defp dispatch("switch", [branch], _), do: switch(branch)
+  defp dispatch("pull", [], _), do: pull()
+  defp dispatch("update", [_], all: true), do: fail("clawswap: update takes a rev or --all, not both")
+  defp dispatch("update", rest, opts), do: update(if(opts[:all], do: :all, else: List.first(rest)))
+  defp dispatch("smee", rest, opts), do: smee(List.first(rest), opts[:new] == true)
+  defp dispatch("walk", names, opts), do: walk(names, opts)
+  defp dispatch("browser", [], _), do: browser()
+  defp dispatch("test", paths, opts), do: browser_tests(paths, opts)
+  defp dispatch("layout", [], _), do: layout()
+  defp dispatch("reload", [], _), do: reload()
+  defp dispatch("completion", ["install" | shell], _), do: install_completion(List.first(shell))
+  defp dispatch("completion", ["refresh"], _), do: refresh_completion()
+  defp dispatch("completion", [shell], _), do: completion(shell)
+  defp dispatch("completion", args, _), do: fail(wrong_arguments("completion", "install [bash|zsh|fish]", args))
 
   defp help(command) do
     case usage(command) do
@@ -144,7 +199,7 @@ defmodule Clawswap.CLI do
         _ -> "#{command} takes #{usage}, not #{Enum.join(rest, " ")}"
       end
 
-    fail("clawswap: #{what}. Usage: clawswap #{String.trim("#{command} #{usage}")}")
+    "clawswap: #{what}. Usage: clawswap #{String.trim("#{command} #{usage}")}"
   end
 
   defp repo_dir, do: System.get_env("CLAWSWAP_REPO") || File.cwd!()
@@ -628,7 +683,7 @@ defmodule Clawswap.CLI do
 
     steps =
       case arg do
-        "--all" -> Plan.steps(project.steps, [], all: true)
+        :all -> Plan.steps(project.steps, [], all: true)
         nil -> project |> Config.pending_steps() |> elem(1)
         rev -> Plan.steps(project.steps, elem(Git.changed(project.root, rev, head), 1))
       end
@@ -640,8 +695,7 @@ defmodule Clawswap.CLI do
 
   # Runs walkthroughs here, one after another: those named, or the ones the branch added or changed. They
   # drive the servers the session runs, so it needs to be up.
-  defp walk(args) do
-    {flags, names} = Enum.split_with(args, &String.starts_with?(&1, "--"))
+  defp walk(names, flags) do
     project = project!()
     list = Walkthrough.list(project)
     folder = Path.relative_to(Walkthrough.dir(project), project.root) <> "/"
@@ -649,12 +703,12 @@ defmodule Clawswap.CLI do
     names =
       cond do
         names != [] -> names
-        list == [] -> fail("No walkthroughs in #{folder} yet. See README.md's Walkthroughs.")
+        list == [] -> fail("No walkthroughs in #{folder} yet. See https://cbishopvelti.github.io/clawswap/walkthroughs.html#writing")
         Enum.any?(list, & &1.new) -> for w <- list, w.new, do: w.name
         true -> fail("None of the walkthroughs is new on this branch; name one: #{Enum.map_join(list, ", ", & &1.name)}")
       end
 
-    opts = if "--headless" in flags, do: [headless: true], else: []
+    opts = Keyword.take(flags, [:headless])
 
     failed =
       Enum.reject(names, fn name ->
@@ -676,17 +730,13 @@ defmodule Clawswap.CLI do
 
   # Runs the project's browser tests (Clawswap.BrowserTests) with ExUnit, headless unless --watch, and exits
   # 1 when one fails. Paths are relative to where you ran it.
-  defp browser_tests(args) do
-    {flags, names, invalid} =
-      OptionParser.parse(args, strict: [watch: :boolean, headless: :boolean, only: :keep, exclude: :keep, seed: :integer, max_cases: :integer])
-
-    if invalid != [], do: fail("clawswap test: there's no option #{elem(hd(invalid), 0)}.\n\n" <> usage("test"))
+  defp browser_tests(names, flags) do
     project = project!()
 
     files =
       case BrowserTests.files(project, names, repo_dir()) do
         {:ok, files} -> files
-        {:error, message} -> fail(message <> ". See README.md's Browser tests.")
+        {:error, message} -> fail(message <> ". See https://cbishopvelti.github.io/clawswap/testing.html#writing")
       end
 
     first = Enum.find_value(project.server_names, &project.servers[&1].port)
@@ -722,7 +772,7 @@ defmodule Clawswap.CLI do
     cache = System.get_env("XDG_CACHE_HOME") || Path.expand("~/.cache")
 
     url =
-      Enum.find_value(project.server_names, Config.url(project, :clawswap, ""), &(project.servers[&1].port && "http://localhost:#{project.servers[&1].port}"))
+      Enum.find_value(project.server_names, Config.url(project, :clawswap, ""), &(project.servers[&1].port && Config.url(project, &1, "")))
 
     case Walkthrough.Browser.open_dev_chrome(Path.join(cache, "clawswap/chrome"), url) do
       {:ok, address} -> IO.puts("Dev Chrome on #{address}: walkthroughs play in a tab of it while it's open")
@@ -734,7 +784,7 @@ defmodule Clawswap.CLI do
   # daemon hasn't yet), stops using a channel of the checkout's own, and tells a running watcher. The
   # daemon adds the webhook by itself the first time a repo comes in, so this is for trying again (or
   # moving a checkout that had a channel of its own onto the shared one).
-  defp smee(nil) do
+  defp smee(nil, false) do
     project = project!()
     old = Config.read_local(project)["smee"]
 
@@ -756,14 +806,21 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # A channel of the checkout's own (given, or new with `new`): saved for this checkout, the webhook added
+  # A channel of the checkout's own (given, or new with --new): saved for this checkout, the webhook added
   # on GitHub when the token may, and a running watcher told to follow it.
-  defp smee(url) do
+  defp smee(url, new?) do
+    cond do
+      url && new? -> fail("clawswap: smee takes a url or --new, not both")
+      url == "new" -> fail("clawswap: smee new is now clawswap smee --new (a url is the channel to use)")
+      url && not String.match?(url, ~r{^https?://}) -> fail("clawswap: smee takes a channel's url (https://smee.io/...), not #{inspect(url)}")
+      true -> :ok
+    end
+
     project = project!()
     old = Config.read_local(project)["smee"] || SharedSmee.channel()
 
     channel =
-      if url == "new" do
+      if new? do
         case Smee.new_channel() do
           {:ok, channel} -> channel
           {:error, message} -> fail(message)

@@ -44,9 +44,42 @@ defmodule Clawswap.CLITest do
     assert test =~ "Usage: clawswap test [path...]"
     assert test =~ ~r/Options:\n  --watch +Show Chrome/
     assert test =~ ~r/  --only <tag> +Run only/
+    assert test =~ ~r/  --max-cases <n> +How many/
+    assert Clawswap.CLI.usage("smee") =~ ~r/--new +Make a new/
 
     assert Clawswap.CLI.usage("nope") == nil
     for {name, _} <- Clawswap.CLI.commands(), do: assert(Clawswap.CLI.usage(name) =~ "clawswap #{name}")
+  end
+
+  test "reads every command's options with OptionParser, and turns down ones it doesn't take" do
+    alias Clawswap.CLI
+    assert CLI.parse("update", ["--all"]) == {:ok, [], [all: true]}
+    assert CLI.parse("update", ["abc123"]) == {:ok, ["abc123"], []}
+    assert CLI.parse("smee", ["--new"]) == {:ok, [], [new: true]}
+    assert CLI.parse("walk", ["branches-menu", "--headless"]) == {:ok, ["branches-menu"], [headless: true]}
+    assert CLI.parse("test", ["a_test.exs", "--max-cases", "2"]) == {:ok, ["a_test.exs"], [max_cases: 2]}
+
+    assert {:error, message} = CLI.parse("walk", ["--headles"])
+    assert message =~ "walk has no option --headles. Did you mean --headless?"
+    assert {:error, message} = CLI.parse("update", ["--al"])
+    assert message =~ "Did you mean --all?"
+    assert {:error, message} = CLI.parse("test", ["--xyz"])
+    assert message =~ "test has no option --xyz; it takes --watch"
+    assert {:error, message} = CLI.parse("status", ["--verbose"])
+    assert message =~ "status takes no options (got --verbose)"
+    assert {:error, message} = CLI.parse("test", ["--seed", "abc"])
+    assert message =~ "test --seed takes a number"
+    assert {:error, message} = CLI.parse("switch", ["--headless", "main"])
+    assert message =~ "switch takes no options"
+    assert {:error, message} = CLI.parse("update", ["a", "b"])
+    assert message =~ "update takes [rev], not a b"
+  end
+
+  test "completes each command's options" do
+    for shell <- Completion.shells() do
+      script = Completion.script(shell, Clawswap.CLI.commands())
+      for flag <- ~w(--all --new --headless --max-cases), do: assert(script =~ flag)
+    end
   end
 
   test "writes completion for bash, zsh and fish, with every command" do

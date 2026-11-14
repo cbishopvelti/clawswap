@@ -49,7 +49,11 @@ defmodule Clawswap.Tmux do
       name, %{command: command, cwd: cwd} -> {name, ["-c", Path.expand(cwd, project.root), "--", keep() | List.wrap(command)]}
     end
 
-    servers = Enum.map(project.server_names, &pane.(&1, project.servers[&1]))
+    servers =
+      Enum.map(project.server_names, fn name ->
+        {name, ["-c", Path.expand(project.servers[name].cwd, project.root), "--" | Clawswap.Multiplexer.server_command(project, name)]}
+      end)
+
     # From the config's folder, so the watcher loads the same config.
     watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)})
     side = [watcher | Enum.map(project.pane_names, &pane.(&1, project.panes[&1]))]
@@ -152,7 +156,7 @@ defmodule Clawswap.Tmux do
       # Through bin/keep, as in the layout, so the pane stays when the server stops.
       start: fn name ->
         server = project.servers[name]
-        respawn.(name, [keep() | List.wrap(server.command)], Path.expand(server.cwd, project.root))
+        respawn.(name, Clawswap.Multiplexer.server_command(project, name), Path.expand(server.cwd, project.root))
         :ok
       end
     }

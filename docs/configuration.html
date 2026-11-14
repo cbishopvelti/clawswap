@@ -137,7 +137,7 @@ servers:
   <tr><th>Field</th><th>What it is</th></tr>
   <tr><td><code>command</code></td><td>Required. What the pane runs.</td></tr>
   <tr><td><code>cwd</code></td><td>Where, relative to the repo root. Default <code>"."</code>.</td></tr>
-  <tr><td><code>port</code></td><td>The port it listens on. A switch makes sure it's free before checking out (a server left running outside the session is sent TERM, then KILL), waits (up to 3 minutes) for it to listen again before it calls the switch done, and its <code>localhost</code> origin may call the API.</td></tr>
+  <tr><td><code>port</code></td><td>The port it listens on. A switch makes sure it's free before checking out (a server left running outside the session is sent TERM, then KILL), waits (up to 3 minutes) for it to listen again before it calls the switch done, and its <code>localhost</code> origin may call the API. A dev server that moves to the next port when its own is taken (Vite, Next) is followed there on Linux: clawswap starts each server with <code>CLAWSWAP_SERVER=&lt;project&gt;/&lt;name&gt;</code> in its environment and looks for that among the processes listening within 20 ports above, so <code>url(:web)</code>, the switch's wait and the API's origins use the port it took. Elsewhere, pin it (<code>vite --strictPort</code>).</td></tr>
   <tr><td><code>match</code></td><td>A Regex that finds the pane by its command, if the pane has been renamed.</td></tr>
 </table>
 
