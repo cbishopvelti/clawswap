@@ -54,7 +54,11 @@ defmodule ClawswapWeb.BranchesPage do
         <a class="all-projects" href="/" title="All projects">☰</a>
         <h1>{@view.project}</h1>
         {%if @view.on}<span class="on" title="The branch checked out now">On <strong>{@view.on}</strong></span>{/if}
-        <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
+        {%if @view.webhook_class == "ok"}
+          <span class="webhook ok" title="Webhook on: GitHub tells clawswap about pushes and pull requests as they happen" aria-label="Webhook on">●</span>
+        {%else}
+          <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
+        {/if}
         <StreamDeck cid="stream_deck" page_project={@id} />
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
