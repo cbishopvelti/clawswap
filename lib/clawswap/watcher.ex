@@ -12,7 +12,8 @@ defmodule Clawswap.Watcher do
   `exit` (restarts the watcher after a switch changed its config), `refresh_git` (false skips git fetch),
   `open_url` (opens a link in the browser; `open_url/1` by default).
   `run_walk` (runs a walkthrough: `Clawswap.Walkthrough.run/3`, or a stand-in in tests),
-  `group_leader` (`{:log, id}`: the project's `Clawswap.ProjectLog`, in the daemon).
+  `group_leader` (`{:log, id}`: the project's `Clawswap.ProjectLog`, in the daemon), `refused_ms` (how long
+  a refusal shows; a minute by default).
   """
 
   use GenServer
@@ -23,6 +24,9 @@ defmodule Clawswap.Watcher do
   @fallback_ms 15 * 60_000
   # Webhook deliveries come in bursts (push + pull_request...), so wait a moment and look once.
   @debounce_ms 1500
+  # A refused switch or pull (nothing ran) shows this long, like a failed key on the deck, unless what
+  # refused it is fixed before then.
+  @refused_ms 60_000
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
 
@@ -98,6 +102,7 @@ defmodule Clawswap.Watcher do
       refresh_git: Keyword.get(opts, :refresh_git, true),
       open_url: opts[:open_url] || (&open_url/1),
       run_walk: opts[:run_walk] || (&Walkthrough.run/3),
+      refused_ms: opts[:refused_ms] || @refused_ms,
       pr_cache: nil,
       refreshing: nil,
       again: false,
@@ -131,7 +136,8 @@ defmodule Clawswap.Watcher do
         # branch isn't on origin).
         upstream: nil,
         # %{target, pull, phase: "running" | "done" | "failed", step, error, notes, at}; queued: true while
-        # a switch asked for waits for the refresh it starts with (step "Fetching").
+        # a switch asked for waits for the refresh it starts with (step "Fetching"); refused: true on one
+        # that failed without running (it clears itself, see refuse/4).
         switch: nil,
         # The checkout's walkthroughs, %{name, path, new} (Clawswap.Walkthrough.list/1), and the last one run:
         # %{name, phase: "running" | "passed" | "failed", step, error, at}.
@@ -323,6 +329,13 @@ defmodule Clawswap.Watcher do
 
   def handle_info(:refresh_now, state), do: {:noreply, start_refresh(%{state | debounce: nil})}
 
+  def handle_info({:refusal_shown, at}, state) do
+    case state.view.switch do
+      %{refused: true, at: ^at} -> {:noreply, changed(put_in(state.view.switch, nil))}
+      _ -> {:noreply, state}
+    end
+  end
+
   def handle_info({:smee, :open}, state) do
     # Look for anything missed while disconnected.
     {:noreply, soon(changed(%{state | view: %{state.view | webhook: "connected", webhookError: nil}}))}
@@ -395,7 +408,7 @@ defmodule Clawswap.Watcher do
     state =
       case result do
         {:ok, view, cache} ->
-          changed(%{state | pr_cache: cache, view: Map.merge(state.view, view)})
+          changed(%{state | pr_cache: cache, view: Map.merge(state.view, view) |> settle_refusal()})
 
         {:error, message, cache} ->
           log("Refresh failed: #{message}")
@@ -510,29 +523,51 @@ defmodule Clawswap.Watcher do
 
   defp after_refresh(:pull, state) do
     view = state.view
-    target = view.current && view.current.branch
-    run = %{target: target, pull: true}
+    run = %{target: view.current && view.current.branch, pull: true}
 
     cond do
       running?(view) ->
         {{:error, 409, "Already switching to #{view.switch.target}"}, state}
 
-      target in [nil, "HEAD"] ->
-        refuse(state, run, 409, "Not on a branch")
-
-      view.upstream == nil ->
-        refuse(state, run, 404, "#{target} isn't on GitHub")
+      refusal = pull_refusal(view) ->
+        {status, message} = refusal
+        refuse(state, run, status, message)
 
       view.upstream.behind == 0 ->
         reply_ok(changed(put_in(state.view.switch, Map.merge(run, %{phase: "done", step: nil, error: nil, notes: ["Already up to date"], at: now()}))))
-
-      view.dirty ->
-        refuse(state, run, 409, "Uncommitted changes: commit or stash them first")
 
       true ->
         start_run(state, run)
     end
   end
+
+  # Why a pull of the checkout's branch can't run now, or nil.
+  defp pull_refusal(view) do
+    target = view.current && view.current.branch
+
+    cond do
+      target in [nil, "HEAD"] -> {409, "Not on a branch"}
+      view.upstream == nil -> {404, "#{target} isn't on GitHub"}
+      view.upstream.behind == 0 -> nil
+      view.dirty -> {409, "Uncommitted changes: commit or stash them first"}
+      true -> nil
+    end
+  end
+
+  # A refusal stops showing once a refresh finds what refused it gone (the branch went to GitHub, the
+  # changes were committed, another branch is checked out).
+  defp settle_refusal(%{switch: %{refused: true} = run} = view) do
+    if still_refused?(view, run), do: view, else: %{view | switch: nil}
+  end
+
+  defp settle_refusal(view), do: view
+
+  defp still_refused?(view, %{pull: true} = run) do
+    view.current != nil and view.current.branch == run.target and match?({_, message} when message == run.error, pull_refusal(view))
+  end
+
+  # The only switch refusal kept in the view is for uncommitted changes.
+  defp still_refused?(view, _run), do: view.dirty
 
   # A queued switch isn't running yet: the first one asked for starts when the refresh is done.
   defp running?(view), do: match?(%{phase: "running"}, view.switch) and not queued?(view)
@@ -540,9 +575,12 @@ defmodule Clawswap.Watcher do
   defp now, do: System.system_time(:millisecond)
   defp reply_ok(state), do: {{:ok, state.view}, state}
 
-  # Refusals are kept in the state too, so the key that was pressed can say why nothing happened.
+  # Refusals are kept in the state too, so the key that was pressed (and every page) can say why nothing
+  # happened; for a while only, as nothing ran that needs looking at.
   defp refuse(state, run, status, message) do
-    state = changed(put_in(state.view.switch, Map.merge(run, %{phase: "failed", step: nil, error: message, notes: [], at: now()})))
+    at = now()
+    Process.send_after(self(), {:refusal_shown, at}, state.refused_ms)
+    state = changed(put_in(state.view.switch, Map.merge(run, %{phase: "failed", refused: true, step: nil, error: message, notes: [], at: at})))
     {{:error, status, message}, state}
   end
 
