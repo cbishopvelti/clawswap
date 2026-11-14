@@ -4,24 +4,45 @@ defmodule ClawswapWeb.ProjectsPage do
   with a link to its page (/p/<id>). "Select" makes one the selected project: the one Stream Deck keys
   that follow the selected project show, and that the API's paths without /p/<id> answer for. The Stream
   Deck can be connected here too.
+
+  ☰ on a project's page comes here, and in an app's iframe there's no browser Back button, so the header
+  links back to the project whose page you came from (the focused one, `Clawswap.Projects.focused/0`), and
+  Escape goes back there too.
   """
 
   use Hologram.Page
+  use Hologram.JS
 
-  alias ClawswapWeb.{StreamDeck, View}
+  alias ClawswapWeb.{BranchesPage, StreamDeck, View}
 
   route("/")
 
   layout(ClawswapWeb.MainLayout)
 
   def init(_params, component, server) do
-    {put_state(component, projects: View.index(), message: nil), put_subscription(server, :clawswap_index)}
+    projects = View.index()
+
+    component =
+      component
+      |> put_state(projects: projects, back: back(projects), message: nil)
+      |> put_action(:listen)
+
+    {component, put_subscription(server, :clawswap_index)}
+  end
+
+  # The project whose page was last in view, if it's still running: where ← and Escape go.
+  defp back(projects) do
+    case Clawswap.Projects.focused() do
+      %{project: id} -> Enum.find_value(projects, fn p -> if p.id == id, do: %{id: p.id, name: p.name, href: p.href} end)
+      _ -> nil
+    end
   end
 
   def template do
     ~HOLO"""
     <main class="projects">
       <header>
+        {%if @back}<a class="back" href={@back.href} title="Back to {@back.name}'s page (Esc)">← {@back.name}</a>{/if}
         <h1>clawswap</h1>
         <StreamDeck cid="stream_deck" />
       </header>
@@ -48,7 +69,39 @@ defmodule ClawswapWeb.ProjectsPage do
     """
   end
 
-  def action(:projects_changed, params, component), do: put_state(component, :projects, params.projects)
+  # On load: Escape goes back to the project's page. The listener stays when Hologram navigates without a
+  # reload, so it's added once, and only acts while this page is the one showing.
+  def action(:listen, _params, component) do
+    if JS.get(:window, :clawswapEscape) != true do
+      JS.set(:window, :clawswapEscape, true)
+
+      JS.call(:document, :addEventListener, [
+        "keydown",
+        fn event ->
+          if JS.get(event, :key) == "Escape" and JS.get(:location, :pathname) == "/",
+            do: JS.call(:Hologram, :dispatchAction, ["back", "page", %{}])
+        end
+      ])
+    end
+
+    component
+  end
+
+  def action(:back, _params, component) do
+    case component.state.back do
+      %{id: id} -> put_page(component, BranchesPage, project: id)
+      nil -> component
+    end
+  end
+
+  def action(:projects_changed, params, component) do
+    component = put_state(component, :projects, params.projects)
+    # The project went down while this page showed: no way back to it.
+    if component.state.back && not Enum.any?(params.projects, &(&1.id == component.state.back.id)),
+      do: put_state(component, :back, nil),
+      else: component
+  end
+
   def action(:show_message, params, component), do: put_state(component, :message, params.message)
 
   def command(:select, params, server) do
