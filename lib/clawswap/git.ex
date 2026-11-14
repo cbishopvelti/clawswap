@@ -37,7 +37,47 @@ defmodule Clawswap.Git do
     end
   end
 
-  def fetch_origin(root), do: git(root, ["fetch", "--prune", "--quiet", "origin"])
+  # A fetch that would ask for something (a password, a key's passphrase, whether to trust a host) or
+  # hangs on the network gives up instead: it runs in the background, where nobody answers, and the
+  # refresh (and any switch or pull waiting on it, shown as "Fetching") would wait on it for ever.
+  @fetch_timeout_ms 60_000
+
+  @doc "Fetches origin, never waiting for a prompt and giving up after a minute: `{:ok, _}` or `{:error, message}`."
+  def fetch_origin(root, opts \\ []) do
+    Run.capture("git", ["fetch", "--prune", "--quiet", "origin"],
+      cwd: root,
+      env: non_interactive_env(root),
+      timeout: Keyword.get(opts, :timeout, @fetch_timeout_ms)
+    )
+  end
+
+  @doc """
+  Environment that makes git fail rather than prompt: no terminal prompt for HTTPS credentials (nor Git
+  Credential Manager's), and ssh in batch mode (ssh-agent keys still work), keeping any ssh command the
+  user set.
+  """
+  def non_interactive_env(root) do
+    https = [{"GIT_TERMINAL_PROMPT", "0"}, {"GCM_INTERACTIVE", "never"}]
+
+    ssh =
+      cond do
+        command = present(System.get_env("GIT_SSH_COMMAND")) -> command
+        present(System.get_env("GIT_SSH")) -> nil
+        true -> core_ssh_command(root) || "ssh"
+      end
+
+    if ssh, do: [{"GIT_SSH_COMMAND", ssh <> " -o BatchMode=yes -o ConnectTimeout=20"} | https], else: https
+  end
+
+  defp core_ssh_command(root) do
+    case git(root, ["config", "--get", "core.sshCommand"]) do
+      {:ok, out} -> present(String.trim(out))
+      _ -> nil
+    end
+  end
+
+  defp present(value) when value in [nil, ""], do: nil
+  defp present(value), do: value
 
   @doc "origin's branches, newest commit first: `[%{branch, sha, date}]`."
   def remote_branches(root) do
