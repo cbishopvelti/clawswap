@@ -10,10 +10,22 @@ each one's merge status, and lights up when the branch you're on has new commits
 walkthrough, a short script that plays its change in Chrome while you watch, and `clawswap test` runs the
 project's own browser tests against the session's servers.
 
-```
-GitHub ──webhook── smee.io ──SSE── clawswap daemon, a watcher per project ──zellij/tmux── each project's server panes
-                                        ▲ 127.0.0.1:27390 (/, /p/<id>)          │ log
-              OpenDeck keys, the Hologram pages, clawswap switch        clawswap watch (each session's clawswap pane)
+How it fits together (a picture, not commands to run): GitHub tells the daemon about new commits through
+smee.io, and the daemon switches each project's session when you ask it to from a key, a page or the command line.
+
+```text
+GitHub
+  │ webhook, on a push or a pull request
+  ▼
+smee.io
+  │ SSE
+  ▼
+clawswap daemon on 127.0.0.1:27390  ◀── OpenDeck keys,
+  (a watcher per project)                the pages at / and /p/<id>,
+  │                                      clawswap switch
+  ├── zellij/tmux ──▶ each project's server panes
+  │
+  └── log ──▶ clawswap watch, in each session's clawswap pane
 ```
 
 One daemon on 127.0.0.1:27390 runs every project you've started with `clawswap up` (each under `/p/<id>`,
