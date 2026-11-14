@@ -18,6 +18,7 @@ header .deck { order: 2; }
 .webhook.off { color: var(--failed); }
 /* On is only a green dot, with a tooltip saying so. */
 .webhook.ok { color: var(--current); cursor: help; }
+.webhook.unchecked { color: var(--running); }
 button { font: inherit; color: inherit; cursor: pointer; }
 .pull { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 .pull.behind { border-color: var(--behind); color: var(--behind); }
