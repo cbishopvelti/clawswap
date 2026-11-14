@@ -595,7 +595,7 @@ defmodule Clawswap.CLI do
     names =
       cond do
         names != [] -> names
-        list == [] -> fail("No walkthroughs in #{folder} yet. See README.md's Walkthroughs.")
+        list == [] -> fail("No walkthroughs in #{folder} yet. See https://cbishopvelti.github.io/clawswap/walkthroughs.html#writing")
         Enum.any?(list, & &1.new) -> for w <- list, w.new, do: w.name
         true -> fail("None of the walkthroughs is new on this branch; name one: #{Enum.map_join(list, ", ", & &1.name)}")
       end
@@ -632,7 +632,7 @@ defmodule Clawswap.CLI do
     files =
       case BrowserTests.files(project, names, repo_dir()) do
         {:ok, files} -> files
-        {:error, message} -> fail(message <> ". See README.md's Browser tests.")
+        {:error, message} -> fail(message <> ". See https://cbishopvelti.github.io/clawswap/testing.html#writing")
       end
 
     first = Enum.find_value(project.server_names, &project.servers[&1].port)
