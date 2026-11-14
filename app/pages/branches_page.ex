@@ -51,8 +51,10 @@ defmodule ClawswapWeb.BranchesPage do
         <h1>{@view.project}</h1>
         {%if @view.on}<span class="on" title="The branch checked out now">On <strong>{@view.on}</strong></span>{/if}
         <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
-        <button class="pull {@view.pull_class}" title={@view.pull_title} disabled={@view.pull_class == "none"} $click={action: :pull}>{%if @view.pull_class == "running"}<span class="spinner"></span>{/if}{@view.pull_label}</button>
-        <a class="settings-link" href={"/p/#{@id}/settings"} target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
+        <span class="actions">
+          <button class="pull {@view.pull_class}" title={@view.pull_title} disabled={@view.pull_class == "none"} $click={action: :pull}>{%if @view.pull_class == "running"}<span class="spinner"></span>{/if}{@view.pull_label}</button>
+          <a class="settings-link" href={"/p/#{@id}/settings"} target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
+        </span>
         <StreamDeck cid="stream_deck" page_project={@id} />
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
