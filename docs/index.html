@@ -56,9 +56,20 @@ one's merge status, and lights up when the branch you're on has new commits on G
 </div>
 
 <h2 id="how">How it fits together</h2>
-<pre><code>GitHub ──webhook── smee.io ──SSE── clawswap daemon, a watcher per project ──zellij/tmux── each project's server panes
-                                        ▲ 127.0.0.1:27390 (/, /p/&lt;id&gt;)          │ log
-              OpenDeck keys, the Hologram pages, clawswap switch        clawswap watch (each session's clawswap pane)</code></pre>
+<p>GitHub tells the daemon about new commits through smee.io, and the daemon switches each project's session
+  when you ask it to from a key, a page or the command line:</p>
+<pre><code>GitHub
+  │ webhook, on a push or a pull request
+  ▼
+smee.io
+  │ SSE
+  ▼
+clawswap daemon on 127.0.0.1:27390  ◀── OpenDeck keys,
+  (a watcher per project)                the pages at / and /p/&lt;id&gt;,
+  │                                      clawswap switch
+  ├── zellij/tmux ──▶ each project's server panes
+  │
+  └── log ──▶ clawswap watch, in each session's clawswap pane</code></pre>
 <ul>
   <li><strong>The session.</strong> <code>clawswap up</code> opens a <a href="https://zellij.dev">zellij</a> or <a href="https://github.com/tmux/tmux">tmux</a> session
     with a pane for each of your servers, one for clawswap and one for each extra pane you configure.</li>
