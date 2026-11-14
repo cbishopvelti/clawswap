@@ -53,6 +53,7 @@ defmodule Clawswap.Tmux do
       Enum.map(project.server_names, fn name ->
         {name, ["-c", Path.expand(project.servers[name].cwd, project.root), "--" | Clawswap.Multiplexer.server_command(project, name)]}
       end)
+
     # From the config's folder, so the watcher loads the same config.
     watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)})
     side = [watcher | Enum.map(project.pane_names, &pane.(&1, project.panes[&1]))]

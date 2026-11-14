@@ -87,6 +87,7 @@ defmodule Clawswap.Zellij do
       project.server_names
       |> Enum.with_index()
       |> Enum.map(fn {n, i} -> run.(n, project.servers[n].cwd, Clawswap.Multiplexer.server_command(project, n), i == 0) end)
+
     # From the config's folder, so the watcher loads the same config.
     watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)}, servers == [])
     side = [watcher | Enum.map(project.pane_names, &pane.(&1, project.panes[&1], false))]
