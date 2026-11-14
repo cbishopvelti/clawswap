@@ -9,9 +9,15 @@ main { max-width: 720px; margin: 0 auto; padding: 16px; }
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
 h1 { font-size: 20px; margin: 0; flex: 1; }
 .webhook { font-size: 13px; color: var(--muted); }
+/* Pull and ⚙, kept together. They come first in the source (for the narrow layout's float), so `order`
+   puts them after the rest here, and the Stream Deck's controls after them. */
+.actions { display: flex; align-items: center; gap: 12px; order: 1; }
+header .deck { order: 2; }
 .on { font-size: 13px; color: var(--muted); }
 .on strong { color: var(--current); font-weight: 600; }
 .webhook.off { color: var(--failed); }
+/* On is only a green dot, with a tooltip saying so. */
+.webhook.ok { color: var(--current); cursor: help; }
 .webhook.unchecked { color: var(--running); }
 button { font: inherit; color: inherit; cursor: pointer; }
 .pull { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
@@ -55,18 +61,22 @@ li.behind .status { color: var(--behind); }
   main { padding: 6px; }
   header { gap: 8px; margin: 0 4px 4px; }
   h1 { font-size: 12px; font-weight: normal; color: var(--muted); }
-  header { flex-wrap: nowrap; }
-  .webhook { font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pull { padding: 1px 8px; font-size: 13px; white-space: nowrap; }
+  /* Nothing is cut short at this width. Pull and ⚙ stay in the top right (a float, first in the
+     source), and the rest flows as a line of text beside them: an item that doesn't fit moves down a
+     line as a whole, and one too long for a line of its own (a webhook error) wraps its text. */
+  main > header { display: flow-root; line-height: 24px; }
+  main > header > * { vertical-align: middle; }
+  .actions { float: right; gap: 8px; margin: 0 0 6px 8px; min-height: 24px; }
+  .all-projects, h1 { display: inline; margin-right: 8px; }
+  .on, .webhook { display: inline-block; max-width: 100%; line-height: 1.4; overflow-wrap: anywhere; }
+  .on { font-size: 12px; margin-right: 8px; }
+  .webhook { font-size: 11px; padding: 4px 0 6px; }
   .message { font-size: 12px; margin: 4px; }
   ul { gap: 0; }
   li button { flex-wrap: wrap; gap: 0 8px; border: 0; border-radius: 4px; padding: 5px 8px; background: none; }
   li button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
   li.checkout button { background: color-mix(in srgb, var(--current) 15%, transparent); box-shadow: inset 3px 0 var(--current); }
-  h1 { flex: 0 0 auto; }
-  /* The checkout's branch keeps its room before the webhook's note does. */
-  .webhook { flex: 0 4 auto; }
-  .on { flex: 0 1 auto; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mark { width: 12px; flex-shrink: 0; text-align: center; }
   .number { min-width: 36px; flex-shrink: 0; }
   .title { flex-basis: 0; min-width: 0; }
@@ -113,6 +123,9 @@ option { background: var(--card); color: var(--fg); }
 .deck-elsewhere { color: var(--muted); }
 .deck-keys { font: inherit; font-size: 13px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
 .all-projects { text-decoration: none; color: var(--muted); }
+/* The front page's way back to the project you came from (ClawswapWeb.ProjectsPage). */
+.projects .back { text-decoration: none; color: var(--muted); font-size: 14px; white-space: nowrap; }
+.projects .back:hover { color: var(--fg); }
 
 /* The daemon's front page: a row for each project. */
 .projects li.project { display: flex; align-items: baseline; gap: 12px; background: var(--card); border: 1px solid var(--line);

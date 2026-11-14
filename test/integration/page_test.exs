@@ -37,6 +37,28 @@ defmodule Clawswap.Integration.PageTest do
     see button("▶ branches-menu")
   end
 
+  test "the list of projects leads back to the project's page, by link and by Escape", %{project: project} do
+    say "In an app's iframe there's no Back button, so the list of projects links back to the page you came from"
+    visit url(:web)
+    click "Branches"
+
+    in_frame "iframe[title=clawswap]", fn ->
+      see css("li.current", text: "main")
+      click css("a.all-projects")
+      see css("main.projects h1", text: "clawswap")
+      see css("a.back[href='/p/#{project.id}']")
+      click css("a.back")
+      see css("li.current", text: "main")
+
+      say "Escape goes back too"
+      click css("a.all-projects")
+      see css("a.back")
+      press(:escape)
+      see css("li.current", text: "main")
+      refute_see css("main.projects")
+    end
+  end
+
   test "the example app's Branches menu frames the page as a compact list" do
     say "The example app embeds clawswap's page in an iframe"
     visit url(:web)
