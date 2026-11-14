@@ -58,8 +58,9 @@ clawswap up       # starts the daemon if it isn't running, and opens the session
 New branches show up straight away with no setup of your own: the daemon keeps one smee.io channel for every
 project, and adds each repo's GitHub webhook for it the first time the repo comes in (with your `gh` login, or
 `GITHUB_TOKEN`). If GitHub says no, `clawswap smee` tries again and prints what to add by hand. With no token
-at all it still listens on the channel (the page says "webhook unchecked" and names it), so a webhook you add by
-hand that sends there works, and the page shows it on once its first delivery comes in.
+at all it still listens on the channel (the page says "webhook listening" and names it), so a webhook you add by
+hand that sends there works: the page shows it on once its first delivery comes in, and remembers that across
+restarts (in `~/.local/state/clawswap/smee.json`).
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:
 `clawswap switch 23`). `clawswap down` ends the project's session and takes it out of the daemon;

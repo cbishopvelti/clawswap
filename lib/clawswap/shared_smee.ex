@@ -2,7 +2,9 @@ defmodule Clawswap.SharedSmee do
   @moduledoc """
   The daemon's one smee.io channel, which every project's GitHub webhook sends to, so no project needs a
   channel of its own. It's made the first time the daemon starts and kept in
-  `$XDG_STATE_HOME/clawswap/smee.json` (`file/0`), so the webhooks stay right across restarts.
+  `$XDG_STATE_HOME/clawswap/smee.json` (`file/0`), so the webhooks stay right across restarts. The file
+  also keeps when each repo's last delivery came in, so a webhook that's been seen working (one added by
+  hand, with no token to look for it with) still shows as working after a restart.
 
   Each watcher without a channel of its own `subscribe/2`s with its repo (owner/name). The first time a
   repo comes in, this makes sure it has the webhook for the channel (with the token the PR list uses);
@@ -12,7 +14,8 @@ defmodule Clawswap.SharedSmee do
   A subscriber gets `{:shared_smee, {:status, %{webhook, error}}}` whenever its webhook's state changes
   (`webhook`: "connecting", "connected", "unchecked" or "off", as the watcher's view has it; "unchecked"
   when there's no token to look for the webhook with, though it listens all the same, and a webhook added
-  by hand that sends to the channel works: its first delivery makes it "connected"), `{:shared_smee,
+  by hand that sends to the channel works: its first delivery makes it "connected", and from then on, across
+  restarts, it starts "connected"), `{:shared_smee,
   {:delivery, github_event}}` for each delivery about its repo, and `{:shared_smee, {:log, text}}` for what
   its project's log should say (the webhook was added, or couldn't be).
 
@@ -53,6 +56,28 @@ defmodule Clawswap.SharedSmee do
       url ->
         {:ok, url}
     end
+  end
+
+  @doc "When the last delivery about `repo` came in on the channel kept in `file`, or nil if none ever has."
+  def last_delivery(file \\ file(), repo) do
+    with {:ok, text} <- File.read(file),
+         {:ok, %{"deliveries" => %{} = deliveries}} <- JSON.decode(text),
+         at when is_binary(at) <- deliveries[key(repo)],
+         {:ok, at, _} <- DateTime.from_iso8601(at) do
+      at
+    else
+      _ -> nil
+    end
+  end
+
+  @doc "Keeps in `file` that a delivery about `repo` came in `at`."
+  def remember_delivery(file \\ file(), repo, at) do
+    with {:ok, text} <- File.read(file), {:ok, %{} = kept} <- JSON.decode(text) do
+      deliveries = Map.put(kept["deliveries"] || %{}, key(repo), DateTime.to_iso8601(DateTime.truncate(at, :second)))
+      File.write!(file, JSON.encode!(Map.put(kept, "deliveries", deliveries)) <> "\n")
+    end
+
+    :ok
   end
 
   @doc """
@@ -102,7 +127,9 @@ defmodule Clawswap.SharedSmee do
       # By repo (lower case, as GitHub's names aren't case-sensitive): :pending, :ok or {:error, message}.
       hooks: %{},
       # pid => {repo, monitor}
-      subs: %{}
+      subs: %{},
+      # By repo: when its last delivery was written to the file (it's written at most once a minute).
+      remembered: %{}
     }
 
     {:ok, state, {:continue, :channel}}
@@ -155,11 +182,19 @@ defmodule Clawswap.SharedSmee do
         {:ok, :exists} ->
           {:ok, nil}
 
+        # No token to ask GitHub with, so go by whether a delivery has ever come in.
         {:error, :no_token} ->
-          {:unchecked,
-           "Couldn't check #{repo}'s GitHub webhook (no GitHub token); listening on #{state.channel} all the same, " <>
-             "so a webhook added by hand that sends there works. Log in with gh auth login (or set GITHUB_TOKEN) " <>
-             "and run clawswap smee to have it added"}
+          case last_delivery(state.file, repo) do
+            nil ->
+              {:unchecked,
+               "Listening for #{repo}'s GitHub webhook on #{state.channel}; nothing has come from it yet. With no " <>
+                 "GitHub token clawswap can't ask GitHub whether it's there, so it says connected when the first " <>
+                 "delivery comes in (the next push, or Redeliver the ping on the webhook's page on GitHub). To have " <>
+                 "clawswap add the webhook itself: gh auth login, then clawswap smee"}
+
+            at ->
+              {:ok, "#{repo}'s GitHub webhook is connected (last delivery #{ago(at)}, on #{state.channel})"}
+          end
 
         {:error, message} ->
           {{:error, message},
@@ -192,16 +227,48 @@ defmodule Clawswap.SharedSmee do
   defp delivered(state, nil), do: state
 
   defp delivered(state, repo) do
+    state = remember(state, repo)
+
     case state.hooks[key(repo)] do
       # Not yet known (or still being checked, which says for itself).
       hook when hook in [nil, :ok, :pending] ->
         state
 
       _ ->
-        note = "Got a delivery from #{repo}'s GitHub webhook, so it works"
+        note = "Got a delivery from #{repo}'s GitHub webhook, so it's connected"
         log(note)
         for pid <- subscribers(state, repo), do: send(pid, {:shared_smee, {:log, note}})
         tell(put_in(state.hooks[key(repo)], :ok), repo)
+    end
+  end
+
+  # Kept in the file at most once a minute, so a busy repo doesn't write it on every push.
+  defp remember(state, repo) do
+    now = DateTime.utc_now()
+
+    case state.remembered[key(repo)] do
+      %DateTime{} = at ->
+        if DateTime.diff(now, at) < 60, do: state, else: keep(state, repo, now)
+
+      _ ->
+        keep(state, repo, now)
+    end
+  end
+
+  defp keep(state, repo, now) do
+    remember_delivery(state.file, repo, now)
+    put_in(state.remembered[key(repo)], now)
+  end
+
+  @doc "How long ago `at` was, said roughly (\"just now\", \"5 min ago\", \"3 h ago\", \"2 days ago\")."
+  def ago(at, now \\ DateTime.utc_now()) do
+    s = max(DateTime.diff(now, at), 0)
+
+    cond do
+      s < 60 -> "just now"
+      s < 3600 -> "#{div(s, 60)} min ago"
+      s < 86_400 -> "#{div(s, 3600)} h ago"
+      true -> "#{div(s, 86_400)} days ago"
     end
   end
 
@@ -241,7 +308,7 @@ defmodule Clawswap.SharedSmee do
     case state.hooks[key(repo)] do
       {:error, message} -> %{webhook: "off", error: message}
       :ok -> %{webhook: state.stream, error: state.stream_error}
-      :unchecked when state.stream == "connected" -> %{webhook: "unchecked", error: "no GitHub token to check it; listening on #{state.channel}"}
+      :unchecked when state.stream == "connected" -> %{webhook: "unchecked", error: "no delivery yet on #{state.channel} (no GitHub token to check it with)"}
       :unchecked -> %{webhook: "connecting", error: state.stream_error}
       _ -> %{webhook: "connecting", error: nil}
     end

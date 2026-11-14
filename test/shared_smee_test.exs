@@ -115,15 +115,16 @@ defmodule Clawswap.SharedSmeeTest do
 
     {_, _} = subscriber(hub, :app, "me/app")
 
-    assert_receive {:got, :app, {:shared_smee, {:log, "Couldn't check me/app's GitHub webhook (no GitHub token); listening on https://smee.io/shared" <> _}}},
+    assert_receive {:got, :app, {:shared_smee, {:log, "Listening for me/app's GitHub webhook on https://smee.io/shared; nothing has come" <> _}}},
                    1000
 
-    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "unchecked", error: "no GitHub token to check it; listening on https://smee.io/shared"}}}},
+    assert_receive {:got, :app,
+                    {:shared_smee, {:status, %{webhook: "unchecked", error: "no delivery yet on https://smee.io/shared (no GitHub token to check it with)"}}}},
                    1000
 
     send(hub, {:smee, {:delivery, "ping", "me/app"}})
     assert_receive {:got, :app, {:shared_smee, {:delivery, "ping"}}}, 1000
-    assert_receive {:got, :app, {:shared_smee, {:log, "Got a delivery from me/app's GitHub webhook, so it works"}}}, 1000
+    assert_receive {:got, :app, {:shared_smee, {:log, "Got a delivery from me/app's GitHub webhook, so it's connected"}}}, 1000
     assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "connected", error: nil}}}}, 1000
 
     # It stays working: no more checks, and a second delivery says nothing new.
@@ -131,6 +132,34 @@ defmodule Clawswap.SharedSmeeTest do
     assert status == %{webhook: "connected", error: nil}
     send(hub, {:smee, {:delivery, "push", "me/app"}})
     refute_receive {:got, :app, {:shared_smee, {:log, _}}}, 100
+  end
+
+  test "without a token, a webhook seen working before a restart starts connected", %{start: start, smee_file: file} do
+    hub = start.(ensure_hook: fn _, _ -> {:error, :no_token} end)
+    assert_receive {:listening, "https://smee.io/shared"}, 1000
+    send(hub, {:smee, :open})
+    {_, _} = subscriber(hub, :app, "me/app")
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "unchecked"}}}}, 1000
+    send(hub, {:smee, {:delivery, "push", "Me/App"}})
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "connected"}}}}, 1000
+    assert %DateTime{} = SharedSmee.last_delivery(file, "me/app")
+    assert SharedSmee.channel(file) == "https://smee.io/shared"
+    stop_supervised!(SharedSmee)
+
+    hub = start.(ensure_hook: fn _, _ -> {:error, :no_token} end)
+    send(hub, {:smee, :open})
+    {_, _} = subscriber(hub, :app, "me/app")
+    assert_receive {:got, :app, {:shared_smee, {:log, "me/app's GitHub webhook is connected (last delivery just now, on https://smee.io/shared)"}}}, 1000
+    assert_receive {:got, :app, {:shared_smee, {:status, %{webhook: "connected", error: nil}}}}, 1000
+    refute SharedSmee.last_delivery(file, "me/other")
+  end
+
+  test "ago says roughly how long ago" do
+    now = ~U[2026-11-14 12:00:00Z]
+    assert SharedSmee.ago(~U[2026-11-14 11:59:30Z], now) == "just now"
+    assert SharedSmee.ago(~U[2026-11-14 11:55:00Z], now) == "5 min ago"
+    assert SharedSmee.ago(~U[2026-11-14 09:00:00Z], now) == "3 h ago"
+    assert SharedSmee.ago(~U[2026-11-12 12:00:00Z], now) == "2 days ago"
   end
 
   test "a delivery also clears a webhook that couldn't be added", %{start: start} do
