@@ -68,7 +68,7 @@ li.behind .status { color: var(--behind); }
   .all-projects, h1 { display: inline; margin-right: 8px; }
   .on, .webhook { display: inline-block; max-width: 100%; line-height: 1.4; overflow-wrap: anywhere; }
   .on { font-size: 12px; margin-right: 8px; }
-  .webhook { font-size: 11px; }
+  .webhook { font-size: 11px; padding: 4px 0 6px; }
   .message { font-size: 12px; margin: 4px; }
   ul { gap: 0; }
   li button { flex-wrap: wrap; gap: 0 8px; border: 0; border-radius: 4px; padding: 5px 8px; background: none; }
