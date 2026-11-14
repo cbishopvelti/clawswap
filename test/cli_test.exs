@@ -99,4 +99,18 @@ defmodule Clawswap.CLITest do
     assert File.read!(path) =~ "'reload:Reload'"
     refute File.exists?(Completion.path("fish", env))
   end
+
+  test "talks to this checkout's own project, and fails without a config rather than use the selected one" do
+    %{dir: dir, work: work} = Clawswap.TestRepo.setup()
+
+    try do
+      assert {:error, "clawswap: no clawswap project here" <> message} = Clawswap.CLI.api_base(work)
+      assert message =~ "No clawswap.exs"
+
+      File.write!("#{work}/clawswap.exs", "[session: \"shop\", port: 27400, servers: [web: [command: \"x\"]]]")
+      assert Clawswap.CLI.api_base(work) == {:ok, "http://127.0.0.1:27400/p/shop"}
+    after
+      File.rm_rf!(dir)
+    end
+  end
 end

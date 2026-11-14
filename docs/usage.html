@@ -64,7 +64,8 @@
   <tr><td><code>clawswap daemon</code></td><td>The daemon itself, which runs every project's watcher, page and API. <code>up</code> starts it in the background; you rarely run it yourself.</td></tr>
 </table>
 <p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the project in the daemon, so they need
-<code>clawswap up</code> first.</p>
+<code>clawswap up</code> first. They act on the checkout's own project, found from its config, so in a repo
+without one they say so and stop rather than show or switch another project.</p>
 <p>A mistyped command says which command it thinks you meant (<code>clawswap swich</code>: "Did you mean
 clawswap switch?"), and a command given the wrong arguments says what it takes. Options work the same way for
 every command: they can go before or after the arguments, and one a command doesn't take stops it before it

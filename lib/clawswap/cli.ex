@@ -514,12 +514,21 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Where the API is for this checkout: its project's paths on its daemon (/p/<id>), from the config; or
-  # the selected project's on the default daemon (CLAWSWAP_PORT), from a checkout without one.
+  # Where the API is for this checkout: its project's paths on its daemon (/p/<id>), from the config.
   defp api_url(path) do
-    case Config.load(repo_dir()) do
-      {:ok, project} -> "http://127.0.0.1:#{project.port}/p/#{project.id}#{path}"
-      _ -> "http://127.0.0.1:#{System.get_env("CLAWSWAP_PORT") || "27390"}#{path}"
+    case api_base(repo_dir()) do
+      {:ok, base} -> base <> path
+      {:error, message} -> fail(message)
+    end
+  end
+
+  @doc false
+  # A checkout without a config has no project of its own, so this fails rather than fall back to the
+  # daemon's selected project: status, switch and pull would show or switch some other project's branches.
+  def api_base(dir) do
+    case Config.load(dir) do
+      {:ok, project} -> {:ok, "http://127.0.0.1:#{project.port}/p/#{project.id}"}
+      {:error, message} -> {:error, "clawswap: no clawswap project here, so nothing to show or switch. #{message}"}
     end
   end
 
