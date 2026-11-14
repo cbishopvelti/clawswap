@@ -2,3 +2,4 @@
 /deps/
 /priv/static/hologram/
 erl_crash.dump
+/tmp/
