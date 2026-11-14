@@ -78,6 +78,20 @@ defmodule Clawswap.WatcherTest do
     assert Watcher.state(w).switch.phase == "failed"
   end
 
+  test "a failed step leaves it and the steps after it owed for next time", %{project: project, start: start} do
+    me = self()
+    fail = fn step -> if step.name == "schema", do: {:error, "boom"}, else: send(me, {:call, step.name}) && :ok end
+    w = start.(run_step: fail)
+    Watcher.refresh(w)
+
+    assert {:ok, _} = Watcher.switch_to(w, "claude/new-thing")
+    TestRepo.until(fn -> finished?(w) end)
+    assert Watcher.state(w).switch.phase == "failed"
+    assert Config.owed(project) == ["schema", "access"]
+    {_, pending} = Config.pending_steps(project)
+    assert Enum.map(pending, & &1.name) == ["schema", "access"]
+  end
+
   test "shows a switch as running as soon as it's asked for, before the refresh it waits for", %{start: start} do
     me = self()
     w = start.(on_change: &send(me, {:changed, &1.switch}))

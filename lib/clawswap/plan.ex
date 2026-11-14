@@ -44,10 +44,14 @@ defmodule Clawswap.Plan do
     }
   end
 
-  @doc "The steps for these changed paths, or every step with `all: true`. A step without `when` only runs with all."
+  @doc """
+  The steps for these changed paths, or every step with `all: true`. A step without `when` only runs with all.
+  `owed:` names steps to include whatever changed (ones an earlier run didn't finish).
+  """
   def steps(steps, changed, opts \\ []) do
     all = opts[:all] || false
-    for step <- steps, all or Enum.any?(changed, step.test), do: Map.delete(step, :test)
+    owed = opts[:owed] || []
+    for step <- steps, all or step.name in owed or Enum.any?(changed, step.test), do: Map.delete(step, :test)
   end
 
   @doc "The messages for these changed paths (e.g. \"restart OpenDeck to load the plugin\")."

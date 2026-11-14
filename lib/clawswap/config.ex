@@ -299,26 +299,48 @@ defmodule Clawswap.Config do
     File.write!(project.local_file, JSON.encode!(Map.delete(read_local(project), key)) <> "\n")
   end
 
-  @doc "Remembers that the steps have run for this commit."
-  def mark_updated(project, sha), do: write_local(project, %{"updated" => sha})
+  @doc """
+  Remembers that the steps have run for this commit, all but `owed` (steps or their names): those failed or
+  didn't get to run (a step that failed, the ones after it, or a run stopped part way), so the next
+  `pending_steps/1` runs them again even though nothing changed.
+  """
+  def mark_updated(project, sha, owed \\ []) do
+    names = owed |> Enum.map(&step_name/1) |> Enum.uniq()
+    local = project |> read_local() |> Map.put("updated", sha) |> Map.delete("owed")
+    local = if names == [], do: local, else: Map.put(local, "owed", names)
+    File.write!(project.local_file, JSON.encode!(local) <> "\n")
+  end
+
+  defp step_name(%{name: name}), do: name
+  defp step_name(name) when is_binary(name), do: name
+
+  @doc "The names of the steps the last run left owing (see `mark_updated/3`)."
+  def owed(project) do
+    case read_local(project)["owed"] do
+      names when is_list(names) -> Enum.filter(names, &is_binary/1)
+      _ -> []
+    end
+  end
 
   @doc """
-  The steps HEAD still needs: those for what changed since the last updated commit, or all of them when
-  there's none (a first run) or it's no longer known to git. Returns `{head, steps}`.
+  The steps HEAD still needs: those for what changed since the last updated commit, plus any the last run
+  left owing, or all of them when there's none (a first run) or it's no longer known to git. Returns
+  `{head, steps}`.
   """
   def pending_steps(project) do
     head = Git.head(project.root)
+    owed = owed(project)
 
     case read_local(project)["updated"] do
-      ^head ->
-        {head, []}
-
       nil ->
         {head, Plan.steps(project.steps, [], all: true)}
 
+      ^head ->
+        {head, Plan.steps(project.steps, [], owed: owed)}
+
       last ->
         case Git.changed(project.root, last, head) do
-          {:ok, changed} -> {head, Plan.steps(project.steps, changed)}
+          {:ok, changed} -> {head, Plan.steps(project.steps, changed, owed: owed)}
           {:error, _} -> {head, Plan.steps(project.steps, [], all: true)}
         end
     end

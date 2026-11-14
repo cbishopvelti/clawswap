@@ -196,6 +196,37 @@ defmodule Clawswap.ConfigTest do
     end
   end
 
+  test "runs the steps a run didn't finish again, even when nothing changed" do
+    %{dir: dir, work: work} = TestRepo.setup()
+    project = Config.normalise(TestRepo.bmx_config(), root: work)
+
+    try do
+      head = String.trim(TestRepo.git(work, ["rev-parse", "HEAD"]))
+      {_, [_first | rest] = steps} = Config.pending_steps(project)
+
+      # The first step worked and the second failed: only those after the first are owed.
+      Config.mark_updated(project, head, steps)
+      Config.mark_updated(project, head, rest)
+      assert Config.pending_steps(project) == {head, rest}
+      assert Config.owed(project) == Enum.map(rest, & &1.name)
+
+      # Owed steps still run after HEAD moves, alongside those for what changed.
+      TestRepo.write("#{work}/README.md", "moved\n")
+      TestRepo.git(work, ["add", "README.md"])
+      TestRepo.git(work, ["commit", "-qm", "moved"])
+      assert {_, ^rest} = Config.pending_steps(project)
+
+      # Once they've all run, nothing is owed and the note goes.
+      Config.mark_updated(project, head, [])
+      refute Config.read_local(project) |> Map.has_key?("owed")
+      Config.write_local(project, %{"smee" => "https://smee.io/x"})
+      Config.mark_updated(project, head)
+      assert Config.read_local(project) == %{"updated" => head, "smee" => "https://smee.io/x"}
+    after
+      File.rm_rf!(dir)
+    end
+  end
+
   defp regex_sources(%Regex{source: source}), do: {:regex, source}
   defp regex_sources(list) when is_list(list), do: Enum.map(list, &regex_sources/1)
   defp regex_sources({k, v}), do: {k, regex_sources(v)}

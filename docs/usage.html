@@ -117,8 +117,10 @@ if nothing answers there) and adds the project to it, so its page is up while th
 <ol class="steps">
   <li>Runs the config's <code>prepare</code> steps (starting containers, say), waiting for any <code>wait_for_port</code>.</li>
   <li>Runs the steps for whatever changed since they last ran, all of them the first time, so the servers don't
-    start on stale deps. It remembers the commit in <code>.git/clawswap.json</code>. If a step fails it says so and
-    starts the servers anyway; fix it and run <code>clawswap update</code>.</li>
+    start on stale deps. It remembers the commit in <code>.git/clawswap.json</code>, noting after each step what's left,
+    so a step that fails (or a run you stop part way) leaves only the steps that didn't finish to run on the next
+    <code>up</code> or switch. If a step fails it says so and starts the servers anyway; fix it and run
+    <code>clawswap update</code>.</li>
   <li>Starts the session: zellij with the generated layout (or the config's own <code>layout</code>), or tmux with the same panes.</li>
 </ol>
 <p><code>clawswap up staging</code> does the same with <code>clawswap.staging.yml</code> (or <code>.exs</code>) merged
@@ -185,7 +187,7 @@ and each project comes into it with a watcher of its own.</p>
 it one when you'd rather it didn't share.</p>
 
 <h2 id="state">What clawswap keeps per checkout</h2>
-<p><code>.git/clawswap.json</code> holds the commit the steps last ran for, and a smee.io channel of the checkout's own if you gave it one. It lives
+<p><code>.git/clawswap.json</code> holds the commit the steps last ran for (with any steps that didn't finish for it), and a smee.io channel of the checkout's own if you gave it one. It lives
 inside <code>.git</code>, so it's never committed and needs no <code>.gitignore</code> entry; worktrees get their own.
 The generated layout sits next to it as <code>.git/clawswap.kdl</code> (zellij only).</p>
 <div class="pager"><span><a href="install.html">← Install</a></span><span><a href="configuration.html">Configuration →</a></span></div>
