@@ -38,6 +38,7 @@ defmodule Clawswap.CLI.Completion do
         daemon) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "stop" -- "$cur")); [ "$COMP_CWORD" -eq 3 ] && COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
         #{flag_cases(commands, ~S|COMPREPLY=($(compgen -W "|, ~S|" -- "$cur"))|)}
         completion) COMPREPLY=($(compgen -W "install #{Enum.join(@shells, " ")}" -- "$cur")) ;;
+        help) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "#{names}" -- "$cur")) ;;
       esac
     }
     complete -F _clawswap clawswap
@@ -66,6 +67,7 @@ defmodule Clawswap.CLI.Completion do
         daemon) (( CURRENT == 3 )) && compadd -- stop; (( CURRENT == 4 )) && compadd -- --all ;;
         #{flag_cases(commands, "compadd -- ", "")}
         completion) compadd -- install #{Enum.join(@shells, " ")} ;;
+        help) (( CURRENT == 3 )) && _describe command commands ;;
       esac
     }
     if [ "$funcstack[1]" = "_clawswap" ]; then _clawswap "$@"; else compdef _clawswap clawswap; fi
@@ -87,6 +89,7 @@ defmodule Clawswap.CLI.Completion do
     complete -c clawswap -n '__fish_seen_subcommand_from daemon; and not __fish_seen_subcommand_from stop' -a stop
     #{for {name, _} <- commands, (flags = Clawswap.CLI.flags(name)) != [], do: "complete -c clawswap -n '__fish_seen_subcommand_from #{name}' -a '#{Enum.join(flags, " ")}'\n"}\
     complete -c clawswap -n '__fish_seen_subcommand_from completion' -a 'install #{Enum.join(@shells, " ")}'
+    complete -c clawswap -n '__fish_seen_subcommand_from help' -a '#{Enum.map_join(commands, " ", &elem(&1, 0))}'
     """
   end
 
