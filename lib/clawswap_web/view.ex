@@ -110,7 +110,8 @@ defmodule ClawswapWeb.View do
           true -> ""
         end,
       pull_title: pull_title(current, pullable),
-      error: (match?(%{phase: "failed"}, run) && failure(run)) || state.error,
+      # A failed fetch too, as the list (and how far behind the branch is) may be out of date.
+      error: (match?(%{phase: "failed"}, run) && failure(run)) || state.error || fetch_error(state),
       branches: Enum.map(state.branches, &branch(&1, state, run, current)),
       # Why there are no branches to show, nil when there are.
       empty: if(state.branches == [], do: Map.get(state, :empty)),
@@ -217,6 +218,13 @@ defmodule ClawswapWeb.View do
   defp webhook_class(_), do: "off"
 
   # A failed switch or pull, said as which it was.
+  defp fetch_error(state) do
+    case Map.get(state, :fetchError) do
+      nil -> nil
+      message -> "Couldn't fetch from origin: #{message}"
+    end
+  end
+
   defp failure(%{pull: true} = run), do: "Pull failed: #{run.error}"
   defp failure(run), do: "Couldn't switch to #{run.target}: #{run.error}"
 

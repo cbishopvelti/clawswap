@@ -190,6 +190,14 @@ defmodule Clawswap.WatcherTest do
     TestRepo.until(fn -> Watcher.state(w).switch == nil end)
   end
 
+  test "a pull whose fetch fails says why instead of waiting on it", %{work: work, start: start} do
+    TestRepo.git(work, ["remote", "set-url", "origin", "/nonexistent/origin.git"])
+    w = start.([])
+    assert {:error, 502, "Couldn't fetch from origin: " <> _} = Watcher.pull(w)
+    assert %{phase: "failed", refused: true, pull: true} = Watcher.state(w).switch
+    assert is_binary(Watcher.state(w).fetchError)
+  end
+
   test "tells on_change about every change", %{start: start} do
     me = self()
     w = start.(on_change: &send(me, {:view, &1}))

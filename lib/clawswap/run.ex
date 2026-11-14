@@ -10,29 +10,78 @@ defmodule Clawswap.Run do
   """
   def capture(cmd, args, opts \\ []) do
     err = Path.join(System.tmp_dir!(), "clawswap-#{System.unique_integer([:positive])}.err")
+    sh_args = ["-c", ~s(exec "$@" 2>"$CLAWSWAP_ERR" </dev/null), "sh", cmd | args]
+    cwd = opts[:cwd] || File.cwd!()
+    env = [{"CLAWSWAP_ERR", err} | opts[:env] || []]
 
     try do
       # stderr goes to a file so it doesn't mix with the answer, and is there for the error.
-      {out, code} =
-        System.cmd("sh", ["-c", ~s(exec "$@" 2>"$CLAWSWAP_ERR" </dev/null), "sh", cmd | args],
-          cd: opts[:cwd] || File.cwd!(),
-          env: [{"CLAWSWAP_ERR", err} | opts[:env] || []]
-        )
+      result =
+        case opts[:timeout] do
+          nil -> System.cmd("sh", sh_args, cd: cwd, env: env)
+          ms -> run_with_timeout(sh_args, cwd, env, ms)
+        end
 
-      if code == 0 do
-        {:ok, out}
-      else
-        stderr =
-          case File.read(err),
-            do: (
-              {:ok, text} -> text
-              _ -> ""
-            )
+      case result do
+        :timeout ->
+          {:error, "#{cmd} #{Enum.join(args, " ")} gave no answer in #{div(opts[:timeout], 1000)} s, so it was stopped"}
 
-        {:error, first_present([error_summary(stderr), error_summary(out), "#{cmd} #{Enum.join(args, " ")} exited with #{code}"])}
+        {out, 0} ->
+          {:ok, out}
+
+        {out, code} ->
+          stderr =
+            case File.read(err),
+              do: (
+                {:ok, text} -> text
+                _ -> ""
+              )
+
+          {:error, first_present([error_summary(stderr), error_summary(out), "#{cmd} #{Enum.join(args, " ")} exited with #{code}"])}
       end
     after
       File.rm(err)
+    end
+  end
+
+  # Like System.cmd/3, but kills the command when it runs longer than `ms`: `{out, code}` or `:timeout`.
+  defp run_with_timeout(sh_args, cwd, env, ms) do
+    port =
+      Port.open({:spawn_executable, System.find_executable("sh")}, [
+        :binary,
+        :exit_status,
+        args: sh_args,
+        cd: cwd,
+        env: for({name, value} <- env, do: {String.to_charlist(name), if(value, do: String.to_charlist(value), else: false)})
+      ])
+
+    collect(port, "", System.monotonic_time(:millisecond) + ms)
+  end
+
+  defp collect(port, out, deadline) do
+    receive do
+      {^port, {:data, text}} -> collect(port, out <> text, deadline)
+      {^port, {:exit_status, code}} -> {out, code}
+    after
+      max(deadline - System.monotonic_time(:millisecond), 0) ->
+        case Port.info(port, :os_pid) do
+          {:os_pid, pid} -> System.cmd("kill", ["-KILL", Integer.to_string(pid)], stderr_to_stdout: true)
+          nil -> :ok
+        end
+
+        try do
+          Port.close(port)
+        rescue
+          ArgumentError -> :ok
+        end
+
+        receive do
+          {^port, {:exit_status, _}} -> :ok
+        after
+          0 -> :ok
+        end
+
+        :timeout
     end
   end
 

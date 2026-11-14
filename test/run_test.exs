@@ -59,4 +59,18 @@ defmodule Clawswap.RunTest do
     assert Run.capture("sh", ["-c", "echo 'fatal: not a git repository' >&2; echo hint >&2; exit 128"]) ==
              {:error, "fatal: not a git repository"}
   end
+
+  describe "capture/3 with a timeout" do
+    test "stops a command that runs too long, and says so" do
+      started = System.monotonic_time(:millisecond)
+      assert {:error, message} = Run.capture("sleep", ["30"], timeout: 1000)
+      assert message == "sleep 30 gave no answer in 1 s, so it was stopped"
+      assert System.monotonic_time(:millisecond) - started < 5000
+    end
+
+    test "answers as usual when the command finishes in time" do
+      assert {:ok, "hi\n"} = Run.capture("echo", ["hi"], timeout: 5000)
+      assert {:error, "nope"} = Run.capture("sh", ["-c", "echo nope >&2; exit 3"], timeout: 5000)
+    end
+  end
 end
