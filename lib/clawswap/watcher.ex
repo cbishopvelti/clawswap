@@ -4,7 +4,8 @@ defmodule Clawswap.Watcher do
   webhook through smee.io), and switches branch when a Stream Deck key or a page asks.
 
   Options: `project` (from `Clawswap.Config`), `servers` (`%{stop: fn name, note, start: fn name}`, and
-  optionally `wait_for_port: fn port, ms` for the wait before a switch is done:
+  optionally `wait_for_port: fn port, ms` for the wait before a switch is done (`:ok`, `{:ok, port}` when the
+  server took another, or `:timeout`; `Clawswap.Ports.wait_for_server/3` by default):
   `Clawswap.Zellij.servers/2` in the session, stand-ins in tests), `run_step` (runs one planned step),
   `smee_url` (a smee.io channel of its own) or `shared_smee` (the `Clawswap.SharedSmee` to follow instead),
   `on_change` (called with the public state after every change; the web layer broadcasts it),
@@ -627,15 +628,23 @@ defmodule Clawswap.Watcher do
 
   # The first server that didn't open its port in time, as an error; nil when they all did.
   defp wait_for_ports(project, servers, step) do
-    wait = Map.get(servers, :wait_for_port, &Ports.wait_for_port/2)
-
     Enum.find_value(project.server_names, fn name ->
+      wait = Map.get(servers, :wait_for_port, fn _port, ms -> Ports.wait_for_server(project, name, ms) end)
+
       if port = project.servers[name][:port] do
         step.("Waiting for #{name} on port #{port}")
 
         case wait.(port, @port_wait_ms) do
-          :ok -> nil
-          _ -> "#{name} didn't listen on port #{port} within #{div(@port_wait_ms, 60_000)} minutes"
+          :ok ->
+            nil
+
+          # A dev server that moves when its port is taken (Vite) took the next one.
+          {:ok, moved} ->
+            log("#{name} is on port #{moved}: #{port} was taken")
+            nil
+
+          _ ->
+            "#{name} didn't listen on port #{port} within #{div(@port_wait_ms, 60_000)} minutes"
         end
       end
     end)
