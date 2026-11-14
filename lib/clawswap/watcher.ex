@@ -614,24 +614,24 @@ defmodule Clawswap.Watcher do
         after_sha = Git.head(project.root)
         changed_paths = if before && before != after_sha, do: elem(Git.changed(project.root, before, after_sha), 1), else: []
 
-        for planned <- Plan.steps(project.steps, changed_paths) do
-          step.(planned.label)
-          log(planned.label)
+        # With any steps an earlier run didn't finish. What's left is noted after each one, so a failure
+        # leaves only the steps that didn't finish for next time.
+        planned = Plan.steps(project.steps, changed_paths, owed: Config.owed(project))
+        note_update(project, after_sha, planned)
 
-          case run_step.(planned) do
-            :ok -> :ok
+        planned
+        |> Enum.with_index(1)
+        |> Enum.each(fn {planned_step, i} ->
+          step.(planned_step.label)
+          log(planned_step.label)
+
+          case run_step.(planned_step) do
+            :ok -> note_update(project, after_sha, Enum.drop(planned, i))
             {:error, message} -> raise RuntimeError, message
           end
-        end
+        end)
 
         log("On #{target}")
-
-        try do
-          Config.mark_updated(project, after_sha)
-        rescue
-          error -> log("Couldn't note the update in #{project.local_file}: #{Exception.message(error)}")
-        end
-
         {:done, changed_paths}
       rescue
         error ->
@@ -702,6 +702,12 @@ defmodule Clawswap.Watcher do
     else
       git.(["checkout", "-b", target, "--track", "origin/#{target}"])
     end
+  end
+
+  defp note_update(project, sha, owed) do
+    Config.mark_updated(project, sha, owed)
+  rescue
+    error -> log("Couldn't note the update in #{project.local_file}: #{Exception.message(error)}")
   end
 
   @doc "The real step runner: output goes to the watcher's pane (or the terminal, for `up` and `update`)."

@@ -249,28 +249,39 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Runs steps one after another in this terminal; true when they all worked.
-  defp run_steps(project, steps) do
-    run = Watcher.step_runner(project)
+  # Runs steps one after another in this terminal; true when they all worked. `progress` gets the steps
+  # still to run after each one that worked, so a caller can note how far it got.
+  defp run_steps(project, steps, progress \\ fn _rest -> :ok end) do
+    run_each(steps, Watcher.step_runner(project), progress)
+  end
 
-    Enum.reduce_while(steps, true, fn step, true ->
-      IO.puts(step.label)
+  defp run_each([], _run, _progress), do: true
 
-      case run.(step) do
-        :ok ->
-          if step.wait_for_port, do: Ports.wait_for_port(step.wait_for_port)
-          {:cont, true}
+  defp run_each([step | rest], run, progress) do
+    IO.puts(step.label)
 
-        {:error, message} ->
-          IO.puts(:stderr, "#{step.label} failed: #{message}")
-          {:halt, false}
-      end
-    end)
+    case run.(step) do
+      :ok ->
+        if step.wait_for_port, do: Ports.wait_for_port(step.wait_for_port)
+        progress.(rest)
+        run_each(rest, run, progress)
+
+      {:error, message} ->
+        IO.puts(:stderr, "#{step.label} failed: #{message}")
+        false
+    end
+  end
+
+  # Runs `steps` for `head`, noting after each one that worked what's left, so a step that fails (or a run
+  # stopped part way, say with Ctrl-C) leaves only the steps that didn't finish for next time, not all of them.
+  defp run_steps_for(project, head, steps) do
+    Config.mark_updated(project, head, steps)
+    run_steps(project, steps, &Config.mark_updated(project, head, &1))
   end
 
   # Runs the config's prepare steps (containers and the like), then brings the checkout up to date with
   # HEAD before the servers start, for whatever changed since the steps last ran (a pull or checkout done
-  # by hand, or a first run).
+  # by hand, or a first run) and any steps the last run didn't finish.
   defp catch_up(project) do
     run_steps(project, project.prepare)
     {head, steps} = Config.pending_steps(project)
@@ -278,10 +289,12 @@ defmodule Clawswap.CLI do
     if steps != [] do
       IO.puts("Catching up with #{String.slice(head, 0, 7)}: #{Enum.map_join(steps, ", ", & &1.label)}")
 
-      if run_steps(project, steps) do
-        Config.mark_updated(project, head)
-      else
-        IO.puts(:stderr, "Starting the servers anyway; fix that and run clawswap update.")
+      unless run_steps_for(project, head, steps) do
+        IO.puts(
+          :stderr,
+          "Starting the servers anyway. The next clawswap up runs the steps that didn't finish again, or run clawswap update once you've fixed it."
+        )
+
         Process.sleep(4000)
       end
     end
@@ -858,7 +871,7 @@ defmodule Clawswap.CLI do
         rev -> Plan.steps(project.steps, elem(Git.changed(project.root, rev, head), 1))
       end
 
-    if steps != [] and not run_steps(project, steps), do: System.halt(1)
+    if steps != [] and not run_steps_for(project, head, steps), do: System.halt(1)
     Config.mark_updated(project, head)
     if steps == [], do: IO.puts("Nothing to do")
   end
