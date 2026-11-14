@@ -24,6 +24,9 @@ defmodule Clawswap.CLI do
     {"daemon", "[stop]", 0, 1,
      "The daemon that runs every project's watcher, page and API (clawswap up starts it); stop stops it (--all: every project's session too)"},
     {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
+    {"self-update", "", 0, 0, "Update clawswap itself: git pull its own checkout, then reload (--no-reload: just pull)"},
+    {"self-pull", "", 0, 0, "The same as self-update"},
+    {"pull-self", "", 0, 0, "The same as self-update"},
     {"completion", "install", 1, 2, "Set up Tab completion for your shell (or install bash|zsh|fish); completion bash prints the script"},
     {"help", "[command]", 0, 1, "This list, or one command's usage and options (so does clawswap <command> --help)"}
   ]
@@ -31,7 +34,7 @@ defmodule Clawswap.CLI do
   # Help groups the commands so the everyday ones come first. Setup is what you run once (or after
   # changing clawswap); internal is what the session runs for you. A command named in neither is everyday,
   # so a new row in @commands shows up there without touching this.
-  @setup ~w(doctor init completion layout reload)
+  @setup ~w(doctor init completion layout reload self-update self-pull pull-self)
   @internal ~w(watch daemon)
 
   for name <- @setup ++ @internal, !List.keymember?(@commands, name, 0) do
@@ -54,6 +57,9 @@ defmodule Clawswap.CLI do
   # (suggesting the closest one), so a typo never runs. --help and -h are every command's, before these.
   @options %{
     "update" => [all: {:boolean, "Run every step, whatever changed"}],
+    "self-update" => [reload: {:boolean, "Reload after pulling (the default; --no-reload just pulls)"}],
+    "self-pull" => [reload: {:boolean, "Reload after pulling (the default; --no-reload just pulls)"}],
+    "pull-self" => [reload: {:boolean, "Reload after pulling (the default; --no-reload just pulls)"}],
     "daemon" => [all: {:boolean, "With stop: end every project's session too"}],
     "smee" => [new: {:boolean, "Make a new smee.io channel of this checkout's own"}],
     "walk" => [headless: {:boolean, "Play them in a Chrome with no window, and exit 1 if one fails"}],
@@ -200,6 +206,10 @@ defmodule Clawswap.CLI do
   defp dispatch("test", paths, opts), do: browser_tests(paths, opts)
   defp dispatch("layout", [], _), do: layout()
   defp dispatch("reload", [], _), do: reload()
+
+  defp dispatch(command, [], opts) when command in ~w(self-update self-pull pull-self),
+    do: self_update(Keyword.get(opts, :reload, true))
+
   defp dispatch("completion", ["install" | shell], _), do: install_completion(List.first(shell))
   defp dispatch("completion", ["refresh"], _), do: refresh_completion()
   defp dispatch("completion", [shell], _), do: completion(shell)
@@ -663,6 +673,45 @@ defmodule Clawswap.CLI do
     System.cmd(Multiplexer.cli(), ["completion", "refresh"], into: IO.stream(), stderr_to_stdout: true)
   end
 
+  # Pulls clawswap's own checkout (not your project's: that's clawswap pull), fast-forward only, and then
+  # reloads. The reload runs as a new clawswap, so it's the pulled code's reload, after fetching any deps the
+  # pull added.
+  defp self_update(reload?) do
+    tool = Path.expand("../..", __DIR__)
+    before = Git.head(tool)
+    IO.puts("Pulling clawswap (#{tool}, on #{Git.current_branch(tool).branch})")
+
+    {_, status} = System.cmd("git", ["pull", "--ff-only"], cd: tool, into: IO.stream(), stderr_to_stdout: true)
+    if status != 0, do: fail("clawswap: git pull didn't work in #{tool} (see above); nothing was reloaded")
+
+    cond do
+      Git.head(tool) == before ->
+        IO.puts("clawswap is up to date; nothing to reload")
+
+      not reload? ->
+        IO.puts("Pulled clawswap; run clawswap reload to start using it")
+
+      true ->
+        changed = Git.git!(tool, ["diff", "--name-only", before, "HEAD"]) |> String.split("\n", trim: true)
+
+        if Enum.any?(changed, &(&1 in ["mix.exs", "mix.lock"])) do
+          IO.puts("Fetching clawswap's deps")
+          {_, status} = System.cmd("mix", ["deps.get"], cd: tool, env: own_env(), into: IO.stream(), stderr_to_stdout: true)
+          if status != 0, do: fail("clawswap: mix deps.get didn't work in #{tool}; nothing was reloaded")
+        end
+
+        {_, status} =
+          System.cmd(Multiplexer.cli(), ["reload"],
+            cd: repo_dir(),
+            env: [{"PATH", System.get_env("CLAWSWAP_HOST_PATH") || System.get_env("PATH", "")} | for(v <- ~w(ROOTDIR BINDIR EMU PROGNAME), do: {v, nil})],
+            into: IO.stream(),
+            stderr_to_stdout: true
+          )
+
+        if status != 0, do: System.halt(status)
+    end
+  end
+
   defp reload_opendeck do
     if Clawswap.OpenDeck.start_command() == nil and not Clawswap.OpenDeck.running?() do
       IO.puts("No OpenDeck here (set CLAWSWAP_OPENDECK_CMD to the command that starts it); leaving its plugin alone")
@@ -686,12 +735,16 @@ defmodule Clawswap.CLI do
     build = Mix.Project.build_path()
     File.rm_rf!(Path.join(build, "lib/clawswap/priv/static/hologram"))
     File.rm_rf!(Path.join(build, "lib/hologram/priv/tmp"))
+    {_, status} = System.cmd("mix", ["compile", "--force"], cd: tool, env: own_env(), into: IO.stream(), stderr_to_stdout: true)
+    status == 0
+  end
+
+  # The environment for running mix in clawswap's own checkout with the Elixir this runs on.
+  defp own_env do
     elixir_bin = Path.expand("../../bin", to_string(:code.lib_dir(:elixir)))
     erlang_bin = Path.join(to_string(:code.root_dir()), "bin")
     path = Enum.join([elixir_bin, erlang_bin, System.get_env("PATH", "")], ":")
-    env = [{"PATH", path}, {"MIX_ENV", to_string(Mix.env())} | for(v <- ~w(ROOTDIR BINDIR EMU PROGNAME), do: {v, nil})]
-    {_, status} = System.cmd("mix", ["compile", "--force"], cd: tool, env: env, into: IO.stream(), stderr_to_stdout: true)
-    status == 0
+    [{"PATH", path}, {"MIX_ENV", to_string(Mix.env())} | for(v <- ~w(ROOTDIR BINDIR EMU PROGNAME), do: {v, nil})]
   end
 
   # Asks the daemon on the port for its OS pid and stops it (killing it if it hasn't gone in 15 seconds).

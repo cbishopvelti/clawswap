@@ -71,6 +71,7 @@
   <tr><td><code>clawswap completion install</code></td><td>Sets up Tab completion for your shell; <code>clawswap completion &lt;shell&gt;</code> prints the script for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap reload</code></td><td>After changing or pulling clawswap: quits OpenDeck, copies the plugin into its plugins folder, starts OpenDeck again, then recompiles clawswap (clearing Hologram's page bundle) and restarts the daemon, and writes any installed <a href="#completion">completion</a> again. It compiles before stopping the daemon, so a compile error leaves everything running. See <a href="opendeck.html#reload">Stream Deck keys</a> for finding OpenDeck.</td></tr>
+  <tr><td><code>clawswap self-update</code><br><code>clawswap self-pull</code><br><code>clawswap pull-self</code></td><td>Updates clawswap itself: <code>git pull --ff-only</code> in clawswap's own checkout (not your project's: that's <code>clawswap pull</code>), fetches its deps if <code>mix.exs</code> or <code>mix.lock</code> changed, then runs the pulled code's <code>clawswap reload</code>. Nothing is reloaded when it was already up to date or the pull fails. <code>--no-reload</code> just pulls. The three names do the same thing.</td></tr>
 </table>
 
 <h3 id="internal">Internal</h3>
