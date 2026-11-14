@@ -10,6 +10,7 @@ defmodule Clawswap.TmuxTest do
     # Under env with the marker that finds the port it's on (Clawswap.Ports.marker/2).
     assert ["new-session", "-s", "bmx", "-n", "bmx", "-c", "/work/bmx/backend", "--", "env", "CLAWSWAP_SERVER=bmx/phx", _keep, "iex -S mix phx.server"] =
              hd(cmds)
+
     assert Enum.any?(cmds, &match?(["split-window", "-h", "-t", "=bmx:", "-l", "40%" | _], &1))
     assert List.last(cmds) == ["select-pane", "-t", "=bmx:.{top-left}"]
   end
