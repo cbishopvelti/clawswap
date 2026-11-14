@@ -54,18 +54,18 @@ li.behind .status { color: var(--behind); }
   main { padding: 6px; }
   header { gap: 8px; margin: 0 4px 4px; }
   h1 { font-size: 12px; font-weight: normal; color: var(--muted); }
-  header { flex-wrap: nowrap; }
-  .webhook { font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pull { padding: 1px 8px; font-size: 13px; white-space: nowrap; }
+  /* Nothing is cut short at this width: the name, Pull and ⚙ share the first line, and the checkout's
+     branch and the webhook's note each take a line of their own below it, wrapping if they're long. */
+  h1 { flex: 1; }
+  .on, .webhook { order: 1; flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+  .on { font-size: 12px; }
+  .webhook { font-size: 11px; margin-top: -6px; }
   .message { font-size: 12px; margin: 4px; }
   ul { gap: 0; }
   li button { flex-wrap: wrap; gap: 0 8px; border: 0; border-radius: 4px; padding: 5px 8px; background: none; }
   li button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
   li.checkout button { background: color-mix(in srgb, var(--current) 15%, transparent); box-shadow: inset 3px 0 var(--current); }
-  h1 { flex: 0 0 auto; }
-  /* The checkout's branch keeps its room before the webhook's note does. */
-  .webhook { flex: 0 4 auto; }
-  .on { flex: 0 1 auto; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mark { width: 12px; flex-shrink: 0; text-align: center; }
   .number { min-width: 36px; flex-shrink: 0; }
   .title { flex-basis: 0; min-width: 0; }
