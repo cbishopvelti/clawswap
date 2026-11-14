@@ -7,7 +7,7 @@ defmodule Clawswap.ZellijTest do
     kdl = Zellij.layout(Config.normalise(TestRepo.bmx_config(), root: "/work/bmx"))
     for name <- ["phx", "vite", "clawswap", "docker"], do: assert(kdl =~ ~s(pane name="#{name}"))
     assert kdl =~ ~s(cwd="/work/bmx/backend" focus=true)
-    assert kdl =~ ~s(args "iex -S mix phx.server")
+    assert kdl =~ ~r{pane name="phx" command="env" .*\n\s+args "CLAWSWAP_SERVER=bmx/phx" ".*bin/keep" "iex -S mix phx.server"}
     assert kdl =~ ~r{bin/clawswap" "watch"}
     # The servers come first, in the config's order.
     assert :binary.match(kdl, "\"phx\"") < :binary.match(kdl, "\"vite\"")

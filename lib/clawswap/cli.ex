@@ -668,7 +668,7 @@ defmodule Clawswap.CLI do
     cache = System.get_env("XDG_CACHE_HOME") || Path.expand("~/.cache")
 
     url =
-      Enum.find_value(project.server_names, Config.url(project, :clawswap, ""), &(project.servers[&1].port && "http://localhost:#{project.servers[&1].port}"))
+      Enum.find_value(project.server_names, Config.url(project, :clawswap, ""), &(project.servers[&1].port && Config.url(project, &1, "")))
 
     case Walkthrough.Browser.open_dev_chrome(Path.join(cache, "clawswap/chrome"), url) do
       {:ok, address} -> IO.puts("Dev Chrome on #{address}: walkthroughs play in a tab of it while it's open")

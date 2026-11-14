@@ -7,7 +7,8 @@ defmodule Clawswap.TmuxTest do
     cmds = Tmux.commands(Config.normalise(TestRepo.bmx_config(), root: "/work/bmx"))
     names = for ["set-option", "-p", "-t", "=bmx:", "@clawswap", n] <- cmds, do: n
     assert names == ["phx", "clawswap", "docker", "shell", "vite"]
-    assert ["new-session", "-s", "bmx", "-n", "bmx", "-c", "/work/bmx/backend", "--", _keep, "iex -S mix phx.server"] = hd(cmds)
+    # Under env with the marker that finds the port it's on (Clawswap.Ports.marker/2).
+    assert ["new-session", "-s", "bmx", "-n", "bmx", "-c", "/work/bmx/backend", "--", "env", "CLAWSWAP_SERVER=bmx/phx", _keep, "iex -S mix phx.server"] = hd(cmds)
     assert Enum.any?(cmds, &match?(["split-window", "-h", "-t", "=bmx:", "-l", "40%" | _], &1))
     assert List.last(cmds) == ["select-pane", "-t", "=bmx:.{top-left}"]
   end
