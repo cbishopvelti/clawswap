@@ -64,7 +64,7 @@ li.behind .status { color: var(--behind); }
      line as a whole, and one too long for a line of its own (a webhook error) wraps its text. */
   main > header { display: flow-root; line-height: 24px; }
   main > header > * { vertical-align: middle; }
-  .actions { float: right; gap: 8px; margin-left: 8px; height: 24px; }
+  .actions { float: right; gap: 8px; margin: 0 0 6px 8px; min-height: 24px; }
   .all-projects, h1 { display: inline; margin-right: 8px; }
   .on, .webhook { display: inline-block; max-width: 100%; line-height: 1.4; overflow-wrap: anywhere; }
   .on { font-size: 12px; margin-right: 8px; }
