@@ -48,6 +48,7 @@
   <tr><th>Command</th><th>What it does</th></tr>
   <tr><td><code>clawswap up</code></td><td>Starts the daemon if it isn't running, adds the project to it, and opens the zellij or tmux session, or re-attaches to it.</td></tr>
   <tr><td><code>clawswap up &lt;name|file&gt;...</code></td><td>The same, with <a href="configuration.html#overrides">override configs</a> (<code>clawswap.&lt;name&gt;.yml</code>, say) merged over the config.</td></tr>
+  <tr><td><code>clawswap down</code></td><td>Ends the project: takes it out of the daemon, then ends its zellij or tmux session, which stops the servers in its panes. Run it from inside the session too. The session's <code>clawswap</code> pane won't bring the project back; <code>clawswap up</code> starts it again. Containers your <code>prepare</code> steps started are left running.</td></tr>
   <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
   <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane. The branch can be its full name, its PR number (<code>switch 23</code>), its short name or any part of its name that only one listed branch has.</td></tr>
   <tr><td><code>clawswap pull</code></td><td>Pulls the current branch the same way. Does nothing if it's up to date.</td></tr>
@@ -57,14 +58,14 @@
   <tr><td><code>clawswap walk [name...]</code></td><td>Plays <a href="walkthroughs.html">walkthroughs</a> in Chrome: the ones named, else the ones this branch added or changed. <code>--headless</code> runs them without a window and exits 1 if one fails.</td></tr>
   <tr><td><code>clawswap test [path...]</code></td><td>Runs the project's <a href="testing.html">browser tests</a> (Wallaby) against the session's servers. <code>--watch</code> shows the windows, <code>--only tag</code> picks by tag.</td></tr>
   <tr><td><code>clawswap browser</code></td><td>Opens a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> at your app, that walkthroughs then play in.</td></tr>
-  <tr><td><code>clawswap smee [url]</code></td><td>Adds the repo's GitHub webhook for the daemon's shared smee.io channel (<code>up</code> does this by itself; this tries again, or prints the steps to do it by hand), and points a running watcher at it. With a URL, or <code>new</code>, the checkout gets a channel of its own (see <a href="install.html#project">Install</a>).</td></tr>
+  <tr><td><code>clawswap smee [url]</code></td><td>Adds the repo's GitHub webhook for the daemon's shared smee.io channel (<code>up</code> does this by itself; this tries again, or prints the steps to do it by hand), and points a running watcher at it. With a URL, or <code>--new</code>, the checkout gets a channel of its own (see <a href="install.html#project">Install</a>).</td></tr>
 </table>
 
 <h3 id="setup">Setup</h3>
 <p>Once per machine or repo, or after changing clawswap.</p>
 <table>
   <tr><th>Command</th><th>What it does</th></tr>
-  <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config and webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
+  <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config, an origin with branches (warning when it isn't on GitHub, which turns off PRs and the webhook) and a webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
   <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap completion install</code></td><td>Sets up Tab completion for your shell; <code>clawswap completion &lt;shell&gt;</code> prints the script for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
@@ -72,16 +73,21 @@
 </table>
 
 <h3 id="internal">Internal</h3>
-<p>The session runs these for you; you rarely run them yourself.</p>
+<p><code>up</code> and the session run these for you; <code>daemon stop</code> is the one you might run yourself.</p>
 <table>
   <tr><th>Command</th><th>What it does</th></tr>
   <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
   <tr><td><code>clawswap daemon</code></td><td>The daemon itself, which runs every project's watcher, page and API. <code>up</code> starts it in the background; you rarely run it yourself.</td></tr>
+  <tr><td><code>clawswap daemon stop</code></td><td>Stops the daemon on the checkout's port (27390 outside a project). While projects run in it, it refuses and names them, since their sessions' <code>clawswap</code> panes would start it again: end them with <code>clawswap down</code> first, or add <code>--all</code> to take every project down and end their sessions too.</td></tr>
 </table>
 <p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the project in the daemon, so they need
-<code>clawswap up</code> first.</p>
+<code>clawswap up</code> first. They act on the checkout's own project, found from its config, so in a repo
+without one they say so and stop rather than show or switch another project.</p>
 <p>A mistyped command says which command it thinks you meant (<code>clawswap swich</code>: "Did you mean
-clawswap switch?"), and a command given the wrong arguments says what it takes.</p>
+clawswap switch?"), and a command given the wrong arguments says what it takes. Options work the same way for
+every command: they can go before or after the arguments, and one a command doesn't take stops it before it
+does anything, with the closest it does take (<code>clawswap walk --headles</code>: "Did you mean
+--headless?").</p>
 
 <h2 id="completion">Completion</h2>
 <p>Tab completes clawswap's commands (<code>clawswap re</code>, Tab, gives <code>clawswap reload</code>), and for
@@ -170,7 +176,8 @@ and each project comes into it with a watcher of its own.</p>
   <li><strong>A config change</strong> (a switch that changes it, or a save on the settings page) starts that one
     project again on the new config; the others carry on.</li>
   <li><strong>When a session ends</strong>, its project leaves the daemon about 30 seconds later. The daemon stops by
-    itself an hour after its last project has gone. If the daemon stops while a session runs, the session's
+    itself an hour after its last project has gone, or straight away with <code>clawswap daemon stop</code>.
+    <code>clawswap down</code> ends a session and takes its project out at once. If the daemon stops while a session runs, the session's
     <code>clawswap</code> pane starts it again and carries on.</li>
 </ul>
 <p>A project with a <code>port</code> of its own gets a daemon of its own on that port, apart from the others: give

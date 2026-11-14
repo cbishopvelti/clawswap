@@ -10,17 +10,19 @@ defmodule Clawswap.CLI do
     {"init", "", 0, 0, "Write a starter clawswap.exs in this repo"},
     {"up", "[config...]", 0, :any,
      "Start (or attach to) the zellij or tmux session with every server; with a name (clawswap.<name>.yml) or file, merged over the config"},
+    {"down", "", 0, 0, "End this project's session (its servers with it) and take it out of the daemon"},
     {"status", "", 0, 0, "The branches the keys show, and the last switch"},
     {"switch", "<branch>", 1, 1, "Switch branch (its name, part of it, or its PR number), restarting the servers"},
     {"pull", "", 0, 0, "Pull the current branch the same way (nothing happens if it's up to date)"},
     {"update", "[rev]", 0, 1, "Run the steps for what changed since they last ran (or since rev), or --all"},
-    {"smee", "[url]", 0, 1, "Add this repo's GitHub webhook for the shared smee.io channel (up does it), or use a channel of its own"},
+    {"smee", "[url]", 0, 1, "Add this repo's GitHub webhook for the shared smee.io channel (up does it); a url or --new: a channel of its own"},
     {"walk", "[name...]", 0, :any, "Run walkthroughs in Chrome (default: the ones this branch added); --headless"},
     {"browser", "", 0, 0, "Open a dev Chrome that walkthroughs play in, at your app"},
     {"test", "[path...]", 0, :any, "Run the browser tests (Wallaby) against the running servers; --watch, --only tag"},
     {"layout", "", 0, 0, "Print the layout up opens (zellij's layout, or tmux's commands)"},
     {"watch", "[config...]", 0, :any, "Run this project in the daemon and follow its log (the session's clawswap pane does)"},
-    {"daemon", "", 0, 0, "The daemon that runs every project's watcher, page and API (clawswap up starts it)"},
+    {"daemon", "[stop]", 0, 1,
+     "The daemon that runs every project's watcher, page and API (clawswap up starts it); stop stops it (--all: every project's session too)"},
     {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
     {"completion", "install", 1, 2, "Set up Tab completion for your shell (or install bash|zsh|fish); completion bash prints the script"},
     {"help", "", 0, 0, "This list"}
@@ -43,9 +45,19 @@ defmodule Clawswap.CLI do
               [
                 {"Everyday", Enum.reject(rows, &(elem(&1, 0) in (@setup ++ @internal)))},
                 {"Setup", pick.(@setup)},
-                {"Internal (the session runs these for you)", pick.(@internal)}
+                {"Internal (up and the session run these for you)", pick.(@internal)}
               ]
             )
+
+  # The options each command takes, as OptionParser's strict switches. A command not here takes none, and
+  # every command turns down an option it doesn't take (suggesting the closest one), so a typo never runs.
+  @switches %{
+    "update" => [all: :boolean],
+    "daemon" => [all: :boolean],
+    "smee" => [new: :boolean],
+    "walk" => [headless: :boolean],
+    "test" => [watch: :boolean, headless: :boolean, only: :keep, exclude: :keep, seed: :integer, max_cases: :integer]
+  }
 
   @usage "Usage: clawswap <command>\n" <>
            Enum.map_join(@sections, fn {heading, rows} ->
@@ -61,6 +73,51 @@ defmodule Clawswap.CLI do
   @doc "The commands, as `{name, summary}`."
   def commands, do: for({name, _, _, _, summary} <- @commands, do: {name, summary})
 
+  @doc "The options `command` takes, as they're typed (`--max-cases`)."
+  def flags(command), do: for({name, _} <- Map.get(@switches, command, []), do: flag(name))
+
+  defp flag(name), do: "--" <> String.replace(to_string(name), "_", "-")
+
+  @doc """
+  Reads `args` for `command` with OptionParser: `{:ok, args, opts}`, or `{:error, message}` for an option
+  the command doesn't take (with the closest it does), an option's bad value, or the wrong number of arguments.
+  """
+  def parse(command, args) do
+    {_, usage, min, max, _} = List.keyfind(@commands, command, 0)
+    {opts, rest, invalid} = OptionParser.parse(args, strict: Map.get(@switches, command, []))
+
+    cond do
+      invalid != [] -> {:error, bad_option(command, hd(invalid))}
+      length(rest) < min or (max != :any and length(rest) > max) -> {:error, wrong_arguments(command, usage, rest)}
+      true -> {:ok, rest, opts}
+    end
+  end
+
+  defp bad_option(command, {option, value}) do
+    flags = flags(command)
+    name = option |> String.split("=") |> hd()
+
+    cond do
+      name in flags ->
+        type = Enum.find_value(@switches[command], fn {key, type} -> flag(key) == name && type end)
+        "clawswap: #{command} #{name} takes #{if type == :integer, do: "a number", else: "no value"}, not #{inspect(value)}"
+
+      flags == [] ->
+        "clawswap: #{command} takes no options (got #{option}). Usage: #{usage_line(command)}"
+
+      hint = Clawswap.CLI.Forgive.closest(String.trim_leading(name, "-"), Enum.map(flags, &String.trim_leading(&1, "-"))) ->
+        "clawswap: #{command} has no option #{name}. Did you mean --#{hint}? (it takes #{Enum.join(flags, ", ")})"
+
+      true ->
+        "clawswap: #{command} has no option #{name}; it takes #{Enum.join(flags, ", ")}"
+    end
+  end
+
+  defp usage_line(command) do
+    {_, usage, _, _, _} = List.keyfind(@commands, command, 0)
+    "clawswap " <> String.trim("#{command} #{usage}")
+  end
+
   def main(args) do
     case args do
       [] -> IO.write(@usage)
@@ -70,32 +127,39 @@ defmodule Clawswap.CLI do
   end
 
   defp run(command, rest) do
-    case List.keyfind(@commands, command, 0) do
-      nil -> unknown(command, rest)
-      {_, usage, min, max, _} when length(rest) < min or (max != :any and length(rest) > max) -> wrong_arguments(command, usage, rest)
-      _ -> dispatch(command, rest)
+    if List.keymember?(@commands, command, 0) do
+      case parse(command, rest) do
+        {:ok, args, opts} -> dispatch(command, args, opts)
+        {:error, message} -> fail(message)
+      end
+    else
+      unknown(command, rest)
     end
   end
 
-  defp dispatch("doctor", []), do: Clawswap.Doctor.main()
-  defp dispatch("init", []), do: init()
-  defp dispatch("up", rest), do: with_overrides(rest, &up/0)
-  defp dispatch("watch", rest), do: with_overrides(rest, &watch/0)
-  defp dispatch("daemon", []), do: daemon()
-  defp dispatch("status", []), do: status()
-  defp dispatch("switch", [branch]), do: switch(branch)
-  defp dispatch("pull", []), do: pull()
-  defp dispatch("update", rest), do: update(List.first(rest))
-  defp dispatch("smee", rest), do: smee(List.first(rest))
-  defp dispatch("walk", rest), do: walk(rest)
-  defp dispatch("browser", []), do: browser()
-  defp dispatch("test", rest), do: browser_tests(rest)
-  defp dispatch("layout", []), do: layout()
-  defp dispatch("reload", []), do: reload()
-  defp dispatch("completion", ["install" | shell]), do: install_completion(List.first(shell))
-  defp dispatch("completion", ["refresh"]), do: refresh_completion()
-  defp dispatch("completion", [shell]), do: completion(shell)
-  defp dispatch("completion", args), do: wrong_arguments("completion", "install [bash|zsh|fish]", args)
+  defp dispatch("doctor", [], _), do: Clawswap.Doctor.main()
+  defp dispatch("init", [], _), do: init()
+  defp dispatch("up", rest, _), do: with_overrides(rest, &up/0)
+  defp dispatch("watch", rest, _), do: with_overrides(rest, &watch/0)
+  defp dispatch("down", [], _), do: down()
+  defp dispatch("daemon", [], []), do: daemon()
+  defp dispatch("daemon", ["stop"], opts), do: daemon_stop(opts[:all] == true)
+  defp dispatch("daemon", args, _), do: fail(wrong_arguments("daemon", "stop [--all]", args))
+  defp dispatch("status", [], _), do: status()
+  defp dispatch("switch", [branch], _), do: switch(branch)
+  defp dispatch("pull", [], _), do: pull()
+  defp dispatch("update", [_], all: true), do: fail("clawswap: update takes a rev or --all, not both")
+  defp dispatch("update", rest, opts), do: update(if(opts[:all], do: :all, else: List.first(rest)))
+  defp dispatch("smee", rest, opts), do: smee(List.first(rest), opts[:new] == true)
+  defp dispatch("walk", names, opts), do: walk(names, opts)
+  defp dispatch("browser", [], _), do: browser()
+  defp dispatch("test", paths, opts), do: browser_tests(paths, opts)
+  defp dispatch("layout", [], _), do: layout()
+  defp dispatch("reload", [], _), do: reload()
+  defp dispatch("completion", ["install" | shell], _), do: install_completion(List.first(shell))
+  defp dispatch("completion", ["refresh"], _), do: refresh_completion()
+  defp dispatch("completion", [shell], _), do: completion(shell)
+  defp dispatch("completion", args, _), do: fail(wrong_arguments("completion", "install [bash|zsh|fish]", args))
 
   defp unknown(command, rest) do
     names = Enum.map(@commands, &elem(&1, 0))
@@ -117,7 +181,7 @@ defmodule Clawswap.CLI do
         _ -> "#{command} takes #{usage}, not #{Enum.join(rest, " ")}"
       end
 
-    fail("clawswap: #{what}. Usage: clawswap #{String.trim("#{command} #{usage}")}")
+    "clawswap: #{what}. Usage: clawswap #{String.trim("#{command} #{usage}")}"
   end
 
   defp repo_dir, do: System.get_env("CLAWSWAP_REPO") || File.cwd!()
@@ -237,7 +301,11 @@ defmodule Clawswap.CLI do
     if parent_pid() != parent, do: System.halt(0)
     ensure_daemon(project)
 
-    case register(project) do
+    case register(project, true) do
+      {:error, :down} ->
+        IO.puts("\e[36m[clawswap]\e[0m #{project.name} was taken down (clawswap down); clawswap up starts it again")
+        System.halt(0)
+
       {:ok, info} ->
         IO.puts("\e[36m[clawswap]\e[0m #{project.name}: #{info["url"]} (all projects: http://127.0.0.1:#{project.port}/)")
         follow_log(project)
@@ -345,13 +413,15 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Runs the project in the daemon, with this shell's environment for its commands.
-  defp register(project) do
-    body = %{cwd: repo_dir(), env: System.get_env()}
+  # Runs the project in the daemon, with this shell's environment for its commands. From a session's pane
+  # (watch), the daemon turns down a project `clawswap down` took down: {:error, :down}.
+  defp register(project, from_pane \\ false) do
+    body = %{cwd: repo_dir(), env: System.get_env(), from_pane: from_pane}
     url = String.to_charlist("http://127.0.0.1:#{project.port}/daemon/projects")
 
     case :httpc.request(:post, {url, [], ~c"application/json", JSON.encode!(body)}, [timeout: 120_000], body_format: :binary) do
       {:ok, {{_, 200, _}, _, answer}} -> {:ok, JSON.decode!(answer)}
+      {:ok, {{_, 410, _}, _, _}} -> {:error, :down}
       {:ok, {{_, status, _}, _, answer}} -> {:error, with({:ok, %{"error" => e}} <- JSON.decode(answer), do: e, else: (_ -> "the daemon answered #{status}"))}
       {:error, reason} -> {:error, "couldn't reach the daemon: #{inspect(reason)}"}
     end
@@ -376,6 +446,126 @@ defmodule Clawswap.CLI do
     {:ok, _} = Application.ensure_all_started(:clawswap)
     :ok = Clawswap.Application.start_daemon(port, idle_ms: 60 * 60_000)
     Process.sleep(:infinity)
+  end
+
+  # Ends this project: takes it out of the daemon first, so its session's clawswap pane doesn't register it
+  # again as it goes, then ends the session, which stops the servers in its panes. Run from inside the
+  # session, ending it ends this too, so that comes last.
+  defp down do
+    project = project!()
+
+    case daemon_info(project.port) do
+      :daemon ->
+        case daemon_post(project.port, "/p/#{project.id}/down") do
+          {:ok, %{"projects" => left}} ->
+            IO.puts("Took #{project.name} out of the daemon on port #{project.port}")
+            if left == [], do: IO.puts(no_projects_left(project.port))
+
+          {:error, 404} ->
+            IO.puts("#{project.name} wasn't running in the daemon on port #{project.port}")
+
+          {:error, other} ->
+            IO.puts(:stderr, "The daemon didn't take #{project.name} out (#{other}); ending its session all the same")
+        end
+
+      _ ->
+        IO.puts("No clawswap daemon on port #{project.port}")
+    end
+
+    end_session(project.session)
+  end
+
+  defp no_projects_left(port),
+    do: "The daemon on port #{port} has no projects now: it stops by itself in an hour, or now with clawswap daemon stop"
+
+  defp end_session(session) do
+    if inside_session?(session), do: IO.puts("Ending the session #{session}, which this runs in")
+
+    case Multiplexer.kill_session(session) do
+      [] -> IO.puts("No session #{session} was running")
+      muxes -> for mux <- muxes, do: IO.puts("Ended the #{mux |> Module.split() |> List.last() |> String.downcase()} session #{session}")
+    end
+  end
+
+  # Whether this runs in a pane of the session named `session`.
+  defp inside_session?(session) do
+    cond do
+      System.get_env("ZELLIJ_SESSION_NAME") == session ->
+        true
+
+      System.get_env("TMUX") not in [nil, ""] ->
+        # tmux turns . and : in a session's name into _.
+        tmux_session() == String.replace(session, ~r/[.:]/, "_")
+
+      true ->
+        false
+    end
+  end
+
+  defp tmux_session do
+    case Clawswap.Run.capture("tmux", ["display-message", "-p", "#S"]) do
+      {:ok, out} -> String.trim(out)
+      _ -> nil
+    end
+  end
+
+  # Stops the daemon on this checkout's port. Each running project's session pane would start it again
+  # straight away, so with projects running it stops only with --all, which takes each one down first (as
+  # clawswap down does), and ends the session this runs in, if it's one of them, last of all.
+  defp daemon_stop(all) do
+    port = daemon_port()
+
+    case daemon_info(port) do
+      :none ->
+        IO.puts("No clawswap daemon is running on port #{port}")
+
+      :other ->
+        fail("Something that isn't clawswap's daemon listens on port #{port}")
+
+      :daemon ->
+        projects =
+          case daemon_get(port, "/projects") do
+            {:ok, %{"projects" => projects}} -> projects
+            _ -> []
+          end
+
+        if projects != [] and not all do
+          fail("""
+          The daemon on port #{port} is running #{Enum.map_join(projects, ", ", & &1["name"])}, and their sessions' clawswap panes would start it again.
+          End them first (clawswap down in each), or all of them with clawswap daemon stop --all\
+          """)
+        end
+
+        {own, others} = Enum.split_with(projects, &inside_session?(&1["session"] || &1["id"]))
+
+        for p <- projects do
+          daemon_post(port, "/p/#{p["id"]}/down")
+          IO.puts("Took #{p["name"]} out of the daemon")
+        end
+
+        for p <- others, do: end_session(p["session"] || p["id"])
+        # So this session's own clawswap pane hears it's down (and quits) before the daemon goes, rather than
+        # starting a new one.
+        if own != [], do: Process.sleep(1000)
+        stop_daemon(port)
+        IO.puts("Stopped the clawswap daemon on port #{port}")
+        for p <- own, do: end_session(p["session"] || p["id"])
+    end
+  end
+
+  defp daemon_get(port, path), do: daemon_request(:get, port, path)
+  defp daemon_post(port, path), do: daemon_request(:post, port, path)
+
+  defp daemon_request(method, port, path) do
+    :inets.start()
+    url = String.to_charlist("http://127.0.0.1:#{port}#{path}")
+    request = if method == :post, do: {url, [], ~c"application/json", "{}"}, else: {url, []}
+
+    case :httpc.request(method, request, [timeout: 30_000], body_format: :binary) do
+      {:ok, {{_, status, _}, _, answer}} when status in 200..299 -> JSON.decode(answer)
+      {:ok, {{_, status, _}, _, _}} -> {:error, status}
+      {:error, reason} -> {:error, inspect(reason)}
+    end
   end
 
   # For working on clawswap (or after pulling it): puts the OpenDeck plugin in again and restarts OpenDeck,
@@ -483,12 +673,21 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # Where the API is for this checkout: its project's paths on its daemon (/p/<id>), from the config; or
-  # the selected project's on the default daemon (CLAWSWAP_PORT), from a checkout without one.
+  # Where the API is for this checkout: its project's paths on its daemon (/p/<id>), from the config.
   defp api_url(path) do
-    case Config.load(repo_dir()) do
-      {:ok, project} -> "http://127.0.0.1:#{project.port}/p/#{project.id}#{path}"
-      _ -> "http://127.0.0.1:#{System.get_env("CLAWSWAP_PORT") || "27390"}#{path}"
+    case api_base(repo_dir()) do
+      {:ok, base} -> base <> path
+      {:error, message} -> fail(message)
+    end
+  end
+
+  @doc false
+  # A checkout without a config has no project of its own, so this fails rather than fall back to the
+  # daemon's selected project: status, switch and pull would show or switch some other project's branches.
+  def api_base(dir) do
+    case Config.load(dir) do
+      {:ok, project} -> {:ok, "http://127.0.0.1:#{project.port}/p/#{project.id}"}
+      {:error, message} -> {:error, "clawswap: no clawswap project here, so nothing to show or switch. #{message}"}
     end
   end
 
@@ -534,7 +733,9 @@ defmodule Clawswap.CLI do
     end)
 
     if run = s["switch"] do
-      IO.puts("Last switch: #{run["target"]}: #{run["phase"]}#{if run["step"], do: " (#{run["step"]})"}#{if run["error"], do: ": #{run["error"]}"}")
+      IO.puts(
+        "Last #{if run["pull"], do: "pull", else: "switch"}: #{run["target"]}: #{run["phase"]}#{if run["step"], do: " (#{run["step"]})"}#{if run["error"], do: ": #{run["error"]}"}"
+      )
     end
   end
 
@@ -601,7 +802,7 @@ defmodule Clawswap.CLI do
 
     steps =
       case arg do
-        "--all" -> Plan.steps(project.steps, [], all: true)
+        :all -> Plan.steps(project.steps, [], all: true)
         nil -> project |> Config.pending_steps() |> elem(1)
         rev -> Plan.steps(project.steps, elem(Git.changed(project.root, rev, head), 1))
       end
@@ -613,8 +814,7 @@ defmodule Clawswap.CLI do
 
   # Runs walkthroughs here, one after another: those named, or the ones the branch added or changed. They
   # drive the servers the session runs, so it needs to be up.
-  defp walk(args) do
-    {flags, names} = Enum.split_with(args, &String.starts_with?(&1, "--"))
+  defp walk(names, flags) do
     project = project!()
     list = Walkthrough.list(project)
     folder = Path.relative_to(Walkthrough.dir(project), project.root) <> "/"
@@ -622,12 +822,12 @@ defmodule Clawswap.CLI do
     names =
       cond do
         names != [] -> names
-        list == [] -> fail("No walkthroughs in #{folder} yet. See README.md's Walkthroughs.")
+        list == [] -> fail("No walkthroughs in #{folder} yet. See https://cbishopvelti.github.io/clawswap/walkthroughs.html#writing")
         Enum.any?(list, & &1.new) -> for w <- list, w.new, do: w.name
         true -> fail("None of the walkthroughs is new on this branch; name one: #{Enum.map_join(list, ", ", & &1.name)}")
       end
 
-    opts = if "--headless" in flags, do: [headless: true], else: []
+    opts = Keyword.take(flags, [:headless])
 
     failed =
       Enum.reject(names, fn name ->
@@ -649,17 +849,13 @@ defmodule Clawswap.CLI do
 
   # Runs the project's browser tests (Clawswap.BrowserTests) with ExUnit, headless unless --watch, and exits
   # 1 when one fails. Paths are relative to where you ran it.
-  defp browser_tests(args) do
-    {flags, names, invalid} =
-      OptionParser.parse(args, strict: [watch: :boolean, headless: :boolean, only: :keep, exclude: :keep, seed: :integer, max_cases: :integer])
-
-    if invalid != [], do: fail("Unknown option #{elem(hd(invalid), 0)}\n" <> @usage)
+  defp browser_tests(names, flags) do
     project = project!()
 
     files =
       case BrowserTests.files(project, names, repo_dir()) do
         {:ok, files} -> files
-        {:error, message} -> fail(message <> ". See README.md's Browser tests.")
+        {:error, message} -> fail(message <> ". See https://cbishopvelti.github.io/clawswap/testing.html#writing")
       end
 
     first = Enum.find_value(project.server_names, &project.servers[&1].port)
@@ -707,7 +903,7 @@ defmodule Clawswap.CLI do
   # daemon hasn't yet), stops using a channel of the checkout's own, and tells a running watcher. The
   # daemon adds the webhook by itself the first time a repo comes in, so this is for trying again (or
   # moving a checkout that had a channel of its own onto the shared one).
-  defp smee(nil) do
+  defp smee(nil, false) do
     project = project!()
     old = Config.read_local(project)["smee"]
 
@@ -729,14 +925,21 @@ defmodule Clawswap.CLI do
     end
   end
 
-  # A channel of the checkout's own (given, or new with `new`): saved for this checkout, the webhook added
+  # A channel of the checkout's own (given, or new with --new): saved for this checkout, the webhook added
   # on GitHub when the token may, and a running watcher told to follow it.
-  defp smee(url) do
+  defp smee(url, new?) do
+    cond do
+      url && new? -> fail("clawswap: smee takes a url or --new, not both")
+      url == "new" -> fail("clawswap: smee new is now clawswap smee --new (a url is the channel to use)")
+      url && not String.match?(url, ~r{^https?://}) -> fail("clawswap: smee takes a channel's url (https://smee.io/...), not #{inspect(url)}")
+      true -> :ok
+    end
+
     project = project!()
     old = Config.read_local(project)["smee"] || SharedSmee.channel()
 
     channel =
-      if url == "new" do
+      if new? do
         case Smee.new_channel() do
           {:ok, channel} -> channel
           {:error, message} -> fail(message)

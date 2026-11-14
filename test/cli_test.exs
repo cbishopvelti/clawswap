@@ -46,7 +46,38 @@ defmodule Clawswap.CLITest do
     names = fn heading -> for {^heading, rows} <- sections, {name, _, _} <- rows, do: name end
     assert "switch" in names.("Everyday")
     assert "completion" in names.("Setup")
-    assert "daemon" in names.("Internal (the session runs these for you)")
+    assert "daemon" in names.("Internal (up and the session run these for you)")
+  end
+
+  test "reads every command's options with OptionParser, and turns down ones it doesn't take" do
+    alias Clawswap.CLI
+    assert CLI.parse("update", ["--all"]) == {:ok, [], [all: true]}
+    assert CLI.parse("update", ["abc123"]) == {:ok, ["abc123"], []}
+    assert CLI.parse("smee", ["--new"]) == {:ok, [], [new: true]}
+    assert CLI.parse("walk", ["branches-menu", "--headless"]) == {:ok, ["branches-menu"], [headless: true]}
+    assert CLI.parse("test", ["a_test.exs", "--max-cases", "2"]) == {:ok, ["a_test.exs"], [max_cases: 2]}
+
+    assert {:error, message} = CLI.parse("walk", ["--headles"])
+    assert message =~ "walk has no option --headles. Did you mean --headless?"
+    assert {:error, message} = CLI.parse("update", ["--al"])
+    assert message =~ "Did you mean --all?"
+    assert {:error, message} = CLI.parse("test", ["--xyz"])
+    assert message =~ "test has no option --xyz; it takes --watch"
+    assert {:error, message} = CLI.parse("status", ["--verbose"])
+    assert message =~ "status takes no options (got --verbose)"
+    assert {:error, message} = CLI.parse("test", ["--seed", "abc"])
+    assert message =~ "test --seed takes a number"
+    assert {:error, message} = CLI.parse("switch", ["--headless", "main"])
+    assert message =~ "switch takes no options"
+    assert {:error, message} = CLI.parse("update", ["a", "b"])
+    assert message =~ "update takes [rev], not a b"
+  end
+
+  test "completes each command's options" do
+    for shell <- Completion.shells() do
+      script = Completion.script(shell, Clawswap.CLI.commands())
+      for flag <- ~w(--all --new --headless --max-cases), do: assert(script =~ flag)
+    end
   end
 
   test "writes completion for bash, zsh and fish, with every command" do
@@ -80,5 +111,19 @@ defmodule Clawswap.CLITest do
     assert File.read!(bash) =~ "up reload"
     assert File.read!(path) =~ "'reload:Reload'"
     refute File.exists?(Completion.path("fish", env))
+  end
+
+  test "talks to this checkout's own project, and fails without a config rather than use the selected one" do
+    %{dir: dir, work: work} = Clawswap.TestRepo.setup()
+
+    try do
+      assert {:error, "clawswap: no clawswap project here" <> message} = Clawswap.CLI.api_base(work)
+      assert message =~ "No clawswap.exs"
+
+      File.write!("#{work}/clawswap.exs", "[session: \"shop\", port: 27400, servers: [web: [command: \"x\"]]]")
+      assert Clawswap.CLI.api_base(work) == {:ok, "http://127.0.0.1:27400/p/shop"}
+    after
+      File.rm_rf!(dir)
+    end
   end
 end

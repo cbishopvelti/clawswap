@@ -66,4 +66,38 @@ defmodule Clawswap.GitTest do
     assert GitHub.claude_link("No link") == nil
     assert GitHub.claude_link(nil) == nil
   end
+
+  describe "empty_reason/3" do
+    setup do
+      root = Path.join(System.tmp_dir!(), "clawswap-empty-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(root)
+      {_, 0} = System.cmd("git", ["init", "-q", root])
+      on_exit(fn -> File.rm_rf!(root) end)
+      %{root: root}
+    end
+
+    test "says there's no origin remote", %{root: root} do
+      assert Git.empty_reason(root, "main") =~ "no origin remote"
+    end
+
+    test "says origin has no branches, and that it isn't on GitHub", %{root: root} do
+      {_, 0} = System.cmd("git", ["-C", root, "remote", "add", "origin", "https://gitlab.com/o/r.git"])
+      reason = Git.empty_reason(root, "main", remote: [])
+      assert reason =~ "origin (https://gitlab.com/o/r.git) has no branches"
+      assert reason =~ "isn't on GitHub"
+    end
+
+    test "gives the fetch's error when it failed", %{root: root} do
+      {_, 0} = System.cmd("git", ["-C", root, "remote", "add", "origin", "https://github.com/o/r.git"])
+
+      assert Git.empty_reason(root, "main", remote: [], fetch: {:error, "Permission denied (publickey).\n"}) =~
+               "git fetch origin (https://github.com/o/r.git) failed: Permission denied (publickey)."
+    end
+
+    test "says the base branch isn't on origin", %{root: root} do
+      {_, 0} = System.cmd("git", ["-C", root, "remote", "add", "origin", "https://github.com/o/r.git"])
+      assert Git.empty_reason(root, "main", remote: [%{branch: "dev"}]) =~ "origin has no main branch"
+      assert Git.empty_reason(root, "dev", remote: [%{branch: "dev"}]) == nil
+    end
+  end
 end

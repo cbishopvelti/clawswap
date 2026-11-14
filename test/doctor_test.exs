@@ -127,6 +127,7 @@ defmodule Clawswap.DoctorTest do
 
     test "wants a config, and says which smee.io channel the webhook uses", %{root: root, sys: sys} do
       sys = %{sys | env: Map.merge(sys.env, %{"XDG_STATE_HOME" => Path.join(root, "state"), "CLAWSWAP_SMEE" => ""})}
+      {_, 0} = System.cmd("git", ["-C", root, "remote", "add", "origin", "https://github.com/o/r.git"])
       assert find(sys, "Config").fix == "clawswap init, in #{root}"
       assert levels(sys)["Webhook"] == :ok
       assert find(sys, "Webhook").found =~ "the shared smee.io channel"
@@ -139,6 +140,38 @@ defmodule Clawswap.DoctorTest do
       File.write!(Path.join([root, ".git", "clawswap.json"]), ~s({"smee": "https://smee.io/abc"}))
       assert find(sys, "Config").found == "clawswap.yml"
       assert find(sys, "Webhook").found == "https://smee.io/abc (this checkout's own channel)"
+    end
+
+    test "warns when origin is missing, empty or not on GitHub", %{root: root, sys: sys} do
+      sys = %{sys | env: Map.merge(sys.env, %{"XDG_STATE_HOME" => Path.join(root, "state"), "CLAWSWAP_SMEE" => ""})}
+      assert levels(sys)["Origin"] == :missing
+      assert find(sys, "Origin").why =~ "no origin remote"
+
+      # A non-GitHub origin with a branch fetched.
+      bare = root <> "-origin.git"
+      on_exit(fn -> File.rm_rf!(bare) end)
+      {_, 0} = System.cmd("git", ["init", "-q", "--bare", bare])
+      {_, 0} = System.cmd("git", ["-C", root, "remote", "add", "origin", bare])
+      assert levels(sys)["Origin"] == :missing
+      assert find(sys, "Origin").fix == "git fetch origin, in #{root}"
+
+      env = [{"GIT_AUTHOR_NAME", "t"}, {"GIT_AUTHOR_EMAIL", "t@t"}, {"GIT_COMMITTER_NAME", "t"}, {"GIT_COMMITTER_EMAIL", "t@t"}]
+      {_, 0} = System.cmd("git", ["-C", root, "commit", "-q", "--allow-empty", "-m", "x"], env: env)
+      {_, 0} = System.cmd("git", ["-C", root, "push", "-q", "origin", "HEAD:main"], stderr_to_stdout: true)
+      {_, 0} = System.cmd("git", ["-C", root, "fetch", "-q", "origin"])
+      assert levels(sys)["Origin"] == :optional
+      assert find(sys, "Origin").why =~ "isn't on GitHub"
+      assert levels(sys)["Webhook"] == :optional
+
+      {_, 0} = System.cmd("git", ["-C", root, "remote", "set-url", "origin", "https://github.com/o/r.git"])
+      assert levels(sys)["Origin"] == :ok
+      assert levels(sys)["Webhook"] == :ok
+    end
+
+    test "tells a GitHub origin URL from others" do
+      assert Doctor.github_url?("git@github.com:o/r.git")
+      assert Doctor.github_url?("https://github.com/o/r")
+      refute Doctor.github_url?("https://gitlab.com/o/r.git")
     end
 
     test "knows the config's names" do

@@ -35,6 +35,14 @@ defmodule ClawswapWeb.ViewTest do
     assert View.page(%{@state | current: %{branch: "claude/a", sha: "3"}}).on == "Add A"
   end
 
+  test "greys out Pull when the branch isn't on GitHub, and says up to date only when it is" do
+    assert {View.page(@state).pull_label, View.page(@state).pull_class} == {"↓ Pull 2 new commits", "behind"}
+    up = View.page(%{@state | upstream: %{sha: "1", behind: 0}})
+    assert {up.pull_label, up.pull_class} == {"↓ Pull (up to date)", ""}
+    none = View.page(%{@state | upstream: nil})
+    assert {none.pull_label, none.pull_class, none.pull_title} == {"Pull (not on GitHub)", "none", "claude-main isn't on GitHub, so there's nothing to pull"}
+  end
+
   test "an unchecked webhook says where it listens, and isn't shown as a fault" do
     view = View.page(%{@state | webhook: "unchecked", webhookError: "no GitHub token to check it; listening on https://smee.io/x"})
     assert view.webhook == "webhook unchecked: no GitHub token to check it; listening on https://smee.io/x"
@@ -47,9 +55,13 @@ defmodule ClawswapWeb.ViewTest do
     assert view.busy
     assert Enum.at(view.branches, 1).status == "npm install"
     failed = View.page(%{@state | switch: %{target: "claude/a", pull: false, phase: "failed", step: nil, error: "Uncommitted changes"}})
-    assert failed.error == "claude/a: Uncommitted changes"
+    assert failed.error == "Couldn't switch to claude/a: Uncommitted changes"
     assert Enum.at(failed.branches, 1).class == "failed"
     assert view.switched == nil and failed.switched == nil
+    # A failed pull says it was a pull.
+    pull = View.page(%{@state | switch: %{target: "claude-main", pull: true, phase: "failed", step: nil, error: "claude-main isn't on GitHub"}})
+    assert pull.error == "Pull failed: claude-main isn't on GitHub"
+    assert hd(pull.branches).status == "Pull failed"
     # A finished one says so, for the app framing the page.
     done = View.page(%{@state | switch: %{target: "claude/a", pull: false, phase: "done", step: nil, error: nil, doneAt: 7}})
     assert done.switched == %{branch: "claude/a", at: 7}
@@ -84,5 +96,10 @@ defmodule ClawswapWeb.ViewTest do
     assert {Enum.at(images, 11), Enum.at(images, 12), Enum.at(images, 13), List.last(images)} == {"i12", "proj", "walk", "pull"}
     assert StreamDeck.key_command(keys, 15, 12) == :next_project
     assert StreamDeck.key_command(keys, 15, 11) == {:switch, "b12"}
+  end
+
+  test "says why the branch list is empty, only when it is" do
+    assert View.page(%{@state | branches: []} |> Map.put(:empty, "No branches to list: x")).empty == "No branches to list: x"
+    assert View.page(Map.put(@state, :empty, "stale")).empty == nil
   end
 end

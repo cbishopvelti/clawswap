@@ -7,6 +7,7 @@ defmodule Clawswap.Multiplexer do
       running; the function it's given gets the checkout ready, and is called only for a new session
     * `layout/1`: what `clawswap layout` prints
     * `servers/2`: the watcher's `%{stop:, start:}` for the servers' panes
+    * `kill_session/1`: ends the session of that name (`clawswap down`): `:ok`, or `:none`
   """
 
   alias Clawswap.{Tmux, Zellij}
@@ -67,6 +68,14 @@ defmodule Clawswap.Multiplexer do
       installed.(Tmux) -> Tmux
       true -> Zellij
     end
+  end
+
+  @doc """
+  Ends the session named `session` in whichever installed multiplexer has it (a project's config may have
+  changed multiplexer since its session started). The ones that had it, e.g. `[Clawswap.Zellij]`.
+  """
+  def kill_session(session, installed \\ &installed?/1) do
+    for mux <- [Zellij, Tmux], installed.(mux), mux.kill_session(session) == :ok, do: mux
   end
 
   defp installed?(mux), do: mux.check() == :ok

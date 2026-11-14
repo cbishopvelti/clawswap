@@ -4,7 +4,7 @@ defmodule ClawswapWeb.Api do
   name); the same paths without it answer for the selected project (`Clawswap.Projects.selected/0`), so a
   Stream Deck key or a script that names no project follows whichever is selected.
 
-      GET  /p/<id>/state                    the watcher's state (see README.md)
+      GET  /p/<id>/state                    the watcher's state (see docs/api.html)
       GET  /p/<id>/events                   the same state as Server-Sent Events: now, then each time it
                                             changes, so a page can listen rather than poll /state
       POST /p/<id>/switch  {"branch": ...}  202, then follow /state's switch
@@ -19,6 +19,8 @@ defmodule ClawswapWeb.Api do
                                             selects it (the branch page and the debug panel send it); 200
                                             {project, root, at}
       GET  /p/<id>/debug/screenshot.png     the debug panel's last screenshot of its Chrome (404 when none)
+      POST /p/<id>/down                     stops the project (clawswap down) and keeps its session's panes
+                                            from registering it again until clawswap up; 200 {down, projects}
       GET  /p/<id>/log                      the project's log, then each new line as it comes (the
                                             session's clawswap pane follows it; the project stays while one does)
 
@@ -29,7 +31,8 @@ defmodule ClawswapWeb.Api do
       POST /select  {"project": id}         selects a project ({"next": true}: the one after the selected one)
       GET  /daemon                          {"clawswap": "daemon", "port": ..., "pid": ...}
       POST /daemon/projects {"cwd", "env"}  registers the project whose config is found from cwd, with the
-                                            shell's environment (`clawswap up` and `clawswap watch` do)
+                                            shell's environment (`clawswap up` and `clawswap watch` do);
+                                            with "from_pane": true (watch), 410 for a project taken down
 
   It answers this machine only, and browsers only from a project's origins (its servers', and any its
   config adds), for that project's paths: a page elsewhere can't make the browser send a JSON POST here
@@ -62,7 +65,7 @@ defmodule ClawswapWeb.Api do
   # {:project, id or "selected", path} | {:daemon, path} | nil (a page's)
   defp route("/p/" <> rest) do
     case String.split(rest, "/", parts: 2) do
-      [id, sub] when id != "" -> if(("/" <> sub) in ["/log", "/events" | @project_paths], do: {:project, id, "/" <> sub})
+      [id, sub] when id != "" -> if(("/" <> sub) in ["/log", "/events", "/down" | @project_paths], do: {:project, id, "/" <> sub})
       _ -> nil
     end
   end
@@ -142,8 +145,9 @@ defmodule ClawswapWeb.Api do
 
     case body["cwd"] do
       cwd when is_binary(cwd) and cwd != "" ->
-        case Projects.register(cwd, env) do
+        case Projects.register(cwd, env, from_pane: body["from_pane"] == true) do
           {:ok, project} -> json(conn, 200, %{id: project.id, name: project.name, root: project.root, url: Clawswap.Config.url(project, :clawswap, "")})
+          {:error, :down} -> json(conn, 410, %{error: "Taken down with clawswap down; clawswap up starts it again", down: true})
           {:error, message} -> json(conn, 422, %{error: message})
         end
 
@@ -161,6 +165,11 @@ defmodule ClawswapWeb.Api do
       {:ok, id} -> json(conn, 200, %{selected: id})
       {:error, message} -> json(conn, 404, %{error: message})
     end
+  end
+
+  defp post(conn, {:project, _, "/down"}, _body, project) do
+    Projects.down(project.id)
+    json(conn, 200, %{down: project.id, projects: Projects.list()})
   end
 
   defp post(conn, {:project, _, "/refresh"}, _body, project), do: json(conn, 200, Watcher.refresh(watcher(project)))

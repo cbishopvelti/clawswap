@@ -158,6 +158,24 @@ defmodule Clawswap.WatcherTest do
     assert_receive {:exit, 75}, 2000
   end
 
+  test "a refused pull clears once its cause is gone, or after a while", %{work: work, start: start} do
+    TestRepo.git(work, ["checkout", "-qb", "local-only"])
+    w = start.([])
+    assert {:error, 404, "local-only isn't on GitHub"} = Watcher.pull(w)
+    assert %{phase: "failed", refused: true, pull: true} = Watcher.state(w).switch
+    # Still not on GitHub: a refresh leaves it.
+    assert %{switch: %{refused: true}} = Watcher.refresh(w)
+    # Checked out a branch that is: the next refresh clears it.
+    TestRepo.git(work, ["checkout", "-q", "claude-main"])
+    assert %{switch: nil} = Watcher.refresh(w)
+
+    stop_supervised!(Watcher)
+    TestRepo.git(work, ["checkout", "-q", "local-only"])
+    w = start.(refused_ms: 50)
+    assert {:error, 404, _} = Watcher.pull(w)
+    TestRepo.until(fn -> Watcher.state(w).switch == nil end)
+  end
+
   test "tells on_change about every change", %{start: start} do
     me = self()
     w = start.(on_change: &send(me, {:view, &1}))
