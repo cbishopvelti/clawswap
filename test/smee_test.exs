@@ -40,4 +40,11 @@ defmodule Clawswap.SmeeTest do
     GenServer.stop(pid)
     send(server, :done)
   end
+
+  test "finds the repo in a webhook sent as a form (GitHub's default content type)" do
+    payload = JSON.encode!(%{"zen" => "Keep it simple.", "repository" => %{"full_name" => "me/app"}})
+    data = JSON.encode!(%{"x-github-event" => "ping", "body" => %{"payload" => payload}})
+    assert Smee.delivery(data) == {"ping", "me/app"}
+    assert Smee.delivery(JSON.encode!(%{"x-github-event" => "ping", "body" => %{"payload" => "not json"}})) == {"ping", nil}
+  end
 end

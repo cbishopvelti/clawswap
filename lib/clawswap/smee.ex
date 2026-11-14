@@ -62,6 +62,9 @@ defmodule Clawswap.Smee do
         repo =
           case message["body"] do
             %{"repository" => %{"full_name" => name}} when is_binary(name) -> name
+            # A webhook sent as a form (GitHub's default content type for one added by hand) carries the
+            # JSON in its payload field.
+            %{"payload" => payload} when is_binary(payload) -> form_repo(payload)
             _ -> nil
           end
 
@@ -69,6 +72,13 @@ defmodule Clawswap.Smee do
 
       _ ->
         nil
+    end
+  end
+
+  defp form_repo(payload) do
+    case JSON.decode(payload) do
+      {:ok, %{"repository" => %{"full_name" => name}}} when is_binary(name) -> name
+      _ -> nil
     end
   end
 

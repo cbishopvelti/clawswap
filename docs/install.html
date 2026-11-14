@@ -112,7 +112,10 @@ so <code>$PWD</code> gives the link the full path:</p>
     own before there was a shared one keeps it; <code>clawswap smee</code> moves it onto the shared channel (and offers to
     remove the old channel's webhook). To give a checkout a channel of its own instead, pass one
     (<code>clawswap smee &lt;url&gt;</code>, or <code>clawswap smee --new</code> for a new one): it's saved in
-    <code>.git/clawswap.json</code>. Without a webhook the watcher still looks every 15 minutes, and whenever you press a key.</li>
+    <code>.git/clawswap.json</code>. With no GitHub token at all it can't look for the webhook, so it goes by what arrives: the page says
+    "webhook listening" until a delivery from the repo comes in (a push, or <em>Redeliver</em> on the webhook's ping),
+    then "webhook on", and it keeps when the last one came in, so after a restart it starts on. Without a webhook the
+    watcher still looks every 15 minutes, and whenever you press a key.</li>
   <li><strong>PR titles</strong> (optional). If the <code>gh</code> CLI is logged in, or <code>GITHUB_TOKEN</code> is set,
     the list shows the base branch and then the branches with an open pull request, labelled by PR title. Without a
     token it shows every branch.</li>
