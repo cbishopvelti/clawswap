@@ -85,4 +85,9 @@ defmodule ClawswapWeb.ViewTest do
     assert StreamDeck.key_command(keys, 15, 12) == :next_project
     assert StreamDeck.key_command(keys, 15, 11) == {:switch, "b12"}
   end
+
+  test "says why the branch list is empty, only when it is" do
+    assert View.page(%{@state | branches: []} |> Map.put(:empty, "No branches to list: x")).empty == "No branches to list: x"
+    assert View.page(Map.put(@state, :empty, "stale")).empty == nil
+  end
 end

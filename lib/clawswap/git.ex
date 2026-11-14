@@ -113,6 +113,40 @@ defmodule Clawswap.Git do
   end
 
   @doc """
+  Why `branch_list/1` came out empty, for the page to say instead of showing nothing: no origin remote,
+  origin with no branches here (`fetch` is the last fetch's result: its error, when it failed, says why),
+  or, with PR info, no base branch on origin and no open PRs. nil when origin has branches.
+  """
+  def empty_reason(root, base, opts \\ []) do
+    remote = Keyword.get_lazy(opts, :remote, fn -> remote_branches(root) end)
+    fetch = opts[:fetch]
+
+    case git(root, ["remote", "get-url", "origin"]) do
+      {:error, _} ->
+        "No branches to list: this checkout has no origin remote. Add one with git remote add origin <url>."
+
+      {:ok, url} ->
+        url = String.trim(url)
+        not_github = if github_repo(root), do: "", else: " (origin isn't on GitHub, so every branch it has is listed)"
+
+        cond do
+          remote == [] and match?({:error, _}, fetch) ->
+            {:error, message} = fetch
+            "No branches to list: git fetch origin (#{url}) failed: #{String.trim(message)}"
+
+          remote == [] ->
+            "No branches to list: origin (#{url}) has no branches#{not_github}. Push one, or run git fetch origin."
+
+          not Enum.any?(remote, &(&1.branch == base)) ->
+            "No branches to list: origin has no #{base} branch, and none of its branches has an open PR. Set base in the config to one of its branches."
+
+          true ->
+            nil
+        end
+    end
+  end
+
+  @doc """
   The list the keys show: the base branch first, then the others by their newest commit, newest first.
   With PR info that's the open PRs' branches; without it, every branch. The current branch is always in
   it. `remote` comes newest commit first (as `remote_branches/1` gives it). `merged`: the branches whose

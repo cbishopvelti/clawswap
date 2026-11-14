@@ -108,6 +108,8 @@ defmodule ClawswapWeb.View do
         end,
       error: (match?(%{phase: "failed"}, run) && "#{run.target}: #{run.error}") || state.error,
       branches: Enum.map(state.branches, &branch(&1, state, run, current)),
+      # Why there are no branches to show, nil when there are.
+      empty: if(state.branches == [], do: Map.get(state, :empty)),
       walkthroughs: Enum.map(Map.get(state, :walkthroughs, []), &walkthrough(&1, Map.get(state, :walk))),
       walk: walk_status(Map.get(state, :walk))
     }

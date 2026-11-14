@@ -66,6 +66,7 @@ defmodule ClawswapWeb.BranchesPage do
           {%if @view.walk.text}<span class="walk-status {@view.walk.class}">{@view.walk.text}</span>{/if}
         </section>
       {/if}
+      {%if @view.empty}<p class="empty">{@view.empty}</p>{/if}
       <ul>
         {%for b <- @view.branches}
           <li class={b.row_class}>
