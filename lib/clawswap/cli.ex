@@ -507,7 +507,9 @@ defmodule Clawswap.CLI do
     end)
 
     if run = s["switch"] do
-      IO.puts("Last switch: #{run["target"]}: #{run["phase"]}#{if run["step"], do: " (#{run["step"]})"}#{if run["error"], do: ": #{run["error"]}"}")
+      IO.puts(
+        "Last #{if run["pull"], do: "pull", else: "switch"}: #{run["target"]}: #{run["phase"]}#{if run["step"], do: " (#{run["step"]})"}#{if run["error"], do: ": #{run["error"]}"}"
+      )
     end
   end
 
