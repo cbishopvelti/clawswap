@@ -51,7 +51,7 @@ hand that sends there works, and the page shows it on once its first delivery co
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:
 `clawswap switch 23`). `clawswap up staging` runs it with `clawswap.staging.yml` merged over the config
-([override configs](https://cbishopvelti.github.io/clawswap/configuration.html#overrides)). Run `clawswap help` for every command, and `clawswap completion install` once for Tab
+([override configs](https://cbishopvelti.github.io/clawswap/configuration.html#overrides)). Run `clawswap help` for every command (`clawswap help switch` or `clawswap switch --help` for one), and `clawswap completion install` once for Tab
 completion (`clawswap re<Tab>` gives `clawswap reload`); `clawswap reload` keeps it up to date.
 
 A minimal `clawswap.exs` (or the same as `clawswap.yml`):

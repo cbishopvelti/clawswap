@@ -13,6 +13,7 @@ _clawswap() {
     walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
     test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
     completion) COMPREPLY=($(compgen -W "install bash zsh fish" -- "$cur")) ;;
+    help) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "up reload" -- "$cur")) ;;
   esac
 }
 complete -F _clawswap clawswap

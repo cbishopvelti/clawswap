@@ -36,6 +36,19 @@ defmodule Clawswap.CLITest do
     assert Forgive.branch("99", @branches) == {:none, nil}
   end
 
+  test "shows one command's usage and options" do
+    assert Clawswap.CLI.usage("switch") =~ "Usage: clawswap switch <branch>\n\nSwitch branch"
+    refute Clawswap.CLI.usage("switch") =~ "Options:"
+
+    test = Clawswap.CLI.usage("test")
+    assert test =~ "Usage: clawswap test [path...]"
+    assert test =~ ~r/Options:\n  --watch +Show Chrome/
+    assert test =~ ~r/  --only <tag> +Run only/
+
+    assert Clawswap.CLI.usage("nope") == nil
+    for {name, _} <- Clawswap.CLI.commands(), do: assert(Clawswap.CLI.usage(name) =~ "clawswap #{name}")
+  end
+
   test "writes completion for bash, zsh and fish, with every command" do
     for shell <- Completion.shells() do
       script = Completion.script(shell, Clawswap.CLI.commands())

@@ -39,6 +39,7 @@ defmodule Clawswap.CLI.Completion do
         walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
         test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
         completion) COMPREPLY=($(compgen -W "install #{Enum.join(@shells, " ")}" -- "$cur")) ;;
+        help) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "#{names}" -- "$cur")) ;;
       esac
     }
     complete -F _clawswap clawswap
@@ -68,6 +69,7 @@ defmodule Clawswap.CLI.Completion do
         walk) compadd -- --headless ;;
         test) compadd -- --watch --headless --only --exclude --seed ;;
         completion) compadd -- install #{Enum.join(@shells, " ")} ;;
+        help) (( CURRENT == 3 )) && _describe command commands ;;
       esac
     }
     if [ "$funcstack[1]" = "_clawswap" ]; then _clawswap "$@"; else compdef _clawswap clawswap; fi
@@ -90,6 +92,7 @@ defmodule Clawswap.CLI.Completion do
     complete -c clawswap -n '__fish_seen_subcommand_from walk' -a --headless
     complete -c clawswap -n '__fish_seen_subcommand_from test' -a '--watch --headless --only --exclude --seed'
     complete -c clawswap -n '__fish_seen_subcommand_from completion' -a 'install #{Enum.join(@shells, " ")}'
+    complete -c clawswap -n '__fish_seen_subcommand_from help' -a '#{Enum.map_join(commands, " ", &elem(&1, 0))}'
     """
   end
 
