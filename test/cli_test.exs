@@ -46,6 +46,7 @@ defmodule Clawswap.CLITest do
     names = fn heading -> for {^heading, rows} <- sections, {name, _, _} <- rows, do: name end
     assert "switch" in names.("Everyday")
     assert "completion" in names.("Setup")
+    for name <- ~w(self-update self-pull pull-self), do: assert(name in names.("Setup"))
     assert "daemon" in names.("Internal (up and the session run these for you)")
   end
 
@@ -71,6 +72,11 @@ defmodule Clawswap.CLITest do
     assert CLI.parse("smee", ["--new"]) == {:ok, [], [new: true]}
     assert CLI.parse("walk", ["branches-menu", "--headless"]) == {:ok, ["branches-menu"], [headless: true]}
     assert CLI.parse("test", ["a_test.exs", "--max-cases", "2"]) == {:ok, ["a_test.exs"], [max_cases: 2]}
+
+    for name <- ~w(self-update self-pull pull-self) do
+      assert CLI.parse(name, ["--no-reload"]) == {:ok, [], [reload: false]}
+      assert CLI.parse(name, []) == {:ok, [], []}
+    end
 
     assert {:error, message} = CLI.parse("walk", ["--headles"])
     assert message =~ "walk has no option --headles. Did you mean --headless?"
