@@ -17,6 +17,7 @@ _clawswap() {
     daemon) (( CURRENT == 3 )) && compadd -- stop; (( CURRENT == 4 )) && compadd -- --all ;;
     
     completion) compadd -- install bash zsh fish ;;
+    help) (( CURRENT == 3 )) && _describe command commands ;;
   esac
 }
 if [ "$funcstack[1]" = "_clawswap" ]; then _clawswap "$@"; else compdef _clawswap clawswap; fi

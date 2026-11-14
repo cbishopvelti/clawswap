@@ -12,6 +12,7 @@ _clawswap() {
     daemon) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "stop" -- "$cur")); [ "$COMP_CWORD" -eq 3 ] && COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
     
     completion) COMPREPLY=($(compgen -W "install bash zsh fish" -- "$cur")) ;;
+    help) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "up reload" -- "$cur")) ;;
   esac
 }
 complete -F _clawswap clawswap

@@ -25,7 +25,7 @@ defmodule Clawswap.CLI do
      "The daemon that runs every project's watcher, page and API (clawswap up starts it); stop stops it (--all: every project's session too)"},
     {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
     {"completion", "install", 1, 2, "Set up Tab completion for your shell (or install bash|zsh|fish); completion bash prints the script"},
-    {"help", "", 0, 0, "This list"}
+    {"help", "[command]", 0, 1, "This list, or one command's usage and options (so does clawswap <command> --help)"}
   ]
 
   # Help groups the commands so the everyday ones come first. Setup is what you run once (or after
@@ -49,15 +49,25 @@ defmodule Clawswap.CLI do
               ]
             )
 
-  # The options each command takes, as OptionParser's strict switches. A command not here takes none, and
-  # every command turns down an option it doesn't take (suggesting the closest one), so a typo never runs.
-  @switches %{
-    "update" => [all: :boolean],
-    "daemon" => [all: :boolean],
-    "smee" => [new: :boolean],
-    "walk" => [headless: :boolean],
-    "test" => [watch: :boolean, headless: :boolean, only: :keep, exclude: :keep, seed: :integer, max_cases: :integer]
+  # The options each command takes: its OptionParser type, the value it takes as help shows it (if any), and
+  # what it does. A command not here takes none, and every command turns down an option it doesn't take
+  # (suggesting the closest one), so a typo never runs. --help and -h are every command's, before these.
+  @options %{
+    "update" => [all: {:boolean, "Run every step, whatever changed"}],
+    "daemon" => [all: {:boolean, "With stop: end every project's session too"}],
+    "smee" => [new: {:boolean, "Make a new smee.io channel of this checkout's own"}],
+    "walk" => [headless: {:boolean, "Play them in a Chrome with no window, and exit 1 if one fails"}],
+    "test" => [
+      watch: {:boolean, "Show Chrome while the tests drive it"},
+      headless: {:boolean, "Run Chrome with no window (the default, unless the config says otherwise)"},
+      only: {:keep, "tag", "Run only the tests with this tag (again for more tags)"},
+      exclude: {:keep, "tag", "Skip the tests with this tag (again for more tags)"},
+      seed: {:integer, "n", "ExUnit's seed, to run them in the same order again"},
+      max_cases: {:integer, "n", "How many test modules run at once"}
+    ]
   }
+
+  @switches Map.new(@options, fn {command, options} -> {command, for({key, spec} <- options, do: {key, elem(spec, 0)})} end)
 
   @usage "Usage: clawswap <command>\n" <>
            Enum.map_join(@sections, fn {heading, rows} ->
@@ -65,13 +75,36 @@ defmodule Clawswap.CLI do
                Enum.map_join(rows, fn {name, args, summary} ->
                  "  " <> String.pad_trailing(String.trim("#{name} #{args}"), 20) <> summary <> "\n"
                end)
-           end)
+           end) <> "\nclawswap help <command> (or clawswap <command> --help) shows one command's options.\n"
 
   @doc "The commands grouped as help shows them, as `{heading, [{name, args, summary}]}`."
   def sections, do: @sections
 
   @doc "The commands, as `{name, summary}`."
   def commands, do: for({name, _, _, _, summary} <- @commands, do: {name, summary})
+
+  @doc "One command's usage, what it does and its options, as `clawswap help <command>` prints it; nil if there's no such command."
+  def usage(command) do
+    with {name, args, _, _, summary} <- List.keyfind(@commands, command, 0) do
+      options =
+        case Map.get(@options, name, []) do
+          [] ->
+            ""
+
+          options ->
+            rows =
+              for {key, spec} <- options do
+                value = if tuple_size(spec) == 3, do: " <#{elem(spec, 1)}>", else: ""
+                {flag(key) <> value, elem(spec, tuple_size(spec) - 1)}
+              end
+
+            width = rows |> Enum.map(&String.length(elem(&1, 0))) |> Enum.max()
+            "\nOptions:\n" <> Enum.map_join(rows, fn {flag, what} -> "  " <> String.pad_trailing(flag, width + 2) <> what <> "\n" end)
+        end
+
+      "Usage: clawswap #{String.trim("#{name} #{args}")}\n\n#{summary}\n" <> options
+    end
+  end
 
   @doc "The options `command` takes, as they're typed (`--max-cases`)."
   def flags(command), do: for({name, _} <- Map.get(@switches, command, []), do: flag(name))
@@ -121,21 +154,32 @@ defmodule Clawswap.CLI do
   def main(args) do
     case args do
       [] -> IO.write(@usage)
-      [help | _] when help in ["help", "--help", "-h"] -> IO.write(@usage)
+      [help | rest] when help in ["--help", "-h"] -> run("help", rest)
       [command | rest] -> run(command, rest)
     end
   end
 
   defp run(command, rest) do
-    if List.keymember?(@commands, command, 0) do
-      case parse(command, rest) do
-        {:ok, args, opts} -> dispatch(command, args, opts)
-        {:error, message} -> fail(message)
-      end
-    else
-      unknown(command, rest)
+    cond do
+      not List.keymember?(@commands, command, 0) ->
+        unknown(command, rest)
+
+      help_flag?(rest) ->
+        IO.write(usage(command))
+
+      true ->
+        case parse(command, rest) do
+          {:ok, args, opts} -> dispatch(command, args, opts)
+          {:error, message} -> fail(message)
+        end
     end
   end
+
+  # --help or -h among a command's arguments (before a --, after which they're the command's own).
+  defp help_flag?(args), do: args |> Enum.take_while(&(&1 != "--")) |> Enum.any?(&(&1 in ["--help", "-h"]))
+
+  defp dispatch("help", [], _), do: IO.write(@usage)
+  defp dispatch("help", [command], _), do: help(command)
 
   defp dispatch("doctor", [], _), do: Clawswap.Doctor.main()
   defp dispatch("init", [], _), do: init()
@@ -161,13 +205,20 @@ defmodule Clawswap.CLI do
   defp dispatch("completion", [shell], _), do: completion(shell)
   defp dispatch("completion", args, _), do: fail(wrong_arguments("completion", "install [bash|zsh|fish]", args))
 
-  defp unknown(command, rest) do
+  defp help(command) do
+    case usage(command) do
+      nil -> unknown(command, [], "help ")
+      text -> IO.write(text)
+    end
+  end
+
+  defp unknown(command, rest, prefix \\ "") do
     names = Enum.map(@commands, &elem(&1, 0))
 
     hint =
       case Clawswap.CLI.Forgive.closest(command, names) do
         nil -> "Run clawswap help for the commands."
-        name -> "Did you mean clawswap #{Enum.join([name | rest], " ")}? (clawswap help lists the commands)"
+        name -> "Did you mean clawswap #{prefix}#{Enum.join([name | rest], " ")}? (clawswap help lists the commands)"
       end
 
     fail("clawswap: there's no command #{inspect(command)}. #{hint}")

@@ -49,6 +49,21 @@ defmodule Clawswap.CLITest do
     assert "daemon" in names.("Internal (up and the session run these for you)")
   end
 
+  test "shows one command's usage and options" do
+    assert Clawswap.CLI.usage("switch") =~ "Usage: clawswap switch <branch>\n\nSwitch branch"
+    refute Clawswap.CLI.usage("switch") =~ "Options:"
+
+    test = Clawswap.CLI.usage("test")
+    assert test =~ "Usage: clawswap test [path...]"
+    assert test =~ ~r/Options:\n  --watch +Show Chrome/
+    assert test =~ ~r/  --only <tag> +Run only/
+    assert test =~ ~r/  --max-cases <n> +How many/
+    assert Clawswap.CLI.usage("smee") =~ ~r/--new +Make a new/
+
+    assert Clawswap.CLI.usage("nope") == nil
+    for {name, _} <- Clawswap.CLI.commands(), do: assert(Clawswap.CLI.usage(name) =~ "clawswap #{name}")
+  end
+
   test "reads every command's options with OptionParser, and turns down ones it doesn't take" do
     alias Clawswap.CLI
     assert CLI.parse("update", ["--all"]) == {:ok, [], [all: true]}
