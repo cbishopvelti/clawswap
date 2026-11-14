@@ -12,6 +12,7 @@ h1 { font-size: 20px; margin: 0; flex: 1; }
 .on { font-size: 13px; color: var(--muted); }
 .on strong { color: var(--current); font-weight: 600; }
 .webhook.off { color: var(--failed); }
+.webhook.unchecked { color: var(--running); }
 button { font: inherit; color: inherit; cursor: pointer; }
 .pull { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 .pull.behind { border-color: var(--behind); color: var(--behind); }

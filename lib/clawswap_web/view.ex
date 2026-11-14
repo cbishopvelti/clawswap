@@ -211,7 +211,7 @@ defmodule ClawswapWeb.View do
   defp webhook(%{webhookError: error}) when is_binary(error), do: "webhook lost: #{error}"
   defp webhook(_), do: "webhook connecting"
 
-  # Unchecked isn't a fault (it listens all the same), so it isn't shown as one.
+  # Unchecked isn't a fault (it listens all the same), so it's a warning (yellow), not red.
   defp webhook_class("connected"), do: "ok"
   defp webhook_class("unchecked"), do: "unchecked"
   defp webhook_class(_), do: "off"
