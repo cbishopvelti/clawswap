@@ -41,11 +41,11 @@
 <code>mix clawswap</code> in clawswap's own folder, with your repo passed along.</p>
 
 <h2 id="commands">Commands</h2>
+<p><code>clawswap help</code> lists them in the same three groups.</p>
+
+<h3 id="everyday">Everyday</h3>
 <table>
   <tr><th>Command</th><th>What it does</th></tr>
-  <tr><td><code>clawswap help [command]</code></td><td>Lists the commands, or shows one command's usage and options. <code>clawswap &lt;command&gt; --help</code> (or <code>-h</code>) does the same.</td></tr>
-  <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config, an origin with branches (warning when it isn't on GitHub, which turns off PRs and the webhook) and a webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
-  <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap up</code></td><td>Starts the daemon if it isn't running, adds the project to it, and opens the zellij or tmux session, or re-attaches to it.</td></tr>
   <tr><td><code>clawswap up &lt;name|file&gt;...</code></td><td>The same, with <a href="configuration.html#overrides">override configs</a> (<code>clawswap.&lt;name&gt;.yml</code>, say) merged over the config.</td></tr>
   <tr><td><code>clawswap down</code></td><td>Ends the project: takes it out of the daemon, then ends its zellij or tmux session, which stops the servers in its panes. Run it from inside the session too. The session's <code>clawswap</code> pane won't bring the project back; <code>clawswap up</code> starts it again. Containers your <code>prepare</code> steps started are left running.</td></tr>
@@ -59,10 +59,25 @@
   <tr><td><code>clawswap test [path...]</code></td><td>Runs the project's <a href="testing.html">browser tests</a> (Wallaby) against the session's servers. <code>--watch</code> shows the windows, <code>--only tag</code> picks by tag.</td></tr>
   <tr><td><code>clawswap browser</code></td><td>Opens a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> at your app, that walkthroughs then play in.</td></tr>
   <tr><td><code>clawswap smee [url]</code></td><td>Adds the repo's GitHub webhook for the daemon's shared smee.io channel (<code>up</code> does this by itself; this tries again, or prints the steps to do it by hand), and points a running watcher at it. With a URL, or <code>--new</code>, the checkout gets a channel of its own (see <a href="install.html#project">Install</a>).</td></tr>
-  <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
+  <tr><td><code>clawswap help [command]</code></td><td>Lists the commands, or shows one command's usage and options. <code>clawswap &lt;command&gt; --help</code> (or <code>-h</code>) does the same.</td></tr>
+</table>
+
+<h3 id="setup">Setup</h3>
+<p>Once per machine or repo, or after changing clawswap.</p>
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>clawswap doctor</code></td><td>Checks what clawswap needs is installed (Elixir, zellij or tmux, Node.js, inotify-tools, a GitHub token, Chrome and chromedriver) and that the repo has a config, an origin with branches (warning when it isn't on GitHub, which turns off PRs and the webhook) and a webhook, and prints the fix for what's missing. Exits 1 if something it needs is.</td></tr>
+  <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap completion install</code></td><td>Sets up Tab completion for your shell; <code>clawswap completion &lt;shell&gt;</code> prints the script for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
-  <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
+  <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap reload</code></td><td>After changing or pulling clawswap: quits OpenDeck, copies the plugin into its plugins folder, starts OpenDeck again, then recompiles clawswap (clearing Hologram's page bundle) and restarts the daemon, and writes any installed <a href="#completion">completion</a> again. It compiles before stopping the daemon, so a compile error leaves everything running. See <a href="opendeck.html#reload">Stream Deck keys</a> for finding OpenDeck.</td></tr>
+</table>
+
+<h3 id="internal">Internal</h3>
+<p><code>up</code> and the session run these for you; <code>daemon stop</code> is the one you might run yourself.</p>
+<table>
+  <tr><th>Command</th><th>What it does</th></tr>
+  <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
   <tr><td><code>clawswap daemon</code></td><td>The daemon itself, which runs every project's watcher, page and API. <code>up</code> starts it in the background; you rarely run it yourself.</td></tr>
   <tr><td><code>clawswap daemon stop</code></td><td>Stops the daemon on the checkout's port (27390 outside a project). While projects run in it, it refuses and names them, since their sessions' <code>clawswap</code> panes would start it again: end them with <code>clawswap down</code> first, or add <code>--all</code> to take every project down and end their sessions too.</td></tr>
 </table>

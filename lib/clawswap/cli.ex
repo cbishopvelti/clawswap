@@ -28,6 +28,27 @@ defmodule Clawswap.CLI do
     {"help", "[command]", 0, 1, "This list, or one command's usage and options (so does clawswap <command> --help)"}
   ]
 
+  # Help groups the commands so the everyday ones come first. Setup is what you run once (or after
+  # changing clawswap); internal is what the session runs for you. A command named in neither is everyday,
+  # so a new row in @commands shows up there without touching this.
+  @setup ~w(doctor init completion layout reload)
+  @internal ~w(watch daemon)
+
+  for name <- @setup ++ @internal, !List.keymember?(@commands, name, 0) do
+    raise CompileError, description: "clawswap help names #{inspect(name)}, which isn't in @commands"
+  end
+
+  @sections (
+              rows = for {name, args, _, _, summary} <- @commands, do: {name, args, summary}
+              pick = fn names -> for name <- names, row = List.keyfind(rows, name, 0), do: row end
+
+              [
+                {"Everyday", Enum.reject(rows, &(elem(&1, 0) in (@setup ++ @internal)))},
+                {"Setup", pick.(@setup)},
+                {"Internal (up and the session run these for you)", pick.(@internal)}
+              ]
+            )
+
   # The options each command takes: its OptionParser type, the value it takes as help shows it (if any), and
   # what it does. A command not here takes none, and every command turns down an option it doesn't take
   # (suggesting the closest one), so a typo never runs. --help and -h are every command's, before these.
@@ -49,9 +70,15 @@ defmodule Clawswap.CLI do
   @switches Map.new(@options, fn {command, options} -> {command, for({key, spec} <- options, do: {key, elem(spec, 0)})} end)
 
   @usage "Usage: clawswap <command>\n" <>
-           Enum.map_join(@commands, fn {name, args, _, _, summary} ->
-             "  " <> String.pad_trailing(String.trim("#{name} #{args}"), 20) <> summary <> "\n"
+           Enum.map_join(@sections, fn {heading, rows} ->
+             "\n#{heading}:\n" <>
+               Enum.map_join(rows, fn {name, args, summary} ->
+                 "  " <> String.pad_trailing(String.trim("#{name} #{args}"), 20) <> summary <> "\n"
+               end)
            end) <> "\nclawswap help <command> (or clawswap <command> --help) shows one command's options.\n"
+
+  @doc "The commands grouped as help shows them, as `{heading, [{name, args, summary}]}`."
+  def sections, do: @sections
 
   @doc "The commands, as `{name, summary}`."
   def commands, do: for({name, _, _, _, summary} <- @commands, do: {name, summary})
