@@ -57,7 +57,7 @@
   <tr><td><code>clawswap walk [name...]</code></td><td>Plays <a href="walkthroughs.html">walkthroughs</a> in Chrome: the ones named, else the ones this branch added or changed. <code>--headless</code> runs them without a window and exits 1 if one fails.</td></tr>
   <tr><td><code>clawswap test [path...]</code></td><td>Runs the project's <a href="testing.html">browser tests</a> (Wallaby) against the session's servers. <code>--watch</code> shows the windows, <code>--only tag</code> picks by tag.</td></tr>
   <tr><td><code>clawswap browser</code></td><td>Opens a <a href="walkthroughs.html#dev-chrome">dev Chrome</a> at your app, that walkthroughs then play in.</td></tr>
-  <tr><td><code>clawswap smee [url]</code></td><td>Adds the repo's GitHub webhook for the daemon's shared smee.io channel (<code>up</code> does this by itself; this tries again, or prints the steps to do it by hand), and points a running watcher at it. With a URL, or <code>new</code>, the checkout gets a channel of its own (see <a href="install.html#project">Install</a>).</td></tr>
+  <tr><td><code>clawswap smee [url]</code></td><td>Adds the repo's GitHub webhook for the daemon's shared smee.io channel (<code>up</code> does this by itself; this tries again, or prints the steps to do it by hand), and points a running watcher at it. With a URL, or <code>--new</code>, the checkout gets a channel of its own (see <a href="install.html#project">Install</a>).</td></tr>
   <tr><td><code>clawswap layout</code></td><td>Prints the layout <code>up</code> opens: zellij's layout file, to start your own from, or the tmux commands that build the session.</td></tr>
   <tr><td><code>clawswap completion install</code></td><td>Sets up Tab completion for your shell; <code>clawswap completion &lt;shell&gt;</code> prints the script for bash, zsh or fish (see <a href="#completion">Completion</a>).</td></tr>
   <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
@@ -68,7 +68,10 @@
 <p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the project in the daemon, so they need
 <code>clawswap up</code> first.</p>
 <p>A mistyped command says which command it thinks you meant (<code>clawswap swich</code>: "Did you mean
-clawswap switch?"), and a command given the wrong arguments says what it takes.</p>
+clawswap switch?"), and a command given the wrong arguments says what it takes. Options work the same way for
+every command: they can go before or after the arguments, and one a command doesn't take stops it before it
+does anything, with the closest it does take (<code>clawswap walk --headles</code>: "Did you mean
+--headless?").</p>
 
 <h2 id="completion">Completion</h2>
 <p>Tab completes clawswap's commands (<code>clawswap re</code>, Tab, gives <code>clawswap reload</code>), and for

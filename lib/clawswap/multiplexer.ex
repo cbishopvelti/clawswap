@@ -19,6 +19,14 @@ defmodule Clawswap.Multiplexer do
   def cli, do: Path.join(@tool, "bin/clawswap")
 
   @doc """
+  A server's pane command: its command through `keep/0`, under `env` with the server's
+  `Clawswap.Ports.marker/2`, which the server's processes (and the shell `keep` leaves, so a restart from
+  there too) inherit. That's how the port it listens on is found when it had to take another.
+  """
+  def server_command(project, name),
+    do: ["env", Clawswap.Ports.marker(project, name), keep() | List.wrap(project.servers[name].command)]
+
+  @doc """
   The session's clawswap pane's command: `clawswap watch`, with the override configs `up` was given (as
   full paths, since the pane runs in the config's folder), so it runs the same project.
   """

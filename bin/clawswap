@@ -45,7 +45,7 @@ case "${1:-}" in
     # mix gets the session ready; zellij or tmux then needs this terminal, so it runs from here.
     CLAWSWAP_EXEC=$(mktemp)
     export CLAWSWAP_EXEC
-    own mix clawswap up || { rm -f "$CLAWSWAP_EXEC"; exit 1; }
+    own mix clawswap "$@" || { rm -f "$CLAWSWAP_EXEC"; exit 1; }
     set --
     while IFS= read -r line; do set -- "$@" "$line"; done < "$CLAWSWAP_EXEC"
     rm -f "$CLAWSWAP_EXEC"

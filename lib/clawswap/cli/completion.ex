@@ -35,10 +35,8 @@ defmodule Clawswap.CLI.Completion do
       case "${COMP_WORDS[1]}" in
         switch) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "$(#{@branches})" -- "$cur")) ;;
         up|watch) COMPREPLY=($(compgen -W "$(#{@overrides})" -- "$cur")) ;;
-        update) COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
-        walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
-        test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
         daemon) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "stop" -- "$cur")); [ "$COMP_CWORD" -eq 3 ] && COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
+        #{flag_cases(commands, ~S|COMPREPLY=($(compgen -W "|, ~S|" -- "$cur"))|)}
         completion) COMPREPLY=($(compgen -W "install #{Enum.join(@shells, " ")}" -- "$cur")) ;;
       esac
     }
@@ -65,10 +63,8 @@ defmodule Clawswap.CLI.Completion do
       case $words[2] in
         switch) (( CURRENT == 3 )) && compadd -- ${(f)"$(#{@branches})"} ;;
         up|watch) compadd -- ${(f)"$(#{@overrides})"} ;;
-        update) compadd -- --all ;;
-        walk) compadd -- --headless ;;
-        test) compadd -- --watch --headless --only --exclude --seed ;;
         daemon) (( CURRENT == 3 )) && compadd -- stop; (( CURRENT == 4 )) && compadd -- --all ;;
+        #{flag_cases(commands, "compadd -- ", "")}
         completion) compadd -- install #{Enum.join(@shells, " ")} ;;
       esac
     }
@@ -88,16 +84,22 @@ defmodule Clawswap.CLI.Completion do
     #{subcommands}
     complete -c clawswap -n '__fish_seen_subcommand_from switch' -a '(#{String.replace(@branches, "'", "\\'")})'
     complete -c clawswap -n '__fish_seen_subcommand_from up watch' -a '(#{String.replace(@overrides, "'", "\\'")})'
-    complete -c clawswap -n '__fish_seen_subcommand_from update' -a --all
-    complete -c clawswap -n '__fish_seen_subcommand_from walk' -a --headless
-    complete -c clawswap -n '__fish_seen_subcommand_from test' -a '--watch --headless --only --exclude --seed'
     complete -c clawswap -n '__fish_seen_subcommand_from daemon; and not __fish_seen_subcommand_from stop' -a stop
-    complete -c clawswap -n '__fish_seen_subcommand_from stop' -a --all
+    #{for {name, _} <- commands, (flags = Clawswap.CLI.flags(name)) != [], do: "complete -c clawswap -n '__fish_seen_subcommand_from #{name}' -a '#{Enum.join(flags, " ")}'\n"}\
     complete -c clawswap -n '__fish_seen_subcommand_from completion' -a 'install #{Enum.join(@shells, " ")}'
     """
   end
 
   def script(_, _), do: nil
+
+  # A shell `case` arm per command with options (Clawswap.CLI.flags/1), completing them.
+  defp flag_cases(commands, before, after_) do
+    Enum.map_join(
+      for({name, _} <- commands, (flags = Clawswap.CLI.flags(name)) != [], do: {name, flags}),
+      "\n    ",
+      fn {name, flags} -> "#{name}) #{before}#{Enum.join(flags, " ")}#{after_} ;;" end
+    )
+  end
 
   @doc """
   Where `shell` loads completion from by itself, for the user `env` (a map of environment variables)

@@ -116,9 +116,10 @@ defmodule Clawswap.Integration do
   @doc """
   Runs `clawswap up` for the project in `multiplexer` (:zellij or :tmux), inside a pane of the tests' tmux
   server (zellij needs a terminal), and waits until the watcher (on `branch`, main unless the test checked
-  out another) and the app answer. Attach to watch the panes: `tmux -L clawswap-tests attach`.
+  out another) and the app answer. `args` go after `up`, as override config names do. Attach to watch the
+  panes: `tmux -L clawswap-tests attach`.
   """
-  def up!(project, multiplexer, branch \\ "main") do
+  def up!(project, multiplexer, branch \\ "main", args \\ []) do
     free_ports()
     # The API paths the tests use are this project's on the daemon (/p/<id>).
     :persistent_term.put({__MODULE__, :id}, project.id)
@@ -136,7 +137,7 @@ defmodule Clawswap.Integration do
       {"CLAWSWAP_CHROME_DEBUGGER", "off"}
     ]
 
-    command = "#{Path.join(@tool, "bin/clawswap")} up"
+    command = Enum.join([Path.join(@tool, "bin/clawswap"), "up" | args], " ")
     tmux!(["new-session", "-d", "-s", "up-" <> project.session, "-x", "200", "-y", "50", "-c", project.work, command], env)
 
     # Keep the pane if `clawswap up` exits, so a failure to start can be read from it.

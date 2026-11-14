@@ -49,27 +49,106 @@ defmodule Clawswap.Ports do
     end
   end
 
-  defp proc_port_pids(port) do
-    hex = port |> Integer.to_string(16) |> String.pad_leading(4, "0")
+  defp proc_port_pids(port), do: for({pid, ^port} <- listeners(), uniq: true, do: pid)
 
-    inodes =
+  # {pid, port} for each listening TCP socket (IPv4 or IPv6) your own processes hold, from /proc: the
+  # sockets' inodes from /proc/net/tcp*, then the processes whose fds point at them. [] off Linux.
+  defp listeners do
+    if match?({:unix, :linux}, :os.type()), do: proc_listeners(), else: []
+  end
+
+  defp proc_listeners do
+    ports =
       for file <- ["/proc/net/tcp", "/proc/net/tcp6"],
           {:ok, text} <- [File.read(file)],
           line <- text |> String.split("\n") |> Enum.drop(1),
           cols = String.split(String.trim(line)),
-          # local_address is ADDR:PORT; state 0A is LISTEN.
-          length(cols) > 9 and String.ends_with?(Enum.at(cols, 1), ":" <> hex) and Enum.at(cols, 3) == "0A",
-          into: MapSet.new(),
-          do: Enum.at(cols, 9)
+          # local_address is ADDR:PORT (hex); state 0A is LISTEN.
+          length(cols) > 9 and Enum.at(cols, 3) == "0A",
+          [_, hex] <- [Regex.run(~r/:([0-9A-F]{4})$/, Enum.at(cols, 1))],
+          into: %{},
+          do: {Enum.at(cols, 9), String.to_integer(hex, 16)}
 
-    if MapSet.size(inodes) == 0 do
+    if map_size(ports) == 0 do
       []
     else
       for pid <- File.ls!("/proc"),
           String.match?(pid, ~r/^\d+$/),
           {:ok, fds} <- [File.ls("/proc/#{pid}/fd")],
-          Enum.any?(fds, &MapSet.member?(inodes, socket_inode("/proc/#{pid}/fd/#{&1}"))),
-          do: String.to_integer(pid)
+          fd <- fds,
+          port = ports[socket_inode("/proc/#{pid}/fd/#{fd}")],
+          uniq: true,
+          do: {String.to_integer(pid), port}
+    end
+  end
+
+  @doc """
+  The environment variable, as NAME=value, that marks a server's processes: its pane's command runs under
+  `env` with it (`Clawswap.Multiplexer.server_command/2`), and everything the server starts inherits it, so
+  the port it took can be found even when it isn't the configured one.
+  """
+  def marker(project, name), do: "CLAWSWAP_SERVER=#{project.id}/#{name}"
+
+  defp marked?(pid, marker) do
+    case File.read("/proc/#{pid}/environ") do
+      {:ok, env} -> marker in String.split(env, <<0>>)
+      _ -> false
+    end
+  end
+
+  # The ports the server's (marked) processes listen on, lowest first.
+  defp ours(listeners, project, name) do
+    marker = marker(project, name)
+    for({pid, port} <- listeners, marked?(pid, marker), uniq: true, do: port) |> Enum.sort()
+  end
+
+  # The port a dev server that moves when its own is taken (Vite, Next) tried next: one of the twenty above.
+  defp moved(ours, port), do: if(port not in ours, do: Enum.find(ours, &(&1 in (port + 1)..(port + 20)//1)))
+
+  @doc """
+  The port a server is on: its configured `port`, or the one it moved to because that was taken (Vite tries
+  5174 when 5173 is busy). Seen on Linux only, from the processes' environment (`marker/2`); elsewhere, and
+  for a server started without the marker, the configured port.
+  """
+  def server_port(project, name) do
+    port = project.servers[to_string(name)][:port]
+    port && (moved(ours(listeners(), project, name), port) || port)
+  end
+
+  @doc """
+  Waits (up to `ms`) for a server to listen: `:ok` on its configured port, `{:ok, port}` on the one it
+  moved to, or `:timeout`. Something else already on the configured port (an old server outside the
+  session) doesn't count while it can be seen not to be this server, so the wait goes on until the server
+  takes the next port; one that can't be seen (another user's, a container's) counts, as before.
+  """
+  def wait_for_server(project, name, ms \\ 30_000) do
+    port = project.servers[to_string(name)].port
+
+    Enum.reduce_while(0..div(ms, 500), :timeout, fn tick, _ ->
+      case server_state(project, name, port, tick) do
+        :waiting ->
+          Process.sleep(500)
+          {:cont, :timeout}
+
+        result ->
+          {:halt, result}
+      end
+    end)
+  end
+
+  # tick counts the half-seconds waited. After 15 s, an open port counts whoever holds it: a server whose
+  # processes drop the environment (env -i, a supervisor that starts it afresh) would otherwise never be seen.
+  defp server_state(project, name, port, tick) do
+    listeners = listeners()
+    ours = ours(listeners, project, name)
+    holders = for {pid, ^port} <- listeners, do: pid
+    moved = moved(ours, port)
+
+    cond do
+      port in ours -> :ok
+      moved -> {:ok, moved}
+      port_open?(port) and (holders == [] or tick >= 30) -> :ok
+      true -> :waiting
     end
   end
 
