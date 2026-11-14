@@ -125,6 +125,8 @@ defmodule Clawswap.Watcher do
         webhookError: nil,
         refreshedAt: nil,
         error: nil,
+        # Why the branch list is empty (Git.empty_reason/3), nil when it isn't.
+        empty: nil,
         # The checkout's branch on origin: how many commits it is ahead of the checkout (nil when the
         # branch isn't on origin).
         upstream: nil,
@@ -419,7 +421,7 @@ defmodule Clawswap.Watcher do
   # What the watcher knows about the checkout and origin, read without blocking the watcher.
   defp snapshot(project, refresh_git, cache) do
     root = project.root
-    if refresh_git, do: Git.fetch_origin(root)
+    fetch = if refresh_git, do: Git.fetch_origin(root)
     current = Git.current_branch(root)
 
     {pulls, cache} =
@@ -436,9 +438,11 @@ defmodule Clawswap.Watcher do
         _ -> {nil, cache}
       end
 
+    remote = Git.remote_branches(root)
+
     branches =
       Git.branch_list(
-        remote: Git.remote_branches(root),
+        remote: remote,
         pulls: pulls,
         merged: Git.merged_branches(root, project.base),
         base: project.base,
@@ -455,6 +459,7 @@ defmodule Clawswap.Watcher do
       dirty: Git.dirty?(root),
       upstream: Git.upstream(root, current.branch),
       branches: branches,
+      empty: if(branches == [], do: Git.empty_reason(root, project.base, remote: remote, fetch: fetch)),
       walkthroughs: Walkthrough.list(project),
       prs: pulls != nil,
       refreshedAt: DateTime.utc_now() |> DateTime.to_iso8601(),

@@ -271,7 +271,8 @@ defmodule Clawswap.Doctor do
               name -> check("Config", :ok, name, nil)
             end
 
-          [config, smee(sys, Path.join(git_dir, "clawswap.json"))]
+          {origin, github?} = origin(sys, root)
+          [config, origin, smee(sys, Path.join(git_dir, "clawswap.json"), github?)]
         end
 
       :error ->
@@ -279,7 +280,44 @@ defmodule Clawswap.Doctor do
     end
   end
 
-  defp smee(sys, local) do
+  # Where the branches come from: origin's remote-tracking branches. On GitHub clawswap also reads its
+  # PRs and adds its webhook; anywhere else it lists every branch and has neither.
+  defp origin(sys, root) do
+    git = fn args -> sys.cmd.("git", ["-C", root | args]) end
+
+    case git.(["remote", "get-url", "origin"]) do
+      {:ok, url} ->
+        url = String.trim(url)
+        github? = github_url?(url)
+
+        cond do
+          match?({:ok, ""}, git.(["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/origin"])) ->
+            {check("Origin", :missing, url, "origin has no branches in this checkout yet, so the branch list is empty.", "git fetch origin, in #{root}"),
+             github?}
+
+          github? ->
+            {check("Origin", :ok, url, nil), true}
+
+          true ->
+            {check(
+               "Origin",
+               :optional,
+               url,
+               "origin isn't on GitHub, so clawswap lists every branch, with no PRs, no merged marks and no webhook (it refreshes on its own timer instead).",
+               "Point origin at the GitHub repo (git remote set-url origin git@github.com:owner/name.git) if there is one"
+             ), false}
+        end
+
+      :error ->
+        {check("Origin", :missing, nil, "#{root} has no origin remote, so clawswap has no branches to list.", "git remote add origin <url>, in #{root}"), false}
+    end
+  end
+
+  # The same test as Clawswap.Git.github_repo/1 (this module stays stdlib-only).
+  @doc false
+  def github_url?(url), do: Regex.match?(~r{github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$}, url)
+
+  defp smee(sys, local, github?) do
     channel =
       if sys.env["CLAWSWAP_SMEE"] not in [nil, ""] do
         sys.env["CLAWSWAP_SMEE"]
@@ -296,6 +334,9 @@ defmodule Clawswap.Doctor do
     cond do
       channel ->
         check("Webhook", :ok, "#{channel} (this checkout's own channel)", nil)
+
+      !github? ->
+        check("Webhook", :optional, nil, "The daemon adds a webhook only to a GitHub repo, so this checkout refreshes on a timer.", nil)
 
       shared = shared_channel(sys) ->
         check("Webhook", :ok, "#{shared} (the shared channel; the daemon adds the repo's webhook for it)", nil)
