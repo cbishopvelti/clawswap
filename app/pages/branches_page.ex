@@ -47,12 +47,18 @@ defmodule ClawswapWeb.BranchesPage do
     <div class="page">
     <main>
       <header>
+        <span class="actions">
+          <button class="pull {@view.pull_class}" title={@view.pull_title} disabled={@view.pull_class == "none"} $click={action: :pull}>{%if @view.pull_class == "running"}<span class="spinner"></span>{/if}{@view.pull_label}</button>
+          <a class="settings-link" href={"/p/#{@id}/settings"} target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
+        </span>
         <a class="all-projects" href="/" title="All projects">☰</a>
         <h1>{@view.project}</h1>
         {%if @view.on}<span class="on" title="The branch checked out now">On <strong>{@view.on}</strong></span>{/if}
-        <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
-        <button class="pull {@view.pull_class}" title={@view.pull_title} disabled={@view.pull_class == "none"} $click={action: :pull}>{%if @view.pull_class == "running"}<span class="spinner"></span>{/if}{@view.pull_label}</button>
-        <a class="settings-link" href={"/p/#{@id}/settings"} target="_blank" rel="noopener" title="Edit the config, in a new window">⚙</a>
+        {%if @view.webhook_class == "ok"}
+          <span class="webhook ok" title="Webhook on: GitHub tells clawswap about pushes and pull requests as they happen" aria-label="Webhook on">●</span>
+        {%else}
+          <span class="webhook {@view.webhook_class}">{@view.webhook}</span>
+        {/if}
         <StreamDeck cid="stream_deck" page_project={@id} />
       </header>
       {%if @message}<p class="message">{@message}</p>{/if}
