@@ -50,7 +50,8 @@ at all it still listens on the channel (the page says "webhook unchecked" and na
 hand that sends there works, and the page shows it on once its first delivery comes in.
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:
-`clawswap switch 23`). `clawswap up staging` runs it with `clawswap.staging.yml` merged over the config
+`clawswap switch 23`). `clawswap down` ends the project's session and takes it out of the daemon;
+`clawswap daemon stop` stops the daemon. `clawswap up staging` runs it with `clawswap.staging.yml` merged over the config
 ([override configs](https://cbishopvelti.github.io/clawswap/configuration.html#overrides)). Run `clawswap help` for every command, and `clawswap completion install` once for Tab
 completion (`clawswap re<Tab>` gives `clawswap reload`); `clawswap reload` keeps it up to date.
 

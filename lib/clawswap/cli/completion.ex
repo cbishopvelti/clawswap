@@ -38,6 +38,7 @@ defmodule Clawswap.CLI.Completion do
         update) COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
         walk) COMPREPLY=($(compgen -W "--headless" -- "$cur")) ;;
         test) COMPREPLY=($(compgen -W "--watch --headless --only --exclude --seed" -- "$cur")) ;;
+        daemon) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "stop" -- "$cur")); [ "$COMP_CWORD" -eq 3 ] && COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
         completion) COMPREPLY=($(compgen -W "install #{Enum.join(@shells, " ")}" -- "$cur")) ;;
       esac
     }
@@ -67,6 +68,7 @@ defmodule Clawswap.CLI.Completion do
         update) compadd -- --all ;;
         walk) compadd -- --headless ;;
         test) compadd -- --watch --headless --only --exclude --seed ;;
+        daemon) (( CURRENT == 3 )) && compadd -- stop; (( CURRENT == 4 )) && compadd -- --all ;;
         completion) compadd -- install #{Enum.join(@shells, " ")} ;;
       esac
     }
@@ -89,6 +91,8 @@ defmodule Clawswap.CLI.Completion do
     complete -c clawswap -n '__fish_seen_subcommand_from update' -a --all
     complete -c clawswap -n '__fish_seen_subcommand_from walk' -a --headless
     complete -c clawswap -n '__fish_seen_subcommand_from test' -a '--watch --headless --only --exclude --seed'
+    complete -c clawswap -n '__fish_seen_subcommand_from daemon; and not __fish_seen_subcommand_from stop' -a stop
+    complete -c clawswap -n '__fish_seen_subcommand_from stop' -a --all
     complete -c clawswap -n '__fish_seen_subcommand_from completion' -a 'install #{Enum.join(@shells, " ")}'
     """
   end

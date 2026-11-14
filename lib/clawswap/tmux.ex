@@ -33,8 +33,21 @@ defmodule Clawswap.Tmux do
   defp arg(s), do: s |> to_string() |> String.replace(~r/;$/, "\\;")
 
   # tmux turns . and : in a session's name into _, since they separate a target's parts.
-  defp session(project), do: String.replace(project.session, ~r/[.:]/, "_")
+  defp session(%{session: name}), do: session(name)
+  defp session(name), do: String.replace(name, ~r/[.:]/, "_")
   defp target(project), do: "=" <> session(project)
+
+  @doc "Ends the tmux session named `session` (`clawswap down`): `:ok`, or `:none` when there's no such session."
+  def kill_session(session) do
+    case Run.capture("tmux", ["has-session", "-t", target(session)]) do
+      {:ok, _} ->
+        Run.capture("tmux", ["kill-session", "-t", target(session)])
+        :ok
+
+      _ ->
+        :none
+    end
+  end
 
   @doc """
   The tmux commands that build the session, as one argument list joined by ";": the servers stacked on

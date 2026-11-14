@@ -61,6 +61,11 @@ case "${1:-}" in
     exit
     ;;
   daemon)
+    # clawswap daemon stop and the like are ordinary commands.
+    if [ $# -gt 1 ]; then
+      own mix clawswap "$@"
+      exit
+    fi
     # The daemon that runs every project (clawswap up starts it in the background). Hologram serves its
     # pages only with this set in dev.
     export HOLOGRAM_START=1

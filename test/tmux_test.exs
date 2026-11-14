@@ -46,6 +46,17 @@ defmodule Clawswap.TmuxTest do
     assert_raise ArgumentError, fn -> Multiplexer.pick(%{p | multiplexer: :screen}, %{}, none) end
   end
 
+  test "ends a session by name in whichever multiplexer has it" do
+    assert Multiplexer.kill_session("clawswap-none", fn _ -> false end) == []
+
+    if System.find_executable("tmux") do
+      session = "clawswap-test-#{System.unique_integer([:positive])}.x"
+      {_, 0} = System.cmd("tmux", ["new-session", "-d", "-s", String.replace(session, ".", "_"), "sleep 60"])
+      assert Tmux.kill_session(session) == :ok
+      assert Tmux.kill_session(session) == :none
+    end
+  end
+
   test "takes the multiplexer from a YAML config" do
     %{dir: dir, work: work} = TestRepo.setup()
 

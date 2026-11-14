@@ -182,6 +182,24 @@ defmodule Clawswap.ProjectsTest do
     end
   end
 
+  test "a project taken down stays down for its session's panes, until up registers it again", %{repos: [shop, blog], env: env} do
+    {:ok, _} = Projects.register(shop.work, env)
+    {:ok, _} = Projects.register(blog.work, env)
+    assert :ok = Projects.down("shop")
+    assert Projects.get("shop") == nil
+    assert Enum.map(Projects.list(), & &1.id) == ["blog"]
+    assert Projects.down("shop") == :none
+
+    # The session's clawswap pane, re-registering as its log ends, is turned away.
+    assert Projects.register(shop.work, env, from_pane: true) == {:error, :down}
+    assert Projects.get("shop") == nil
+
+    # clawswap up brings it back, and its pane can follow it again.
+    assert {:ok, %{id: "shop"}} = Projects.register(shop.work, env)
+    assert {:ok, %{id: "shop"}} = Projects.register(shop.work, env, from_pane: true)
+    assert %{session: "shop"} = Enum.find(Projects.list(), &(&1.id == "shop"))
+  end
+
   describe "the API" do
     defp api(method, path, body \\ nil, headers \\ []) do
       conn = conn(method, path, body && JSON.encode!(body))
@@ -210,6 +228,17 @@ defmodule Clawswap.ProjectsTest do
 
       assert {404, %{"error" => "isn't one of the listed branches" <> _}} =
                api(:post, "/p/blog/switch", %{branch: "nope"}) |> then(fn {s, b} -> {s, %{"error" => String.replace(b["error"], "nope ", "")}} end)
+    end
+
+    test "takes a project down at /p/<id>/down, and turns its pane's register away", %{repos: [shop, blog], env: env} do
+      {:ok, _} = Projects.register(shop.work, env)
+      {:ok, _} = Projects.register(blog.work, env)
+      # Only under /p/<id>: the selected project is never taken down by mistake.
+      assert {nil, _} = api(:post, "/down", %{})
+      assert {200, %{"down" => "shop", "projects" => [%{"id" => "blog", "session" => "blog"}]}} = api(:post, "/p/shop/down", %{})
+      assert {404, _} = api(:post, "/p/shop/down", %{})
+      assert {410, %{"down" => true}} = api(:post, "/daemon/projects", %{cwd: shop.work, env: env, from_pane: true})
+      assert {200, %{"id" => "shop"}} = api(:post, "/daemon/projects", %{cwd: shop.work, env: env})
     end
 
     test "streams a project's state at /p/<id>/events: now, then each change, until the project goes", %{repos: [shop, _], env: env} do

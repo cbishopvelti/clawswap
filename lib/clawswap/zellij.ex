@@ -30,16 +30,32 @@ defmodule Clawswap.Zellij do
          "clawswap needs zellij 0.44 or newer (found #{if version, do: Enum.join(version, "."), else: "none"}): https://github.com/zellij-org/zellij/releases"}
   end
 
+  @doc """
+  Ends the zellij session named `session` (`clawswap down`), and deletes it so it doesn't come back as an
+  exited one: `:ok`, or `:none` when there's no such session.
+  """
+  def kill_session(session) do
+    case session_line(session) do
+      nil ->
+        :none
+
+      line ->
+        unless line =~ "EXITED", do: Run.capture("zellij", ["kill-session", session])
+        Run.capture("zellij", ["delete-session", "--force", session])
+        :ok
+    end
+  end
+
+  defp session_line(session) do
+    case Run.capture("zellij", ["list-sessions", "--no-formatting"]) do
+      {:ok, out} -> out |> String.split("\n") |> Enum.find(&(hd(String.split(&1, " ")) == session))
+      _ -> nil
+    end
+  end
+
   @doc "zellij's command for `up`: attach to the running session, or start it from the layout."
   def up(project, catch_up) do
-    sessions =
-      case Run.capture("zellij", ["list-sessions", "--no-formatting"]),
-        do: (
-          {:ok, out} -> out
-          _ -> ""
-        )
-
-    line = sessions |> String.split("\n") |> Enum.find(&(hd(String.split(&1, " ")) == project.session))
+    line = session_line(project.session)
     # An exited session would come back with its panes waiting for Enter; start it fresh instead.
     if line && line =~ "EXITED", do: Run.capture("zellij", ["delete-session", project.session])
 

@@ -5,7 +5,9 @@ defmodule Clawswap.Projects do
 
   A project comes in with `register/2`, from `clawswap up` and from the `clawswap watch` in its session's
   clawswap pane, which then follows the project's log (`attach/2`). The project leaves when no pane has
-  followed it for a while (its session ended), or with `unregister/1`. `reload/1` starts a project again
+  followed it for a while (its session ended), or with `unregister/1`, or `down/1` (`clawswap down`), which
+  also keeps its session's pane from bringing it back: a register `from_pane` is turned down until `up`
+  registers it again. `reload/1` starts a project again
   on its config as it is now, which a switch that changed it and the settings page ask for.
 
   One project is the selected one: what the API's paths without /p/<id> answer for, and what Stream
@@ -35,17 +37,24 @@ defmodule Clawswap.Projects do
 
   @doc """
   Loads the config found from `cwd` with the shell's environment `env` (a map), and starts the project
-  unless it's running already. `{:ok, project}` or `{:error, message}`.
+  unless it's running already. `{:ok, project}` or `{:error, message}`; with `from_pane: true` (a session
+  pane's `clawswap watch`), `{:error, :down}` for a project `down/1` took down.
   """
-  def register(cwd, env, server \\ __MODULE__) do
+  def register(cwd, env, opts \\ [], server \\ __MODULE__) do
     case load(cwd, env) do
-      {:ok, project} -> GenServer.call(server, {:register, project, cwd}, 60_000)
+      {:ok, project} -> GenServer.call(server, {:register, project, cwd, opts[:from_pane] == true}, 60_000)
       {:error, message} -> {:error, message}
     end
   end
 
   @doc "Stops a project and forgets it."
   def unregister(id, server \\ __MODULE__), do: GenServer.call(server, {:unregister, id})
+
+  @doc """
+  Stops a project for good (`clawswap down`): as `unregister/1`, and until `clawswap up` registers it again,
+  its session's panes can't bring it back. `:ok`, or `:none` when it wasn't running.
+  """
+  def down(id, server \\ __MODULE__), do: GenServer.call(server, {:down, id})
 
   @doc "Starts the project again on its config as it is now. It keeps running as it was if the config doesn't load."
   def reload(id, server \\ __MODULE__), do: GenServer.cast(server, {:reload, id})
@@ -101,7 +110,9 @@ defmodule Clawswap.Projects do
       first_attach_ms: opts[:first_attach_ms] || 120_000,
       idle_ms: opts[:idle_ms],
       on_idle: opts[:on_idle],
-      idle: nil
+      idle: nil,
+      # Projects `down/1` took down, which a pane's register can't bring back.
+      down: MapSet.new()
     }
 
     # Projects a previous run of this server started (it crashed and was restarted) are unknown to it now.
@@ -111,10 +122,15 @@ defmodule Clawswap.Projects do
   end
 
   @impl true
-  def handle_call({:register, project, cwd}, _from, state) do
+  def handle_call({:register, project, cwd, from_pane}, _from, state) do
     id = project.id
+    down = MapSet.member?(state.down, id)
+    state = if from_pane, do: state, else: %{state | down: MapSet.delete(state.down, id)}
 
     case state.projects[id] do
+      _ when from_pane and down ->
+        {:reply, {:error, :down}, state}
+
       %{project: %{root: root}} = entry when root == project.root ->
         {:reply, {:ok, entry.project}, state}
 
@@ -137,6 +153,12 @@ defmodule Clawswap.Projects do
   end
 
   def handle_call({:unregister, id}, _from, state), do: {:reply, :ok, drop(state, id)}
+
+  def handle_call({:down, id}, _from, state) do
+    answer = if Map.has_key?(state.projects, id), do: :ok, else: :none
+    if answer == :ok, do: log(id, "Taken down (clawswap down)")
+    {:reply, answer, drop(%{state | down: MapSet.put(state.down, id)}, id)}
+  end
 
   def handle_call(:list, _from, state), do: {:reply, summary(state), state}
 
@@ -339,7 +361,7 @@ defmodule Clawswap.Projects do
   defp summary(state) do
     Enum.map(state.order, fn id ->
       p = state.projects[id].project
-      %{id: id, name: p.name, root: p.root, port: p.port}
+      %{id: id, name: p.name, root: p.root, port: p.port, session: p.session}
     end)
   end
 
