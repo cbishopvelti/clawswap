@@ -71,7 +71,7 @@ defmodule ClawswapWeb.View do
   end
 
   defp index_status(%{switch: %{phase: "running"} = run}), do: "#{if run.pull, do: "pulling", else: "switching to #{run.target}"}: #{run.step}"
-  defp index_status(%{switch: %{phase: "failed"} = run}), do: "#{run.target}: #{run.error}"
+  defp index_status(%{switch: %{phase: "failed"} = run}), do: failure(run)
   defp index_status(%{error: error}) when is_binary(error), do: error
   defp index_status(%{dirty: true}), do: "uncommitted changes"
   defp index_status(_), do: ""
@@ -82,6 +82,8 @@ defmodule ClawswapWeb.View do
     current = state.current && state.current.branch
     running = match?(%{phase: "running"}, run)
     behind = (state.upstream && state.upstream.behind) || 0
+    # Nothing to pull from: not on a branch, or the branch isn't on GitHub.
+    pullable = current not in [nil, "HEAD"] and state.upstream != nil
 
     %{
       project: state.project,
@@ -99,15 +101,19 @@ defmodule ClawswapWeb.View do
       # The switch or pull that finished last (its branch, and when), so a page in an app's iframe can tell
       # the app to reload when it changes; nil until one has.
       switched: switched(run),
-      pull_label: pull_label(run, current, behind),
+      pull_label: pull_label(run, pullable, behind),
       pull_class:
         cond do
           running and match?(%{pull: true}, run) -> "running"
+          not pullable -> "none"
           behind > 0 -> "behind"
           true -> ""
         end,
-      error: (match?(%{phase: "failed"}, run) && "#{run.target}: #{run.error}") || state.error,
+      pull_title: pull_title(current, pullable),
+      error: (match?(%{phase: "failed"}, run) && failure(run)) || state.error,
       branches: Enum.map(state.branches, &branch(&1, state, run, current)),
+      # Why there are no branches to show, nil when there are.
+      empty: if(state.branches == [], do: Map.get(state, :empty)),
       walkthroughs: Enum.map(Map.get(state, :walkthroughs, []), &walkthrough(&1, Map.get(state, :walk))),
       walk: walk_status(Map.get(state, :walk))
     }
@@ -210,10 +216,18 @@ defmodule ClawswapWeb.View do
   defp webhook_class("unchecked"), do: "unchecked"
   defp webhook_class(_), do: "off"
 
+  # A failed switch or pull, said as which it was.
+  defp failure(%{pull: true} = run), do: "Pull failed: #{run.error}"
+  defp failure(run), do: "Couldn't switch to #{run.target}: #{run.error}"
+
   defp pull_label(%{pull: true, phase: "running", step: step}, _, _), do: "Pulling: #{step || "..."}"
-  defp pull_label(_, nil, _), do: "Pull"
+  defp pull_label(_, false, _), do: "Pull (not on GitHub)"
   defp pull_label(_, _, 0), do: "↓ Pull (up to date)"
   defp pull_label(_, _, n), do: "↓ Pull #{n} new commit#{if n == 1, do: "", else: "s"}"
+
+  defp pull_title(current, _) when current in [nil, "HEAD"], do: "Not on a branch, so there's nothing to pull"
+  defp pull_title(current, false), do: "#{current} isn't on GitHub, so there's nothing to pull"
+  defp pull_title(current, true), do: "Pull #{current} from GitHub"
 
   defp branch(b, state, run, current) do
     pr = Map.get(b, :pr)
@@ -222,7 +236,7 @@ defmodule ClawswapWeb.View do
     {class, status} =
       cond do
         targeted and run.phase == "running" -> {"running", run.step || "Switching"}
-        targeted and run.phase == "failed" -> {"failed", "Failed"}
+        targeted and run.phase == "failed" -> {"failed", if(run.pull, do: "Pull failed", else: "Failed")}
         (b.branch == current and b.sha) && b.sha != state.current.sha -> {"behind", "New commits"}
         b.branch == current -> {"current", if(state.dirty, do: "Uncommitted", else: "Current")}
         true -> {"", ""}

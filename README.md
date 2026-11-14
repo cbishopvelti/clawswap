@@ -10,10 +10,22 @@ each one's merge status, and lights up when the branch you're on has new commits
 walkthrough, a short script that plays its change in Chrome while you watch, and `clawswap test` runs the
 project's own browser tests against the session's servers.
 
-```
-GitHub ──webhook── smee.io ──SSE── clawswap daemon, a watcher per project ──zellij/tmux── each project's server panes
-                                        ▲ 127.0.0.1:27390 (/, /p/<id>)          │ log
-              OpenDeck keys, the Hologram pages, clawswap switch        clawswap watch (each session's clawswap pane)
+How it fits together (a picture, not commands to run): GitHub tells the daemon about new commits through
+smee.io, and the daemon switches each project's session when you ask it to from a key, a page or the command line.
+
+```text
+GitHub
+  │ webhook, on a push or a pull request
+  ▼
+smee.io
+  │ SSE
+  ▼
+clawswap daemon on 127.0.0.1:27390  ◀── OpenDeck keys,
+  (a watcher per project)                the pages at / and /p/<id>,
+  │                                      clawswap switch
+  ├── zellij/tmux ──▶ each project's server panes
+  │
+  └── log ──▶ clawswap watch, in each session's clawswap pane
 ```
 
 One daemon on 127.0.0.1:27390 runs every project you've started with `clawswap up` (each under `/p/<id>`,
@@ -50,7 +62,8 @@ at all it still listens on the channel (the page says "webhook unchecked" and na
 hand that sends there works, and the page shows it on once its first delivery comes in.
 
 Then pick a branch on the page, press a key, or run `clawswap switch <branch>` (a PR number works too:
-`clawswap switch 23`). `clawswap up staging` runs it with `clawswap.staging.yml` merged over the config
+`clawswap switch 23`). `clawswap down` ends the project's session and takes it out of the daemon;
+`clawswap daemon stop` stops the daemon. `clawswap up staging` runs it with `clawswap.staging.yml` merged over the config
 ([override configs](https://cbishopvelti.github.io/clawswap/configuration.html#overrides)). Run `clawswap help` for every command (`clawswap help switch` or `clawswap switch --help` for one), and `clawswap completion install` once for Tab
 completion (`clawswap re<Tab>` gives `clawswap reload`); `clawswap reload` keeps it up to date.
 
