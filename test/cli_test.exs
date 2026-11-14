@@ -73,10 +73,8 @@ defmodule Clawswap.CLITest do
     assert CLI.parse("walk", ["branches-menu", "--headless"]) == {:ok, ["branches-menu"], [headless: true]}
     assert CLI.parse("test", ["a_test.exs", "--max-cases", "2"]) == {:ok, ["a_test.exs"], [max_cases: 2]}
 
-    for name <- ~w(self-update self-pull pull-self) do
-      assert CLI.parse(name, ["--no-reload"]) == {:ok, [], [reload: false]}
-      assert CLI.parse(name, []) == {:ok, [], []}
-    end
+    assert CLI.parse("self-update", ["--no-reload"]) == {:ok, [], [reload: false]}
+    assert {:error, _} = CLI.parse("self-pull", ["--reload"])
 
     assert {:error, message} = CLI.parse("walk", ["--headles"])
     assert message =~ "walk has no option --headles. Did you mean --headless?"

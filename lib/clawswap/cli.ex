@@ -25,8 +25,8 @@ defmodule Clawswap.CLI do
      "The daemon that runs every project's watcher, page and API (clawswap up starts it); stop stops it (--all: every project's session too)"},
     {"reload", "", 0, 0, "After changing clawswap: reinstall the OpenDeck plugin, restart OpenDeck, recompile, restart the daemon"},
     {"self-update", "", 0, 0, "Update clawswap itself: git pull its own checkout, then reload (--no-reload: just pull)"},
-    {"self-pull", "", 0, 0, "The same as self-update"},
-    {"pull-self", "", 0, 0, "The same as self-update"},
+    {"self-pull", "", 0, 0, "Just git pull clawswap's own checkout (self-update --no-reload): clawswap reload starts using it"},
+    {"pull-self", "", 0, 0, "The same as self-pull"},
     {"completion", "install", 1, 2, "Set up Tab completion for your shell (or install bash|zsh|fish); completion bash prints the script"},
     {"help", "[command]", 0, 1, "This list, or one command's usage and options (so does clawswap <command> --help)"}
   ]
@@ -58,8 +58,6 @@ defmodule Clawswap.CLI do
   @options %{
     "update" => [all: {:boolean, "Run every step, whatever changed"}],
     "self-update" => [reload: {:boolean, "Reload after pulling (the default; --no-reload just pulls)"}],
-    "self-pull" => [reload: {:boolean, "Reload after pulling (the default; --no-reload just pulls)"}],
-    "pull-self" => [reload: {:boolean, "Reload after pulling (the default; --no-reload just pulls)"}],
     "daemon" => [all: {:boolean, "With stop: end every project's session too"}],
     "smee" => [new: {:boolean, "Make a new smee.io channel of this checkout's own"}],
     "walk" => [headless: {:boolean, "Play them in a Chrome with no window, and exit 1 if one fails"}],
@@ -207,8 +205,8 @@ defmodule Clawswap.CLI do
   defp dispatch("layout", [], _), do: layout()
   defp dispatch("reload", [], _), do: reload()
 
-  defp dispatch(command, [], opts) when command in ~w(self-update self-pull pull-self),
-    do: self_update(Keyword.get(opts, :reload, true))
+  defp dispatch("self-update", [], opts), do: self_update(Keyword.get(opts, :reload, true))
+  defp dispatch(command, [], _) when command in ~w(self-pull pull-self), do: self_update(false)
 
   defp dispatch("completion", ["install" | shell], _), do: install_completion(List.first(shell))
   defp dispatch("completion", ["refresh"], _), do: refresh_completion()
@@ -686,7 +684,7 @@ defmodule Clawswap.CLI do
 
     cond do
       Git.head(tool) == before ->
-        IO.puts("clawswap is up to date; nothing to reload")
+        IO.puts("clawswap is up to date#{if reload?, do: "; nothing to reload"}")
 
       not reload? ->
         IO.puts("Pulled clawswap; run clawswap reload to start using it")
