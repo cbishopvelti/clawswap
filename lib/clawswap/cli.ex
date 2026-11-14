@@ -26,10 +26,37 @@ defmodule Clawswap.CLI do
     {"help", "", 0, 0, "This list"}
   ]
 
+  # Help groups the commands so the everyday ones come first. Setup is what you run once (or after
+  # changing clawswap); internal is what the session runs for you. A command named in neither is everyday,
+  # so a new row in @commands shows up there without touching this.
+  @setup ~w(doctor init completion layout reload)
+  @internal ~w(watch daemon)
+
+  for name <- @setup ++ @internal, !List.keymember?(@commands, name, 0) do
+    raise CompileError, description: "clawswap help names #{inspect(name)}, which isn't in @commands"
+  end
+
+  @sections (
+              rows = for {name, args, _, _, summary} <- @commands, do: {name, args, summary}
+              pick = fn names -> for name <- names, row = List.keyfind(rows, name, 0), do: row end
+
+              [
+                {"Everyday", Enum.reject(rows, &(elem(&1, 0) in (@setup ++ @internal)))},
+                {"Setup", pick.(@setup)},
+                {"Internal (the session runs these for you)", pick.(@internal)}
+              ]
+            )
+
   @usage "Usage: clawswap <command>\n" <>
-           Enum.map_join(@commands, fn {name, args, _, _, summary} ->
-             "  " <> String.pad_trailing(String.trim("#{name} #{args}"), 20) <> summary <> "\n"
+           Enum.map_join(@sections, fn {heading, rows} ->
+             "\n#{heading}:\n" <>
+               Enum.map_join(rows, fn {name, args, summary} ->
+                 "  " <> String.pad_trailing(String.trim("#{name} #{args}"), 20) <> summary <> "\n"
+               end)
            end)
+
+  @doc "The commands grouped as help shows them, as `{heading, [{name, args, summary}]}`."
+  def sections, do: @sections
 
   @doc "The commands, as `{name, summary}`."
   def commands, do: for({name, _, _, _, summary} <- @commands, do: {name, summary})

@@ -36,6 +36,19 @@ defmodule Clawswap.CLITest do
     assert Forgive.branch("99", @branches) == {:none, nil}
   end
 
+  test "help groups every command once, everyday first" do
+    sections = Clawswap.CLI.sections()
+    assert Enum.map(sections, &elem(&1, 0)) |> Enum.map(&hd(String.split(&1))) == ["Everyday", "Setup", "Internal"]
+
+    listed = for {_, rows} <- sections, {name, _, _} <- rows, do: name
+    assert Enum.sort(listed) == Enum.sort(Enum.map(Clawswap.CLI.commands(), &elem(&1, 0)))
+
+    names = fn heading -> for {^heading, rows} <- sections, {name, _, _} <- rows, do: name end
+    assert "switch" in names.("Everyday")
+    assert "completion" in names.("Setup")
+    assert "daemon" in names.("Internal (the session runs these for you)")
+  end
+
   test "writes completion for bash, zsh and fish, with every command" do
     for shell <- Completion.shells() do
       script = Completion.script(shell, Clawswap.CLI.commands())
