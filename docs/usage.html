@@ -47,6 +47,7 @@
   <tr><td><code>clawswap init</code></td><td>Writes a starter <code>clawswap.exs</code> at the repo root (refuses if a config is already there).</td></tr>
   <tr><td><code>clawswap up</code></td><td>Starts the daemon if it isn't running, adds the project to it, and opens the zellij or tmux session, or re-attaches to it.</td></tr>
   <tr><td><code>clawswap up &lt;name|file&gt;...</code></td><td>The same, with <a href="configuration.html#overrides">override configs</a> (<code>clawswap.&lt;name&gt;.yml</code>, say) merged over the config.</td></tr>
+  <tr><td><code>clawswap down</code></td><td>Ends the project: takes it out of the daemon, then ends its zellij or tmux session, which stops the servers in its panes. Run it from inside the session too. The session's <code>clawswap</code> pane won't bring the project back; <code>clawswap up</code> starts it again. Containers your <code>prepare</code> steps started are left running.</td></tr>
   <tr><td><code>clawswap status</code></td><td>The list the keys show, the current branch, the webhook's state and the last switch.</td></tr>
   <tr><td><code>clawswap switch &lt;branch&gt;</code></td><td>What a key press does. Follow it in the <code>clawswap</code> pane. The branch can be its full name, its PR number (<code>switch 23</code>), its short name or any part of its name that only one listed branch has.</td></tr>
   <tr><td><code>clawswap pull</code></td><td>Pulls the current branch the same way. Does nothing if it's up to date.</td></tr>
@@ -62,6 +63,7 @@
   <tr><td><code>clawswap watch</code></td><td>Runs the project in the daemon (starting the daemon if it isn't running) and shows its log. The session runs it in its <code>clawswap</code> pane; you rarely run it yourself.</td></tr>
   <tr><td><code>clawswap reload</code></td><td>After changing or pulling clawswap: quits OpenDeck, copies the plugin into its plugins folder, starts OpenDeck again, then recompiles clawswap (clearing Hologram's page bundle) and restarts the daemon, and writes any installed <a href="#completion">completion</a> again. It compiles before stopping the daemon, so a compile error leaves everything running. See <a href="opendeck.html#reload">Stream Deck keys</a> for finding OpenDeck.</td></tr>
   <tr><td><code>clawswap daemon</code></td><td>The daemon itself, which runs every project's watcher, page and API. <code>up</code> starts it in the background; you rarely run it yourself.</td></tr>
+  <tr><td><code>clawswap daemon stop</code></td><td>Stops the daemon on the checkout's port (27390 outside a project). While projects run in it, it refuses and names them, since their sessions' <code>clawswap</code> panes would start it again: end them with <code>clawswap down</code> first, or add <code>--all</code> to take every project down and end their sessions too.</td></tr>
 </table>
 <p><code>status</code>, <code>switch</code> and <code>pull</code> talk to the project in the daemon, so they need
 <code>clawswap up</code> first. They act on the checkout's own project, found from its config, so in a repo
@@ -159,7 +161,8 @@ and each project comes into it with a watcher of its own.</p>
   <li><strong>A config change</strong> (a switch that changes it, or a save on the settings page) starts that one
     project again on the new config; the others carry on.</li>
   <li><strong>When a session ends</strong>, its project leaves the daemon about 30 seconds later. The daemon stops by
-    itself an hour after its last project has gone. If the daemon stops while a session runs, the session's
+    itself an hour after its last project has gone, or straight away with <code>clawswap daemon stop</code>.
+    <code>clawswap down</code> ends a session and takes its project out at once. If the daemon stops while a session runs, the session's
     <code>clawswap</code> pane starts it again and carries on.</li>
 </ul>
 <p>A project with a <code>port</code> of its own gets a daemon of its own on that port, apart from the others: give

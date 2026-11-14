@@ -35,6 +35,7 @@ defmodule Clawswap.CLI.Completion do
       case "${COMP_WORDS[1]}" in
         switch) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "$(#{@branches})" -- "$cur")) ;;
         up|watch) COMPREPLY=($(compgen -W "$(#{@overrides})" -- "$cur")) ;;
+        daemon) [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=($(compgen -W "stop" -- "$cur")); [ "$COMP_CWORD" -eq 3 ] && COMPREPLY=($(compgen -W "--all" -- "$cur")) ;;
         #{flag_cases(commands, ~S|COMPREPLY=($(compgen -W "|, ~S|" -- "$cur"))|)}
         completion) COMPREPLY=($(compgen -W "install #{Enum.join(@shells, " ")}" -- "$cur")) ;;
       esac
@@ -62,6 +63,7 @@ defmodule Clawswap.CLI.Completion do
       case $words[2] in
         switch) (( CURRENT == 3 )) && compadd -- ${(f)"$(#{@branches})"} ;;
         up|watch) compadd -- ${(f)"$(#{@overrides})"} ;;
+        daemon) (( CURRENT == 3 )) && compadd -- stop; (( CURRENT == 4 )) && compadd -- --all ;;
         #{flag_cases(commands, "compadd -- ", "")}
         completion) compadd -- install #{Enum.join(@shells, " ")} ;;
       esac
@@ -82,6 +84,7 @@ defmodule Clawswap.CLI.Completion do
     #{subcommands}
     complete -c clawswap -n '__fish_seen_subcommand_from switch' -a '(#{String.replace(@branches, "'", "\\'")})'
     complete -c clawswap -n '__fish_seen_subcommand_from up watch' -a '(#{String.replace(@overrides, "'", "\\'")})'
+    complete -c clawswap -n '__fish_seen_subcommand_from daemon; and not __fish_seen_subcommand_from stop' -a stop
     #{for {name, _} <- commands, (flags = Clawswap.CLI.flags(name)) != [], do: "complete -c clawswap -n '__fish_seen_subcommand_from #{name}' -a '#{Enum.join(flags, " ")}'\n"}\
     complete -c clawswap -n '__fish_seen_subcommand_from completion' -a 'install #{Enum.join(@shells, " ")}'
     """
