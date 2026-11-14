@@ -4,7 +4,7 @@ defmodule ClawswapWeb.Api do
   name); the same paths without it answer for the selected project (`Clawswap.Projects.selected/0`), so a
   Stream Deck key or a script that names no project follows whichever is selected.
 
-      GET  /p/<id>/state                    the watcher's state (see README.md)
+      GET  /p/<id>/state                    the watcher's state (see docs/api.html)
       GET  /p/<id>/events                   the same state as Server-Sent Events: now, then each time it
                                             changes, so a page can listen rather than poll /state
       POST /p/<id>/switch  {"branch": ...}  202, then follow /state's switch

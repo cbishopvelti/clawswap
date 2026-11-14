@@ -15,7 +15,7 @@ defmodule Clawswap.Config do
   @file_names [@file_name, "clawswap.yml", "clawswap.yaml"]
   def file_names, do: @file_names
 
-  @doc "The config as the rest of clawswap uses it, with the defaults filled in. See README.md for each field."
+  @doc "The config as the rest of clawswap uses it, with the defaults filled in. See docs/configuration.html for each field."
   def normalise(config, opts) do
     config = Map.new(config)
     root = Keyword.fetch!(opts, :root)
