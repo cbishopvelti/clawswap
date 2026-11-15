@@ -23,6 +23,41 @@ defmodule Clawswap.HostEnvTest do
            ]
   end
 
+  test "puts the whole host environment back from CLAWSWAP_HOST_ENV's file" do
+    # What mise exec and erl add for clawswap's own Elixir, over a shell whose mise had set its own.
+    env = %{
+      "CLAWSWAP_HOST_ENV" => "/tmp/host",
+      "CLAWSWAP_HOST_PATH" => "/elixir-1.19.7/bin:/usr/bin",
+      "CLAWSWAP_REPO" => "/repo",
+      "PATH" => "/otp28/erts/bin:/elixir-1.19.6/bin:/usr/bin",
+      "MIX_HOME" => "/elixir-1.19.6/.mix",
+      "MIX_ARCHIVES" => "/elixir-1.19.6/.mix/archives",
+      "__MISE_DIFF" => "abc",
+      "ROOTDIR" => "/otp28",
+      "HOME" => "/home/me"
+    }
+
+    file = "PATH=/elixir-1.19.7/bin:/usr/bin\0MIX_HOME=/elixir-1.19.7/.mix\0HOME=/home/me\0NOTE=two\nlines, a=b\0CLAWSWAP_EXEC=/tmp/outer\0"
+    read = fn "/tmp/host" -> {:ok, file} end
+
+    assert HostEnv.changes(env, read) == [
+             {"MIX_HOME", "/elixir-1.19.7/.mix"},
+             {"NOTE", "two\nlines, a=b"},
+             {"PATH", "/elixir-1.19.7/bin:/usr/bin"},
+             {"MIX_ARCHIVES", nil},
+             {"ROOTDIR", nil},
+             {"__MISE_DIFF", nil}
+           ]
+  end
+
+  test "falls back to the PATH when CLAWSWAP_HOST_ENV's file can't be read or isn't an environment" do
+    env = %{"CLAWSWAP_HOST_ENV" => "/tmp/gone", "CLAWSWAP_HOST_PATH" => "/mine", "PATH" => "/clawswap", "MIX_HOME" => "/x", "EMU" => "beam"}
+    path_only = [{"PATH", "/mine"}, {"EMU", nil}]
+
+    assert HostEnv.changes(env, fn _ -> {:error, :enoent} end) == path_only
+    assert HostEnv.changes(env, fn _ -> {:ok, ""} end) == path_only
+  end
+
   test "changes nothing without CLAWSWAP_HOST_PATH" do
     assert HostEnv.changes(%{"PATH" => "/usr/bin", "ROOTDIR" => "/otp"}) == []
     assert HostEnv.changes(%{"CLAWSWAP_HOST_PATH" => "", "ROOTDIR" => "/otp"}) == []
