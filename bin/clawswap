@@ -5,9 +5,18 @@
 set -u
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 tool=$(cd "$(dirname "$self")/.." && pwd)
+# Your environment as it is here, in your project. clawswap runs on its own Elixir (below), which changes
+# the PATH and, with mise, MIX_HOME and more; it gives this back to everything it starts in your repo
+# (Clawswap.HostEnv), so your project's steps and servers build with the same Elixir and never rebuild each
+# other's work. Where env has no -0, only the PATH is given back (CLAWSWAP_HOST_PATH).
+if host_env=$(mktemp 2>/dev/null) && env -0 > "$host_env" 2>/dev/null; then
+  export CLAWSWAP_HOST_ENV="$host_env"
+  trap 'rm -f "$host_env"' EXIT
+else
+  rm -f "${host_env:-}"
+  host_env=
+fi
 export CLAWSWAP_REPO="$PWD"
-# Your PATH as it is here, in your project. clawswap runs on its own Elixir (below), and gives this back to
-# everything it starts in your repo (Clawswap.HostEnv), so your project keeps its own Elixir too.
 export CLAWSWAP_HOST_PATH="$PATH"
 cd "$tool" || exit 1
 
@@ -48,7 +57,8 @@ case "${1:-}" in
     own mix clawswap "$@" || { rm -f "$CLAWSWAP_EXEC"; exit 1; }
     set --
     while IFS= read -r line; do set -- "$@" "$line"; done < "$CLAWSWAP_EXEC"
-    rm -f "$CLAWSWAP_EXEC"
+    rm -f "$CLAWSWAP_EXEC" "$host_env"
+    unset CLAWSWAP_HOST_ENV
     cd "$1" && shift && exec "$@"
     ;;
   doctor)
@@ -71,7 +81,8 @@ case "${1:-}" in
     export HOLOGRAM_START=1
     # The daemon serves several projects, so it keeps its own environment, and gives each project's
     # commands the one it was registered from instead (Clawswap.HostEnv.for_project/2).
-    unset CLAWSWAP_HOST_PATH
+    unset CLAWSWAP_HOST_PATH CLAWSWAP_HOST_ENV
+    rm -f "$host_env"
     # Ctrl-C in the terminal it was started from mustn't reach it.
     export ELIXIR_ERL_OPTIONS="${ELIXIR_ERL_OPTIONS:-} +Bi"
     own mix clawswap daemon
