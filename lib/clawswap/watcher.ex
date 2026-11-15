@@ -106,7 +106,11 @@ defmodule Clawswap.Watcher do
       pr_cache: nil,
       refreshing: nil,
       again: false,
+      # Callers waiting for a refresh that hasn't started yet, and those the running one answers: each
+      # is answered by the first refresh that started after it asked, so a burst of webhook deliveries
+      # (each starting another refresh) can't keep a switch or pull waiting.
       waiters: [],
+      serving: [],
       # The switch a queued one (below) replaced in the view, put back if the queued one is refused unseen.
       queued_over: nil,
       debounce: nil,
@@ -130,6 +134,8 @@ defmodule Clawswap.Watcher do
         webhookError: nil,
         refreshedAt: nil,
         error: nil,
+        # Why the last git fetch failed (it gave up, or wanted a password), nil when it worked.
+        fetchError: nil,
         # Why the branch list is empty (Git.empty_reason/3), nil when it isn't.
         empty: nil,
         # The checkout's branch on origin: how many commits it is ahead of the checkout (nil when the
@@ -397,7 +403,7 @@ defmodule Clawswap.Watcher do
   defp start_refresh(%{refreshing: nil} = state) do
     %{project: project, refresh_git: refresh_git, pr_cache: cache} = state
     task = Task.Supervisor.async_nolink(Clawswap.TaskSupervisor, Clawswap.ProjectLog.wrap(fn -> snapshot(project, refresh_git, cache) end))
-    %{state | refreshing: task.ref, again: false}
+    %{state | refreshing: task.ref, again: false, serving: state.waiters, waiters: []}
   end
 
   defp start_refresh(state), do: %{state | again: true}
@@ -415,26 +421,24 @@ defmodule Clawswap.Watcher do
           changed(%{state | pr_cache: cache, view: %{state.view | error: message}})
       end
 
-    if state.again do
-      {:noreply, start_refresh(state)}
-    else
-      {waiters, state} = {state.waiters, %{state | waiters: []}}
+    {serving, state} = {state.serving, %{state | serving: []}}
 
-      state =
-        Enum.reduce(waiters, state, fn {from, what}, state ->
-          {reply, state} = after_refresh(what, state)
-          GenServer.reply(from, reply)
-          state
-        end)
+    state =
+      Enum.reduce(serving, state, fn {from, what}, state ->
+        {reply, state} = after_refresh(what, state)
+        GenServer.reply(from, reply)
+        state
+      end)
 
-      {:noreply, state}
-    end
+    {:noreply, if(state.again, do: start_refresh(state), else: state)}
   end
 
   # What the watcher knows about the checkout and origin, read without blocking the watcher.
   defp snapshot(project, refresh_git, cache) do
     root = project.root
     fetch = if refresh_git, do: Git.fetch_origin(root)
+    fetch_error = with {:error, message} <- fetch, do: String.trim(message), else: (_ -> nil)
+    if fetch_error, do: log("git fetch origin failed: #{fetch_error}")
     current = Git.current_branch(root)
 
     {pulls, cache} =
@@ -475,6 +479,7 @@ defmodule Clawswap.Watcher do
       empty: if(branches == [], do: Git.empty_reason(root, project.base, remote: remote, fetch: fetch)),
       walkthroughs: Walkthrough.list(project),
       prs: pulls != nil,
+      fetchError: fetch_error,
       refreshedAt: DateTime.utc_now() |> DateTime.to_iso8601(),
       error: nil
     }
@@ -547,6 +552,7 @@ defmodule Clawswap.Watcher do
 
     cond do
       target in [nil, "HEAD"] -> {409, "Not on a branch"}
+      view.fetchError -> {502, "Couldn't fetch from origin: #{view.fetchError}"}
       view.upstream == nil -> {404, "#{target} isn't on GitHub"}
       view.upstream.behind == 0 -> nil
       view.dirty -> {409, "Uncommitted changes: commit or stash them first"}

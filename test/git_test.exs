@@ -100,4 +100,37 @@ defmodule Clawswap.GitTest do
       assert Git.empty_reason(root, "dev", remote: [%{branch: "dev"}]) == nil
     end
   end
+
+  describe "fetch_origin/2" do
+    setup do
+      dir = Path.join(System.tmp_dir!(), "clawswap-fetch-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      {_, 0} = System.cmd("git", ["init", "-q", dir])
+      ssh_env = System.get_env("GIT_SSH_COMMAND")
+      System.delete_env("GIT_SSH_COMMAND")
+
+      on_exit(fn ->
+        if ssh_env, do: System.put_env("GIT_SSH_COMMAND", ssh_env)
+        File.rm_rf!(dir)
+      end)
+
+      %{dir: dir}
+    end
+
+    test "gives up on an ssh remote that never answers, running ssh in batch mode", %{dir: dir} do
+      ssh = Path.join(dir, "fake-ssh")
+      File.write!(ssh, "#!/bin/sh\necho \"$@\" > #{dir}/ssh-args\nexec sleep 30\n")
+      File.chmod!(ssh, 0o755)
+      {_, 0} = System.cmd("git", ["remote", "add", "origin", "ssh://git@example.invalid/o/r.git"], cd: dir)
+      {_, 0} = System.cmd("git", ["config", "core.sshCommand", ssh], cd: dir)
+
+      assert {:error, message} = Git.fetch_origin(dir, timeout: 1500)
+      assert message =~ "gave no answer"
+      assert File.read!("#{dir}/ssh-args") =~ "-o BatchMode=yes"
+    end
+
+    test "never asks for an https password on the terminal", %{dir: dir} do
+      assert {"GIT_TERMINAL_PROMPT", "0"} in Git.non_interactive_env(dir)
+    end
+  end
 end

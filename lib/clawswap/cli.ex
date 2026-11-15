@@ -156,6 +156,10 @@ defmodule Clawswap.CLI do
   end
 
   def main(args) do
+    # Before anything runs in your repo or registers it with the daemon: the app only starts (and does
+    # this itself) for the daemon.
+    Clawswap.HostEnv.restore()
+
     case args do
       [] -> IO.write(@usage)
       [help | rest] when help in ["--help", "-h"] -> run("help", rest)
@@ -742,7 +746,10 @@ defmodule Clawswap.CLI do
     elixir_bin = Path.expand("../../bin", to_string(:code.lib_dir(:elixir)))
     erlang_bin = Path.join(to_string(:code.root_dir()), "bin")
     path = Enum.join([elixir_bin, erlang_bin, System.get_env("PATH", "")], ":")
-    [{"PATH", path}, {"MIX_ENV", to_string(Mix.env())} | for(v <- ~w(ROOTDIR BINDIR EMU PROGNAME), do: {v, nil})]
+    # With what clawswap's version manager set for its Elixir (MIX_HOME, where its Hex is), which
+    # Clawswap.HostEnv took out of this VM's environment.
+    own = for name <- ~w(MIX_HOME MIX_ARCHIVES), value = Clawswap.HostEnv.own()[name], do: {name, value}
+    own ++ [{"PATH", path}, {"MIX_ENV", to_string(Mix.env())} | for(v <- ~w(ROOTDIR BINDIR EMU PROGNAME), do: {v, nil})]
   end
 
   # Asks the daemon on the port for its OS pid and stops it (killing it if it hasn't gone in 15 seconds).
