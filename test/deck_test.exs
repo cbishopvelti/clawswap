@@ -226,8 +226,39 @@ defmodule Clawswap.DeckTest do
     Deck.poll(deck)
     assert image("b") =~ "claude-main"
     tap_key(deck, "p")
-    assert_received {:request, :post, "http://dev/pull", %{}}
-    assert_received {:sent, %{event: "showOk", context: "p"}}
+    assert_receive {:request, :post, "http://dev/pull", %{}}
+    assert_receive {:sent, %{event: "showOk", context: "p"}}
+  end
+
+  test "a slow switch doesn't hold the deck: OpenDeck's events and the polls carry on while it waits" do
+    me = self()
+    running = Map.put(@state, "switch", %{"target" => "claude/undo-sliders-abc123", "phase" => "running", "step" => "Fetching"})
+
+    deck =
+      start(fn
+        :get, _, _ ->
+          {:ok, 200, running}
+
+        :post, url, _ ->
+          # The watcher answers a switch only after its fetch, which can take a minute.
+          send(me, {:waiting, self(), url})
+
+          receive do
+            :answer -> {:ok, 200, running}
+          end
+      end)
+
+    appear(deck, "a", %{}, 0, 0)
+    appear(deck, "b", %{}, 0, 1)
+    Deck.poll(deck)
+    tap_key(deck, "b")
+    assert_receive {:waiting, poster, "http://dev/switch"}
+    # Still answering while the switch is out, so the keys show it running.
+    Deck.handle(deck, %{"event" => "keyDown", "context" => "a", "payload" => %{}})
+    Deck.poll(deck)
+    assert image("b") =~ "Fetching"
+    send(poster, :answer)
+    refute_receive {:sent, %{event: "showAlert", context: "b"}}
   end
 
   test "a walkthrough key plays the checkout's walkthrough and shows how it went" do
