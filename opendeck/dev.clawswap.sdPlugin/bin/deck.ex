@@ -27,6 +27,7 @@ defmodule Clawswap.Deck do
   @default_url "http://127.0.0.1:27390"
   @poll_ms 1000
   @retry_ms 3000
+  @get_timeout_ms 5000
   # Holding a key this long opens its branch's Claude Code thread instead of switching.
   @hold_ms 500
   # A failed switch stays on its key this long.
@@ -247,8 +248,11 @@ defmodule Clawswap.Deck do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
 
-  @doc "Passes one OpenDeck event to the keys."
-  def handle(deck, message), do: GenServer.call(deck, {:message, message})
+  @doc """
+  Passes one OpenDeck event to the keys. It waits as long as the deck is busy (a poll gives up after a
+  few seconds): a timeout here would stop the plugin, and every key with it.
+  """
+  def handle(deck, message), do: GenServer.call(deck, {:message, message}, :infinity)
 
   @doc "Polls the watchers now and redraws."
   def poll(deck), do: GenServer.call(deck, :poll)
@@ -287,6 +291,9 @@ defmodule Clawswap.Deck do
   def handle_info({:held, context, ref}, s) do
     if s.down[context] == ref, do: {:noreply, open_claude(context, put_in(s.down[context], :held))}, else: {:noreply, s}
   end
+
+  def handle_info({:answer, {:pressed, kind}, context, answer}, s), do: {:noreply, pressed(context, kind, answer, s)}
+  def handle_info({:answer, :claude, context, answer}, s), do: {:noreply, claude_opened(context, answer, s)}
 
   defp on_message(%{"event" => "willAppear", "context" => context} = m, s) do
     payload = m["payload"] || %{}
@@ -418,29 +425,52 @@ defmodule Clawswap.Deck do
     else
       url = url_of(instance, s.url)
 
-      answer =
+      {path, body} =
         case instance.kind do
-          :project -> s.fetch.(:post, "#{url}/select", %{next: true})
-          :pull -> s.fetch.(:post, "#{url}/pull", %{})
-          :walk -> s.fetch.(:post, "#{url}/walk", %{name: walk["name"]})
-          :branch -> s.fetch.(:post, "#{url}/switch", %{branch: entry["branch"]})
+          :project -> {"/select", %{next: true}}
+          :pull -> {"/pull", %{}}
+          :walk -> {"/walk", %{name: walk["name"]}}
+          :branch -> {"/switch", %{branch: entry["branch"]}}
         end
 
-      case answer do
-        {:ok, status, body} when status in 200..299 ->
-          # Nothing new: a tick, since the key doesn't change.
-          if instance.kind == :pull and get_in(body, ["switch", "phase"]) == "done", do: s.send.(%{event: "showOk", context: context})
-
-        {:ok, _, body} ->
-          s.log.("clawswap: #{body["error"]}")
-          s.send.(%{event: "showAlert", context: context})
-
-        {:error, _} ->
-          s.send.(%{event: "showAlert", context: context})
-      end
-
+      # A switch or pull answers once the watcher has fetched (up to a minute), so it runs beside the
+      # deck: the keys keep redrawing (to "Fetching", then each step) and OpenDeck's events keep coming.
+      request(context, {:pressed, instance.kind}, fn -> s.fetch.(:post, url <> path, body) end)
       schedule(s, 0)
     end
+  end
+
+  defp pressed(context, kind, answer, s) do
+    case answer do
+      {:ok, status, body} when status in 200..299 ->
+        # Nothing new: a tick, since the key doesn't change.
+        if kind == :pull and get_in(body, ["switch", "phase"]) == "done", do: s.send.(%{event: "showOk", context: context})
+
+      {:ok, _, body} ->
+        s.log.("clawswap: #{body["error"]}")
+        s.send.(%{event: "showAlert", context: context})
+
+      {:error, _} ->
+        s.send.(%{event: "showAlert", context: context})
+    end
+
+    schedule(s, 0)
+  end
+
+  # Runs `fun` (a POST to the watcher) in a process of its own and sends the deck `{tag, context, answer}`.
+  defp request(context, tag, fun) do
+    me = self()
+
+    Task.start(fn ->
+      answer =
+        try do
+          fun.()
+        catch
+          kind, reason -> {:error, {kind, reason}}
+        end
+
+      send(me, {:answer, tag, context, answer})
+    end)
   end
 
   defp open_claude(context, s) do
@@ -451,15 +481,20 @@ defmodule Clawswap.Deck do
       s.send.(%{event: "showAlert", context: context})
     else
       branch = if instance.kind == :branch, do: entry["branch"]
+      request(context, :claude, fn -> s.fetch.(:post, "#{url_of(instance, s.url)}/claude", %{branch: branch}) end)
+    end
 
-      case s.fetch.(:post, "#{url_of(instance, s.url)}/claude", %{branch: branch}) do
-        {:ok, 200, _} ->
-          s.send.(%{event: "showOk", context: context})
+    s
+  end
 
-        other ->
-          with {:ok, _, body} <- other, do: s.log.("clawswap: #{body["error"]}")
-          s.send.(%{event: "showAlert", context: context})
-      end
+  defp claude_opened(context, answer, s) do
+    case answer do
+      {:ok, 200, _} ->
+        s.send.(%{event: "showOk", context: context})
+
+      other ->
+        with {:ok, _, body} <- other, do: s.log.("clawswap: #{body["error"]}")
+        s.send.(%{event: "showAlert", context: context})
     end
 
     s
@@ -473,7 +508,11 @@ defmodule Clawswap.Deck do
         :post -> {String.to_charlist(url), [], ~c"application/json", JSON.encode!(body)}
       end
 
-    case :httpc.request(method, request, [timeout: 120_000], body_format: :binary) do
+    # A GET (the state, every second) gives up soon, so a stuck daemon shows "Not running" rather than
+    # holding every key; a POST waits for the watcher's fetch and steps.
+    timeout = if method == :get, do: @get_timeout_ms, else: 120_000
+
+    case :httpc.request(method, request, [timeout: timeout, connect_timeout: 3_000], body_format: :binary) do
       {:ok, {{_, status, _}, _, text}} ->
         case JSON.decode(text) do
           {:ok, map} -> {:ok, status, map}
