@@ -27,4 +27,10 @@ defmodule Clawswap.ZellijTest do
     assert Zellij.version_ok?([1, 0, 0])
     refute Zellij.version_ok?(nil)
   end
+
+  test "zellij's actions look for the session's sockets where the shell it was registered from does" do
+    host = %{"XDG_RUNTIME_DIR" => "/run/user/1000", "TMPDIR" => "/var/folders/x/T/", "PATH" => "/bin"}
+    assert Zellij.socket_env(%{host_env: host}) == [{"ZELLIJ_SOCKET_DIR", nil}, {"XDG_RUNTIME_DIR", "/run/user/1000"}, {"TMPDIR", "/var/folders/x/T/"}]
+    assert Zellij.socket_env(%{host_env: nil}) == []
+  end
 end

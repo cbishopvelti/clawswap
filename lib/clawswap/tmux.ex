@@ -162,7 +162,7 @@ defmodule Clawswap.Tmux do
     %{
       stop: fn name, note ->
         server = project.servers[name]
-        respawn.(name, ["sh", "-c", ~s(printf '%s\\n' "$1"; exec sleep infinity), "sh", note], Path.expand(server.cwd, project.root))
+        respawn.(name, Clawswap.Multiplexer.hold(note), Path.expand(server.cwd, project.root))
         if server.port, do: Ports.free_port(server.port, log)
         :ok
       end,

@@ -133,12 +133,27 @@ defmodule Clawswap.Zellij do
     """
   end
 
+  # Where zellij looks for its sessions' sockets: ZELLIJ_SOCKET_DIR, else XDG_RUNTIME_DIR (Linux), else
+  # TMPDIR (macOS, whose TMPDIR is per user and missing over ssh). Taken from the shell the project was
+  # registered from, as tmux's TMUX is, since the daemon may have been started from another, which sees
+  # none of this session's sockets ("There is no active session!").
+  @socket_vars ~w(ZELLIJ_SOCKET_DIR XDG_RUNTIME_DIR TMPDIR)
+
+  @doc false
+  def socket_env(project) do
+    case project[:host_env] do
+      nil -> []
+      host -> for name <- @socket_vars, do: {name, host[name]}
+    end
+  end
+
   @doc """
   `%{stop: fn name, note -> ... end, start: fn name -> ... end}` for the watcher: replaces a server's
   pane in place, with a note while the switch runs, then with the server again.
   """
   def servers(project, log \\ &IO.puts/1) do
-    action = fn args -> Run.capture!("zellij", ["--session", project.session, "action" | args]) end
+    sockets = socket_env(project)
+    action = fn args -> Run.capture!("zellij", ["--session", project.session, "action" | args], env: sockets) end
 
     # A pane's id is found again each time, since replacing a pane gives the new one a new id.
     find_pane = fn name ->
@@ -158,7 +173,7 @@ defmodule Clawswap.Zellij do
     %{
       stop: fn name, note ->
         server = project.servers[name]
-        replace.(name, ["sh", "-c", ~s(printf '%s\\n' "$1"; exec sleep infinity), "sh", note], Path.expand(server.cwd, project.root))
+        replace.(name, Clawswap.Multiplexer.hold(note), Path.expand(server.cwd, project.root))
         if server.port, do: Ports.free_port(server.port, log)
         :ok
       end,

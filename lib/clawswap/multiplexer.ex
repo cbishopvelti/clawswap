@@ -19,6 +19,13 @@ defmodule Clawswap.Multiplexer do
   def cli, do: Path.join(@tool, "bin/clawswap")
 
   @doc """
+  The command a server's pane shows while a switch runs: `note`, then nothing until the pane is replaced.
+  `tail -f /dev/null`, not `sleep infinity`: macOS's and the BSDs' `sleep` don't take `infinity` (it exits
+  with its usage, leaving the pane dead), and one process that a signal ends, unlike a loop of sleeps.
+  """
+  def hold(note), do: ["sh", "-c", ~s(printf '%s\\n' "$1"; exec tail -f /dev/null), "sh", note]
+
+  @doc """
   A server's pane command: its command through `keep/0`, under `env` with the server's
   `Clawswap.Ports.marker/2`, which the server's processes (and the shell `keep` leaves, so a restart from
   there too) inherit. That's how the port it listens on is found when it had to take another.
