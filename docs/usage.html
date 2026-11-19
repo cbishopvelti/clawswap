@@ -113,7 +113,8 @@ it changed:</p>
     <code>.zfunc</code> counts, so nothing is added then.</li>
   <li>fish: <code>~/.config/fish/completions/clawswap.fish</code>, which fish reads by itself.</li>
 </ul>
-<p>Then open a new terminal. The script is a copy of the command list, so <code>clawswap reload</code> writes the
+<p>Then run <code>exec zsh</code> (or bash, fish), as install prints, or open a new terminal: <code>source ~/.zshrc</code>
+doesn't reload completion in a shell that has run <code>compinit</code> already. The script is a copy of the command list, so <code>clawswap reload</code> writes the
 installed ones again once it has compiled (<code>clawswap completion refresh</code> does just that), adding the
 startup file's line too if it's missing, and a command added since completes too. <code>clawswap completion bash</code> (or zsh, fish) prints the script, to save
 somewhere else.</p>

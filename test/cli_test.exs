@@ -138,6 +138,9 @@ defmodule Clawswap.CLITest do
     assert File.read!(bash) =~ "up reload"
     assert File.read!(path) =~ "'reload:Reload'"
     refute File.exists?(Completion.path("fish", env))
+
+    assert Completion.restart_hint("zsh") =~ "\n    exec zsh\n"
+    assert Enum.map(Completion.shells(), &Completion.shell_of(Completion.path(&1, env))) == Completion.shells()
   end
 
   @tag :tmp_dir

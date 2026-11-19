@@ -141,6 +141,22 @@ defmodule Clawswap.CLI.Completion do
     end
   end
 
+  @doc """
+  What to run so the shell you're in picks up `shell`'s completion: a new shell in its place (sourcing the
+  startup file again doesn't reload zsh's completion, which compinit has set up already).
+  """
+  def restart_hint(shell),
+    do: "Run this (or open a new terminal) for Tab to complete clawswap's commands:\n\n    exec #{shell}\n"
+
+  @doc "The shell whose completion `path` is (one `path/2` gives)."
+  def shell_of(path) do
+    cond do
+      String.ends_with?(path, ".fish") -> "fish"
+      Path.basename(path) == "_clawswap" -> "zsh"
+      true -> "bash"
+    end
+  end
+
   defp write(shell, commands, env) do
     path = path(shell, env)
     File.mkdir_p!(Path.dirname(path))
