@@ -4,8 +4,9 @@ defmodule Clawswap.CLI.Completion do
   commands, for `switch` the branches on origin, read with git in the repo you're in so completing
   doesn't have to start mix, and for `up` the override configs (clawswap.<name>.yml) in the folder you're in.
 
-  `clawswap completion install` saves the script where the shell finds it, and `clawswap reload` writes the
-  saved ones again, so a new command completes once clawswap has reloaded.
+  `clawswap completion install` saves the script where the shell finds it and adds what the shell's startup
+  file needs to find it (zsh's $fpath line, before compinit), and `clawswap reload` writes the saved ones
+  again, so a new command completes once clawswap has reloaded.
   """
 
   @shells ~w(bash zsh fish)
@@ -121,17 +122,23 @@ defmodule Clawswap.CLI.Completion do
   end
 
   @doc """
-  Saves `shell`'s script where it loads completion from, and returns `{path, notes}`: what else the shell
-  needs, if anything, before Tab completes in a new terminal.
+  Saves `shell`'s script where it loads completion from, and returns `{path, changes}`: what it changed in
+  the shell's startup file so a new terminal finds the script (nothing when that's set up already).
   """
   def install(shell, commands, env \\ System.get_env()) do
     path = write(shell, commands, env)
-    {path, notes(shell, path, env)}
+    {path, set_up(shell, path, env)}
   end
 
-  @doc "Writes the scripts that are installed again (with `commands` as they are now), and returns their paths."
+  @doc """
+  Writes the scripts that are installed again (with `commands` as they are now), making sure each shell's
+  startup file still finds them, and returns `[{path, changes}]`.
+  """
   def refresh(commands, env \\ System.get_env()) do
-    for shell <- @shells, File.exists?(path(shell, env)), do: write(shell, commands, env)
+    for shell <- @shells, File.exists?(path(shell, env)) do
+      path = write(shell, commands, env)
+      {path, set_up(shell, path, env)}
+    end
   end
 
   defp write(shell, commands, env) do
@@ -141,32 +148,85 @@ defmodule Clawswap.CLI.Completion do
     path
   end
 
+  # Marks the lines clawswap adds to a startup file, so it can tell they're there.
+  @marker "# Tab completion for clawswap (added by clawswap completion install)"
+
   @bash_completion ~w(/usr/share/bash-completion/bash_completion /etc/bash_completion
     /opt/homebrew/etc/profile.d/bash_completion.sh /usr/local/etc/profile.d/bash_completion.sh)
 
-  # bash reads that folder only through the bash-completion package; zsh only once the folder is on $fpath.
-  defp notes("bash", path, _env) do
-    if Enum.any?(@bash_completion, &File.exists?/1),
-      do: [],
-      else: ["bash-completion doesn't seem to be installed, so add this to ~/.bashrc: source #{path}"]
+  # bash reads that folder by itself only through the bash-completion package, so without it ~/.bashrc
+  # sources the script.
+  defp set_up("bash", path, env) do
+    bashrc = Path.join(home(env), ".bashrc")
+    text = read(bashrc)
+
+    cond do
+      Enum.any?(@bash_completion, &File.exists?/1) ->
+        []
+
+      text =~ @marker or text =~ ~r/^[^#\n]*(source|\.)\s+\S*bash-completion\/completions\/clawswap/m ->
+        []
+
+      true ->
+        line = "source #{tilde(path, env)}"
+        File.write!(bashrc, append(text, [@marker, line]))
+        ["Added #{line} to #{bashrc} (bash-completion isn't installed, so bash doesn't read that folder by itself)"]
+    end
   end
 
-  defp notes("zsh", path, env) do
+  # A line (not a comment) that runs compinit, or sources a framework that does.
+  @runs_compinit ~r/^[^#]*(compinit|oh-my-zsh\.sh|zprezto|antigen|zinit|zplug|antidote|zimfw)/
+
+  # zsh reads the script once its folder is on $fpath, which has to be set before compinit (or the
+  # framework that runs it, like oh-my-zsh) runs. macOS's zsh doesn't run compinit unless .zshrc does.
+  defp set_up("zsh", path, env) do
     zshrc = Path.join(env["ZDOTDIR"] || home(env), ".zshrc")
-    folder = Path.dirname(path)
+    text = read(zshrc)
+    folder = tilde(Path.dirname(path), env)
+    fpath = "fpath=(#{folder} $fpath)"
 
-    on_fpath? =
-      case File.read(zshrc) do
-        {:ok, text} -> text =~ ".zfunc"
-        _ -> false
+    if text =~ @marker or text =~ ~r/^[^#\n]*fpath[^#\n]*\.zfunc/m do
+      []
+    else
+      lines = String.split(text, "\n")
+
+      case Enum.find_index(lines, &(&1 =~ @runs_compinit)) do
+        nil ->
+          File.write!(zshrc, append(text, [@marker, fpath, "autoload -Uz compinit && compinit"]))
+          ["Added #{fpath} and compinit to the end of #{zshrc} (it didn't run compinit, which zsh's completion needs)"]
+
+        index ->
+          {before, rest} = Enum.split(lines, index)
+          File.write!(zshrc, Enum.join(before ++ [@marker, fpath] ++ rest, "\n"))
+          ["Added #{fpath} to #{zshrc}, before: #{String.trim(hd(rest))}"]
       end
-
-    if on_fpath?,
-      do: [],
-      else: ["Add this to #{zshrc}, before compinit (or before oh-my-zsh is sourced): fpath=(#{folder} $fpath)"]
+    end
   end
 
-  defp notes("fish", _path, _env), do: []
+  defp set_up("fish", _path, _env), do: []
+
+  defp read(file) do
+    case File.read(file) do
+      {:ok, text} -> text
+      {:error, _} -> ""
+    end
+  end
+
+  # `text` with `lines` after it, a blank line between.
+  defp append("", lines), do: Enum.join(lines, "\n") <> "\n"
+
+  defp append(text, lines) do
+    text = if String.ends_with?(text, "\n"), do: text, else: text <> "\n"
+    text <> "\n" <> Enum.join(lines, "\n") <> "\n"
+  end
+
+  # `path` starting with ~ when it's in the home folder, as people write it in a startup file.
+  defp tilde(path, env) do
+    case Path.relative_to(path, home(env)) do
+      ^path -> path
+      relative -> "~/" <> relative
+    end
+  end
 
   defp home(env), do: env["HOME"] || System.user_home!()
   defp data_home(env), do: env["XDG_DATA_HOME"] || Path.join([home(env), ".local", "share"])

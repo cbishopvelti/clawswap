@@ -115,21 +115,67 @@ defmodule Clawswap.CLITest do
     assert Completion.login_shell(env) == "zsh"
     assert Completion.login_shell(%{"SHELL" => "/bin/tcsh"}) == nil
 
-    {path, notes} = Completion.install("zsh", [{"up", "Start"}], env)
+    {path, [change]} = Completion.install("zsh", [{"up", "Start"}], env)
     assert path == Path.join(home, ".zfunc/_clawswap")
-    assert [note] = notes
-    assert note =~ "fpath=(#{home}/.zfunc $fpath)"
+    assert change =~ "fpath=(~/.zfunc $fpath) and compinit to the end"
+    zshrc = File.read!(Path.join(home, ".zshrc"))
+    assert zshrc =~ ~r/^fpath=\(~\/\.zfunc \$fpath\)\nautoload -Uz compinit && compinit\n$/m
 
-    File.write!(Path.join(home, ".zshrc"), "fpath=(~/.zfunc $fpath)\n")
+    # Once it's there, installing again changes nothing.
     assert {^path, []} = Completion.install("zsh", [{"up", "Start"}], env)
+    assert File.read!(Path.join(home, ".zshrc")) == zshrc
 
-    {bash, _} = Completion.install("bash", [{"up", "Start"}], env)
+    {bash, bash_changes} = Completion.install("bash", [{"up", "Start"}], env)
     assert bash == Path.join(home, ".local/share/bash-completion/completions/clawswap")
 
-    assert Completion.refresh([{"up", "Start"}, {"reload", "Reload"}], env) == [bash, path]
+    # Without the bash-completion package ~/.bashrc sources the script.
+    if bash_changes != [] do
+      assert File.read!(Path.join(home, ".bashrc")) =~ "\nsource ~/.local/share/bash-completion/completions/clawswap\n"
+      assert {_, []} = Completion.install("bash", [{"up", "Start"}], env)
+    end
+
+    assert [{^bash, []}, {^path, []}] = Completion.refresh([{"up", "Start"}, {"reload", "Reload"}], env)
     assert File.read!(bash) =~ "up reload"
     assert File.read!(path) =~ "'reload:Reload'"
     refute File.exists?(Completion.path("fish", env))
+  end
+
+  @tag :tmp_dir
+  test "puts zsh's fpath line before compinit or the framework that runs it", %{tmp_dir: home} do
+    env = %{"HOME" => home}
+    zshrc = Path.join(home, ".zshrc")
+
+    File.write!(zshrc, """
+    # compinit is run by oh-my-zsh
+    export ZSH="$HOME/.oh-my-zsh"
+    plugins=(git)
+    source $ZSH/oh-my-zsh.sh
+    alias g=git
+    """)
+
+    assert {_, [change]} = Completion.install("zsh", [], env)
+    assert change =~ "before: source $ZSH/oh-my-zsh.sh"
+
+    assert File.read!(zshrc) =~
+             "plugins=(git)\n# Tab completion for clawswap (added by clawswap completion install)\n" <>
+               "fpath=(~/.zfunc $fpath)\nsource $ZSH/oh-my-zsh.sh\nalias g=git\n"
+
+    File.write!(zshrc, "autoload -Uz compinit\ncompinit\n")
+    assert {_, [_]} = Completion.install("zsh", [], env)
+    assert File.read!(zshrc) =~ ~r/\Afpath=|\A# Tab completion/
+
+    # An fpath line the person wrote counts; reload adds the line for a script installed before.
+    File.write!(zshrc, "fpath+=~/.zfunc\ncompinit\n")
+    assert {_, []} = Completion.install("zsh", [], env)
+    File.write!(zshrc, "compinit\n")
+    assert [{_, [_]}] = Completion.refresh([], env)
+    assert File.read!(zshrc) =~ "fpath=(~/.zfunc $fpath)\ncompinit\n"
+
+    # With ZDOTDIR, zsh reads .zshrc from there.
+    zdotdir = Path.join(home, "zsh")
+    File.mkdir_p!(zdotdir)
+    assert {_, [_]} = Completion.install("zsh", [], Map.put(env, "ZDOTDIR", zdotdir))
+    assert File.exists?(Path.join(zdotdir, ".zshrc"))
   end
 
   test "talks to this checkout's own project, and fails without a config rather than use the selected one" do
