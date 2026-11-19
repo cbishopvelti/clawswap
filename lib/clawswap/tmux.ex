@@ -53,9 +53,10 @@ defmodule Clawswap.Tmux do
   The tmux commands that build the session, as one argument list joined by ";": the servers stacked on
   the left, the watcher and the other panes on the right, as zellij's layout. The watcher finds the
   servers' panes by these names. Each command names its target, since run from inside tmux they would
-  otherwise act on the pane they were run from.
+  otherwise act on the pane they were run from. With a `gate`, the servers wait for it to go
+  (`Clawswap.Multiplexer.gated/2`).
   """
-  def commands(project) do
+  def commands(project, gate \\ nil) do
     pane = fn
       # A pane with no command opens tmux's default shell there.
       name, %{command: nil, cwd: cwd} -> {name, ["-c", Path.expand(cwd, project.root)]}
@@ -64,7 +65,12 @@ defmodule Clawswap.Tmux do
 
     servers =
       Enum.map(project.server_names, fn name ->
-        {name, ["-c", Path.expand(project.servers[name].cwd, project.root), "--" | Clawswap.Multiplexer.server_command(project, name)]}
+        {name,
+         [
+           "-c",
+           Path.expand(project.servers[name].cwd, project.root),
+           "--" | Clawswap.Multiplexer.gated(Clawswap.Multiplexer.server_command(project, name), gate)
+         ]}
       end)
 
     # From the config's folder, so the watcher loads the same config.
@@ -124,8 +130,8 @@ defmodule Clawswap.Tmux do
         ["tmux", if(inside, do: "switch-client", else: "attach-session"), "-t", target(project)]
 
       _ ->
-        catch_up.()
-        [["new-session" | spec] | commands] = commands(project)
+        gate = catch_up.(true)
+        [["new-session" | spec] | commands] = commands(project, gate)
         spec = if inside, do: ["-d" | spec], else: spec
         switch = if inside, do: [["switch-client", "-t", target(project)]], else: []
         ["tmux" | join([["new-session" | spec] | commands] ++ switch)]

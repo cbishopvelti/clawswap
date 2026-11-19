@@ -15,6 +15,12 @@ defmodule Clawswap.ZellijTest do
     assert Zellij.layout(Config.normalise([panes: [q: [command: ~s(echo "hi")]]], root: "/r")) =~ ~s(args "echo \\"hi\\"")
   end
 
+  test "with a gate, the servers wait for it and the other panes don't" do
+    kdl = Zellij.layout(Config.normalise(TestRepo.bmx_config(), root: "/work/bmx"), "/work/bmx/.git/clawswap.catching-up")
+    assert kdl =~ ~r{pane name="phx" command="sh" .*\n\s+args "-c" .* "/work/bmx/.git/clawswap.catching-up" .* "env" "CLAWSWAP_SERVER=bmx/phx"}
+    refute kdl =~ ~r{pane name="clawswap" command="sh"}
+  end
+
   test "a pane with no command is a plain shell" do
     kdl = Zellij.layout(Config.normalise([panes: [shell: [], sub: [cwd: "web"]]], root: "/r"))
     assert kdl =~ ~s(pane name="shell" cwd="/r"\n)

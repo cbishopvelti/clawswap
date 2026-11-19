@@ -300,6 +300,12 @@ defmodule Clawswap.Config do
   end
 
   @doc """
+  The file that holds a new session's servers back while its clawswap pane catches up (see `Clawswap.CLI`):
+  `up` writes it, the pane removes it once the steps are done, and the servers' panes start when it's gone.
+  """
+  def catch_up_gate(project), do: String.replace_suffix(project.local_file, ".json", ".catching-up")
+
+  @doc """
   Remembers that the steps have run for this commit, all but `owed` (steps or their names): those failed or
   didn't get to run (a step that failed, the ones after it, or a run stopped part way), so the next
   `pending_steps/1` runs them again even though nothing changed.
