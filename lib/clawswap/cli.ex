@@ -901,15 +901,18 @@ defmodule Clawswap.CLI do
       true -> :ok
     end
 
-    {path, notes} = Clawswap.CLI.Completion.install(shell, commands())
+    {path, changes} = Clawswap.CLI.Completion.install(shell, commands())
     IO.puts("Saved #{shell} completion to #{path}; clawswap reload keeps it up to date")
-    Enum.each(notes, &IO.puts/1)
+    Enum.each(changes, &IO.puts/1)
     IO.puts("Open a new terminal for Tab to complete clawswap's commands")
   end
 
   # clawswap reload runs this once it has compiled, so the commands are the new ones.
   defp refresh_completion do
-    for path <- Clawswap.CLI.Completion.refresh(commands()), do: IO.puts("Updated the completion in #{path}")
+    for {path, changes} <- Clawswap.CLI.Completion.refresh(commands()) do
+      IO.puts("Updated the completion in #{path}")
+      Enum.each(changes, &IO.puts/1)
+    end
   end
 
   defp pull do

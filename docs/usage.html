@@ -98,18 +98,24 @@ does anything, with the closest it does take (<code>clawswap walk --headles</cod
 and for <code>up</code> the <a href="configuration.html#overrides">override configs</a> in the folder you're in.
 Set it up once:</p>
 <pre><code>clawswap completion install        # for the shell $SHELL names; or: clawswap completion install zsh</code></pre>
-<p>That saves the script where the shell looks for it, and says if the shell needs one more line first:</p>
+<p>That saves the script where the shell looks for it, and adds the line the shell's startup file needs to find
+it, if it isn't there already (each under a <code># Tab completion for clawswap</code> comment), and prints what
+it changed:</p>
 <ul>
   <li>bash: <code>~/.local/share/bash-completion/completions/clawswap</code>, which bash reads through the
-    bash-completion package. Without it, add <code>source ~/.local/share/bash-completion/completions/clawswap</code>
-    to <code>~/.bashrc</code>.</li>
-  <li>zsh: <code>~/.zfunc/_clawswap</code>. Put <code>fpath=(~/.zfunc $fpath)</code> in <code>~/.zshrc</code>
-    before <code>compinit</code> (or before oh-my-zsh is sourced).</li>
+    bash-completion package. Without it, <code>source ~/.local/share/bash-completion/completions/clawswap</code>
+    goes at the end of <code>~/.bashrc</code>.</li>
+  <li>zsh: <code>~/.zfunc/_clawswap</code>, and <code>fpath=(~/.zfunc $fpath)</code> in <code>~/.zshrc</code>
+    (or <code>$ZDOTDIR/.zshrc</code>) just before the line that runs <code>compinit</code> or sources oh-my-zsh
+    (or prezto, antigen, zinit, zplug, antidote, zimfw). When <code>.zshrc</code> doesn't run
+    <code>compinit</code> at all, as macOS's doesn't by default, it goes at the end with
+    <code>autoload -Uz compinit &amp;&amp; compinit</code>. An <code>fpath</code> line of your own that names
+    <code>.zfunc</code> counts, so nothing is added then.</li>
   <li>fish: <code>~/.config/fish/completions/clawswap.fish</code>, which fish reads by itself.</li>
 </ul>
 <p>Then open a new terminal. The script is a copy of the command list, so <code>clawswap reload</code> writes the
-installed ones again once it has compiled (<code>clawswap completion refresh</code> does just that), and a command
-added since completes too. <code>clawswap completion bash</code> (or zsh, fish) prints the script, to save
+installed ones again once it has compiled (<code>clawswap completion refresh</code> does just that), adding the
+startup file's line too if it's missing, and a command added since completes too. <code>clawswap completion bash</code> (or zsh, fish) prints the script, to save
 somewhere else.</p>
 
 <h2 id="up">clawswap up</h2>
