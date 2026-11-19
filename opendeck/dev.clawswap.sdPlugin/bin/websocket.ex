@@ -2,11 +2,14 @@ defmodule Clawswap.WebSocket do
   @moduledoc """
   Just enough of a WebSocket client (RFC 6455) to talk to OpenDeck on localhost: the handshake, masked
   text frames out, and unmasked frames in. OpenDeck's messages are small JSON texts.
+
+  It uses nothing of `:crypto`: OpenDeck starts the plugin on whatever Erlang its PATH has, and one built
+  without OpenSSL has no `:crypto` at all. The key and masks needn't be secret on localhost.
   """
 
   @doc "Connects and upgrades: `{:ok, socket, rest}`, where rest is whatever came after the handshake."
   def connect(host, port, path \\ "/") do
-    key = Base.encode64(:crypto.strong_rand_bytes(16))
+    key = Base.encode64(:rand.bytes(16))
 
     with {:ok, socket} <- :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: false], 5000),
          :ok <-
@@ -36,7 +39,7 @@ defmodule Clawswap.WebSocket do
   @doc "A masked frame, as a client must send: :text by default, or :pong / :close."
   def frame(payload, opcode \\ :text) do
     code = %{text: 0x1, close: 0x8, ping: 0x9, pong: 0xA}[opcode]
-    mask = :crypto.strong_rand_bytes(4)
+    mask = :rand.bytes(4)
     size = byte_size(payload)
 
     length =
@@ -51,7 +54,9 @@ defmodule Clawswap.WebSocket do
 
   defp apply_mask(payload, <<m::binary-size(4)>>) do
     mask = :binary.copy(m, div(byte_size(payload), 4) + 1) |> binary_part(0, byte_size(payload))
-    :crypto.exor(payload, mask)
+    size = byte_size(payload)
+    # One big-integer xor, in place of :crypto.exor/2.
+    <<Bitwise.bxor(:binary.decode_unsigned(payload), :binary.decode_unsigned(mask))::size(size)-unit(8)>>
   end
 
   @doc """

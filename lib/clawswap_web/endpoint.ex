@@ -7,6 +7,7 @@ defmodule ClawswapWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :clawswap
 
   plug(:local_host_only)
+  plug(ClawswapWeb.Embeddable)
 
   # Before the parsers, which would take the API's JSON bodies.
   plug(ClawswapWeb.Api)

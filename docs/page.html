@@ -127,6 +127,10 @@ adds reload, open-in-a-tab and close buttons. Things to know:</p>
 <ul>
   <li><strong>Framing.</strong> Neither clawswap's endpoint nor Hologram sets <code>X-Frame-Options</code> or
     <code>frame-ancestors</code>, so the page frames.</li>
+  <li><strong>Cross-origin isolated apps.</strong> An app that sends <code>Cross-Origin-Embedder-Policy: require-corp</code>
+    (for <code>SharedArrayBuffer</code>) can only frame pages that opt in, so clawswap sends
+    <code>Cross-Origin-Embedder-Policy: require-corp</code> and <code>Cross-Origin-Resource-Policy: cross-origin</code>
+    on everything. If your app has a <code>Content-Security-Policy</code>, allow clawswap's origin in <code>frame-src</code>.</li>
   <li><strong>Use <code>localhost</code> for both.</strong> Hologram's session cookie is <code>SameSite=Lax</code>.
     <code>localhost:27391</code> and <code>localhost:27390</code> are the same site (ports don't count), so the framed page
     gets its cookie. Mixing <code>localhost</code> and <code>127.0.0.1</code> makes them cross-site.</li>

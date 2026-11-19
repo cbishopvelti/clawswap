@@ -512,7 +512,7 @@ defmodule Clawswap.Deck do
     # holding every key; a POST waits for the watcher's fetch and steps.
     timeout = if method == :get, do: @get_timeout_ms, else: 120_000
 
-    case :httpc.request(method, request, [timeout: timeout, connect_timeout: 3_000], body_format: :binary) do
+    case :httpc.request(method, request, [timeout: timeout, connect_timeout: 3_000, ssl: [verify: :verify_none]], body_format: :binary) do
       {:ok, {{_, status, _}, _, text}} ->
         case JSON.decode(text) do
           {:ok, map} -> {:ok, status, map}
