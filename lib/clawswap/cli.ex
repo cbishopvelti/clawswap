@@ -314,19 +314,60 @@ defmodule Clawswap.CLI do
 
   # In the session's clawswap pane: catches up when `up` left it to do (its gate is there), then lets the
   # servers' panes start. Run again after a Ctrl+C there (keep's Up arrow), it carries on from where it got.
+  # The pane follows the project's log (without printing it) while it does: the daemon drops a project no
+  # pane follows within a couple of minutes of `up`, which took its page and Stream Deck keys away mid
+  # catch-up.
   defp catch_up_in_pane(project) do
     gate = Config.catch_up_gate(project)
 
     if File.exists?(gate) do
+      hold = hold_project(project)
+
       try do
         catch_up(project)
       after
         File.rm(gate)
+        release_project(hold)
       end
 
       IO.puts("Starting the servers")
     end
   end
+
+  # Registers the project as its pane and follows its log in a process of its own, discarding it, so the
+  # daemon keeps the project while the pane is busy. The watch loop that follows does the rest (and says
+  # what's wrong when the daemon can't be reached).
+  defp hold_project(project) do
+    ensure_daemon(project)
+
+    case register(project, true) do
+      {:ok, _} ->
+        url = String.to_charlist("http://127.0.0.1:#{project.port}/p/#{project.id}/log")
+
+        spawn(fn ->
+          case :httpc.request(:get, {url, []}, [timeout: :infinity], sync: false, stream: :self) do
+            {:ok, ref} -> discard_log(ref)
+            {:error, _} -> :ok
+          end
+        end)
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  defp discard_log(ref) do
+    receive do
+      :release -> :httpc.cancel_request(ref)
+      {:http, {^ref, :stream_end, _}} -> :ok
+      {:http, {^ref, {_, _, _}}} -> :ok
+      {:http, {^ref, {:error, _}}} -> :ok
+      {:http, _} -> discard_log(ref)
+    end
+  end
+
+  defp release_project(nil), do: :ok
+  defp release_project(pid), do: send(pid, :release)
 
   # Runs the config's prepare steps (containers and the like), then brings the checkout up to date with
   # HEAD before the servers start, for whatever changed since the steps last ran (a pull or checkout done
