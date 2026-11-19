@@ -3,6 +3,13 @@ defmodule Clawswap.TmuxTest do
 
   alias Clawswap.{Config, Multiplexer, TestRepo, Tmux, Zellij}
 
+  test "with a gate, the servers wait for it" do
+    [first | _] = Tmux.commands(Config.normalise(TestRepo.bmx_config(), root: "/work/bmx"), "/g")
+
+    assert ["new-session", "-s", "bmx", "-n", "bmx", "-c", "/work/bmx/backend", "--", "sh", "-c", _, "sh", "/g", _note, "env", "CLAWSWAP_SERVER=bmx/phx" | _] =
+             first
+  end
+
   test "builds the servers on the left, the watcher and the other panes on the right" do
     cmds = Tmux.commands(Config.normalise(TestRepo.bmx_config(), root: "/work/bmx"))
     names = for ["set-option", "-p", "-t", "=bmx:", "@clawswap", n] <- cmds, do: n

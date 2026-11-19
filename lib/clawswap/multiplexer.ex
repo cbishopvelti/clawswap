@@ -4,7 +4,9 @@ defmodule Clawswap.Multiplexer do
 
     * `check/0`: `:ok`, or `{:error, message}` when it's missing or too old
     * `up/2`: the command (program and arguments) that opens the session, or attaches to it when it's
-      running; the function it's given gets the checkout ready, and is called only for a new session
+      running; the function it's given gets the checkout ready, and is called only for a new session, with
+      whether the session's clawswap pane can do that instead (true for a generated layout). It returns the
+      gate (`Clawswap.Config.catch_up_gate/1`) the servers' panes wait on, or nil to start them at once
     * `layout/1`: what `clawswap layout` prints
     * `servers/2`: the watcher's `%{stop:, start:}` for the servers' panes
     * `kill_session/1`: ends the session of that name (`clawswap down`): `:ok`, or `:none`
@@ -32,6 +34,23 @@ defmodule Clawswap.Multiplexer do
   """
   def server_command(project, name),
     do: ["env", Clawswap.Ports.marker(project, name), keep() | List.wrap(project.servers[name].command)]
+
+  @doc """
+  A server's pane command in a new session's layout: while `gate` is there (the clawswap pane is still
+  catching up), it says so and waits, then runs `command`. Ctrl+C stops the wait and starts the server now.
+  With no gate, just `command`.
+  """
+  def gated(command, nil), do: command
+
+  def gated(command, gate) do
+    # One line: zellij's layout indents every line of a pane's arguments.
+    script =
+      ~s(if [ -e "$1" ]; then printf '%s\\n' "$2"; trap 'skip=1' INT; ) <>
+        ~s(while [ -z "$skip" ] && [ -e "$1" ]; do sleep 1; done; trap - INT; fi; shift 2; exec "$@")
+
+    note = "Waiting for clawswap to catch up (see the clawswap pane). Ctrl+C starts the server now."
+    ["sh", "-c", script, "sh", gate, note | command]
+  end
 
   @doc """
   The session's clawswap pane's command: `clawswap watch`, with the override configs `up` was given (as

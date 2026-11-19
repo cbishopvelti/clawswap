@@ -291,6 +291,43 @@ defmodule Clawswap.CLI do
     run_steps(project, steps, &Config.mark_updated(project, head, &1))
   end
 
+  # For a new session: with `in_session`, leaves the catch-up to the session's clawswap pane, so the session
+  # opens straight away, and returns the gate its servers wait on (nil when there's nothing to run, so they
+  # start at once). Otherwise catches up here, before the session opens.
+  defp start_catch_up(project, in_session) do
+    gate = Config.catch_up_gate(project)
+    File.rm(gate)
+
+    cond do
+      not in_session ->
+        catch_up(project)
+        nil
+
+      project.prepare == [] and elem(Config.pending_steps(project), 1) == [] ->
+        nil
+
+      true ->
+        File.write!(gate, "")
+        gate
+    end
+  end
+
+  # In the session's clawswap pane: catches up when `up` left it to do (its gate is there), then lets the
+  # servers' panes start. Run again after a Ctrl+C there (keep's Up arrow), it carries on from where it got.
+  defp catch_up_in_pane(project) do
+    gate = Config.catch_up_gate(project)
+
+    if File.exists?(gate) do
+      try do
+        catch_up(project)
+      after
+        File.rm(gate)
+      end
+
+      IO.puts("Starting the servers")
+    end
+  end
+
   # Runs the config's prepare steps (containers and the like), then brings the checkout up to date with
   # HEAD before the servers start, for whatever changed since the steps last ran (a pull or checkout done
   # by hand, or a first run) and any steps the last run didn't finish.
@@ -336,7 +373,7 @@ defmodule Clawswap.CLI do
     # The project's page is up while the session starts (its pane's clawswap watch registers it too).
     ensure_daemon(project)
     register!(project)
-    command = mux.up(project, fn -> catch_up(project) end)
+    command = mux.up(project, &start_catch_up(project, &1))
 
     case System.get_env("CLAWSWAP_EXEC") do
       nil -> fail("Run this through bin/clawswap, which starts the session: " <> Enum.join(command, " "))
@@ -358,6 +395,7 @@ defmodule Clawswap.CLI do
     # once the session has ended, it mustn't keep the project (or a daemon) going.
     parent = parent_pid()
     spawn(fn -> exit_with(parent) end)
+    catch_up_in_pane(project)
     watch_loop(project, 0, parent)
   end
 

@@ -62,14 +62,16 @@ defmodule Clawswap.Zellij do
     if line != nil and not (line =~ "EXITED") do
       ["zellij", "attach", project.session]
     else
-      catch_up.()
+      # Only the generated layout's server panes know to wait for the clawswap pane to catch up: with the
+      # config's own layout, it's done here first.
+      gate = catch_up.(project.layout == nil)
 
       layout =
         if project.layout do
           Path.expand(project.layout, project.root)
         else
           path = String.replace_suffix(project.local_file, ".json", ".kdl")
-          File.write!(path, layout(project))
+          File.write!(path, layout(project, gate))
           path
         end
 
@@ -82,9 +84,10 @@ defmodule Clawswap.Zellij do
 
   @doc """
   The layout `up` opens when the config names none: the servers stacked on the left, the watcher and the
-  other panes on the right. The watcher finds the servers' panes by these names.
+  other panes on the right. The watcher finds the servers' panes by these names. With a `gate`, the servers
+  wait for it to go (`Clawswap.Multiplexer.gated/2`).
   """
-  def layout(project) do
+  def layout(project, gate \\ nil) do
     run = fn name, cwd, [program | args], focus ->
       ~s(pane name=#{kdl(name)} command=#{kdl(program)} cwd=#{kdl(Path.expand(cwd, project.root))}#{if focus, do: " focus=true"} {\n) <>
         ~s(    args #{Enum.map_join(args, " ", &kdl/1)}\n})
@@ -102,7 +105,7 @@ defmodule Clawswap.Zellij do
     servers =
       project.server_names
       |> Enum.with_index()
-      |> Enum.map(fn {n, i} -> run.(n, project.servers[n].cwd, Clawswap.Multiplexer.server_command(project, n), i == 0) end)
+      |> Enum.map(fn {n, i} -> run.(n, project.servers[n].cwd, Clawswap.Multiplexer.gated(Clawswap.Multiplexer.server_command(project, n), gate), i == 0) end)
 
     # From the config's folder, so the watcher loads the same config.
     watcher = pane.("clawswap", %{command: Clawswap.Multiplexer.watch(project), cwd: Path.dirname(project.file)}, servers == [])
