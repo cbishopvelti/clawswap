@@ -121,4 +121,7 @@ jobs:
 
       - run: mix deps.get
       # Every test brings clawswap up, so once one can't, the rest won't either.
-      - run: mix test.integration --max-failures 1
+      - run: |
+          fail=0
+          for i in 1 2 3; do mix test.integration test/integration/stream_deck_test.exs || fail=1; done
+          exit $fail

@@ -35,6 +35,32 @@ defmodule Clawswap.Integration.StreamDeckTest do
   })();
   """
 
+  # TEMP diagnostics: what the page does across the daemon's restart, kept in sessionStorage so a reload keeps it.
+  @probe """
+  (() => {
+    const n = (+sessionStorage.getItem("loads") || 0) + 1; sessionStorage.setItem("loads", n);
+    const log = (m) => { const all = JSON.parse(sessionStorage.getItem("probe") || "[]"); all.push(`${new Date().toISOString().slice(11, 23)} #${n} ${m}`); sessionStorage.setItem("probe", JSON.stringify(all)); };
+    window.probeLog = log;
+    log("load " + location.href);
+    let last = {};
+    setInterval(() => {
+      const now = {sse: window.Hologram?.["sseConnected?"], up: window.clawswapLinkUp, reports: window.fakeDeck?.reports.length, on: !!document.querySelector(".deck-on")};
+      if (JSON.stringify(now) !== JSON.stringify(last)) { last = now; log(JSON.stringify(now)); }
+    }, 50);
+    const f = window.fetch;
+    window.fetch = async (...a) => {
+      const u = String(a[0] && a[0].url || a[0]); const t = Date.now();
+      try { const r = await f(...a); log(`fetch ${u} ${r.status} ${Date.now() - t} ms`); return r; }
+      catch (e) { log(`fetch ${u} ERR ${e} ${Date.now() - t} ms`); throw e; }
+    };
+    const ES = window.EventSource;
+    window.EventSource = class extends ES {
+      constructor(u, o) { super(u, o); log("es new"); this.addEventListener("open", () => log("es open")); this.addEventListener("error", () => log("es error " + this.readyState)); }
+    };
+    addEventListener("beforeunload", () => log("unload"));
+  })();
+  """
+
   setup do
     Integration.compile!()
     project = Integration.up!(Integration.project!(), :tmux)
@@ -80,21 +106,43 @@ defmodule Clawswap.Integration.StreamDeckTest do
     connect_deck()
     keys_drawn()
     sent = js("return fakeDeck.reports.length")
+    js("probeLog('sent ' + arguments[0])", [sent])
 
     say "The daemon stops, and the checkout moves to another branch meanwhile"
+    js("probeLog('stopping')")
     Integration.stop!(project)
+    js("probeLog('stopped')")
     {_, 0} = System.cmd("git", ["checkout", "-q", "claude/new-heading"], cd: project.work, stderr_to_stdout: true)
 
     say "clawswap up starts it again: the open page's deck shows the new branch without waiting for its next beat"
     Integration.up!(project, :tmux, "claude/new-heading")
+    js("probeLog('up returned')")
     # The page reconnects within Hologram's reconnect delay (5 s at most); the deck's own beat (20 s) is
     # what it used to wait for.
-    wait_until(fn -> js("return fakeDeck.reports.length") > sent end, timeout: 10_000, message: "The deck wasn't redrawn")
+    try do
+      wait_until(fn -> js("return fakeDeck.reports.length") > sent end, timeout: 10_000, message: "The deck wasn't redrawn")
+      dump(project, "PASSED")
+    rescue
+      error ->
+        dump(project, "FAILED")
+        reraise error, __STACKTRACE__
+    end
+  end
+
+  defp dump(_project, what) do
+    IO.puts("[probe] #{what} at #{Time.utc_now()}")
+    IO.puts(Enum.join(js("return JSON.parse(sessionStorage.getItem('probe') || '[]')") || [], "\n"))
+    log = Clawswap.CLI.daemon_log(27390)
+    IO.puts("[probe] daemon log #{log}:")
+    IO.puts(log |> File.read!() |> String.split("\n") |> Enum.take(-80) |> Enum.join("\n"))
+  rescue
+    e -> IO.puts("[probe] dump failed: #{inspect(e)}")
   end
 
   # Connects the stand-in deck from the project's page.
   defp connect_deck do
     before_load(@fake_deck)
+    before_load(@probe)
 
     say "Connect a (stand-in) Stream Deck from the page"
     visit url(:clawswap)
