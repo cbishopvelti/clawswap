@@ -102,7 +102,7 @@ defmodule Clawswap.DeckTest do
     # It switches when the key is let go, not before.
     refute_received {:request, :post, _, _}
     Deck.handle(deck, %{"event" => "keyUp", "context" => "a", "payload" => %{}})
-    assert_received {:request, :post, "http://dev/switch", %{branch: "claude-main"}}
+    assert_receive {:request, :post, "http://dev/switch", %{branch: "claude-main"}}
   end
 
   test "holding a key opens its branch's Claude Code thread instead of switching" do
@@ -163,7 +163,7 @@ defmodule Clawswap.DeckTest do
     assert image("s1") =~ ">main<"
     assert image("s2") =~ ">fix<"
     tap_key(deck, "s2")
-    assert_received {:request, :post, "http://shop/switch", %{branch: "fix"}}
+    assert_receive {:request, :post, "http://shop/switch", %{branch: "fix"}}
   end
 
   test "keys pinned to a project use its paths; the others, and the project key, follow the selected one" do
@@ -181,9 +181,9 @@ defmodule Clawswap.DeckTest do
     assert next =~ "shop" and next =~ "Next project"
 
     tap_key(deck, "pinned")
-    assert_received {:request, :post, "http://dev/p/blog/switch", %{branch: "claude-main"}}
+    assert_receive {:request, :post, "http://dev/p/blog/switch", %{branch: "claude-main"}}
     tap_key(deck, "next")
-    assert_received {:request, :post, "http://dev/select", %{next: true}}
+    assert_receive {:request, :post, "http://dev/select", %{next: true}}
   end
 
   test "a key's settings page gets the daemon's projects for its Project menu" do
@@ -280,7 +280,7 @@ defmodule Clawswap.DeckTest do
     assert image("w") =~ "login"
     assert image("b") =~ "claude-main"
     tap_key(deck, "w")
-    assert_received {:request, :post, "http://dev/walk", %{name: "login"}}
+    assert_receive {:request, :post, "http://dev/walk", %{name: "login"}}
   end
 
   test "frames WebSocket messages both ways" do

@@ -116,26 +116,27 @@ defmodule Clawswap.Integration do
   @doc """
   Runs `clawswap up` for the project in `multiplexer` (:zellij or :tmux), inside a pane of the tests' tmux
   server (zellij needs a terminal), and waits until the watcher (on `branch`, main unless the test checked
-  out another) and the app answer. `args` go after `up`, as override config names do. Attach to watch the
-  panes: `tmux -L clawswap-tests attach`.
+  out another) and the app answer. `args` go after `up`, as override config names do; `more_env` is more
+  environment for it (and the daemon it starts). Attach to watch the panes: `tmux -L clawswap-tests attach`.
   """
-  def up!(project, multiplexer, branch \\ "main", args \\ []) do
+  def up!(project, multiplexer, branch \\ "main", args \\ [], more_env \\ []) do
     free_ports()
     # The API paths the tests use are this project's on the daemon (/p/<id>).
     :persistent_term.put({__MODULE__, :id}, project.id)
 
-    env = [
-      # bin/clawswap runs clawswap in dev, as for you, not in the tests' env.
-      {"MIX_ENV", nil},
-      {"TMUX", nil},
-      {"ZELLIJ", nil},
-      {"CLAWSWAP_MULTIPLEXER", to_string(multiplexer)},
-      {"CLAWSWAP_SESSION", project.session},
-      # ▶ on the page runs a walkthrough in the watcher: headless too, unless you're watching.
-      {"CLAWSWAP_HEADLESS", System.get_env("CLAWSWAP_HEADLESS") || "1"},
-      # Nor in a dev Chrome you may have open.
-      {"CLAWSWAP_CHROME_DEBUGGER", "off"}
-    ]
+    env =
+      [
+        # bin/clawswap runs clawswap in dev, as for you, not in the tests' env.
+        {"MIX_ENV", nil},
+        {"TMUX", nil},
+        {"ZELLIJ", nil},
+        {"CLAWSWAP_MULTIPLEXER", to_string(multiplexer)},
+        {"CLAWSWAP_SESSION", project.session},
+        # ▶ on the page runs a walkthrough in the watcher: headless too, unless you're watching.
+        {"CLAWSWAP_HEADLESS", System.get_env("CLAWSWAP_HEADLESS") || "1"},
+        # Nor in a dev Chrome you may have open.
+        {"CLAWSWAP_CHROME_DEBUGGER", "off"}
+      ] ++ more_env
 
     command = Enum.join([Path.join(@tool, "bin/clawswap"), "up" | args], " ")
     tmux!(["new-session", "-d", "-s", "up-" <> project.session, "-x", "200", "-y", "50", "-c", project.work, command], env)
@@ -270,7 +271,8 @@ defmodule Clawswap.Integration do
     end
   end
 
-  defp http_ok?(url) do
+  @doc "Whether `url` answers 200 (on IPv4 or IPv6, as Vite may listen on ::1 only)."
+  def http_ok?(url) do
     :inets.start()
     # Vite binds localhost, which can be ::1 alone (as on GitHub's runners); asked by its IP, it answers 403.
     :httpc.set_options(ipfamily: :inet6fb4)
