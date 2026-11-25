@@ -27,11 +27,19 @@ defmodule ClawswapWeb.BranchesPage do
 
     case Project.whereis(id, :watcher) do
       nil ->
-        put_state(component, id: id, view: nil, server: nil, pending: nil, message: nil)
+        component
+        |> put_state(id: id, view: nil, server: nil, pending: nil, message: nil)
+        |> put_action(:listen)
 
       watcher ->
         view = View.page(Watcher.state(watcher))
-        {put_state(component, id: id, view: view, server: view, pending: nil, message: nil), put_subscription(server, {:clawswap, id})}
+
+        component =
+          component
+          |> put_state(id: id, view: view, server: view, pending: nil, message: nil)
+          |> put_action(:listen)
+
+        {component, put_subscription(server, {:clawswap, id})}
     end
   end
 
@@ -91,6 +99,26 @@ defmodule ClawswapWeb.BranchesPage do
     </div>
     {/if}
     """
+  end
+
+  # On load: Escape tells the parent, so an app showing this page in a dropdown iframe can close it
+  # (docs/page.html#escape). A key pressed in the frame never reaches the app's own listeners. Like
+  # `tell_parent/1`, outside a frame the parent is the page itself, and nothing listens. The listener
+  # stays when Hologram navigates without a reload, so it's added once, and only acts on a project's page.
+  def action(:listen, _params, component) do
+    if JS.get(:window, :clawswapEscapeParent) != true do
+      JS.set(:window, :clawswapEscapeParent, true)
+
+      JS.call(:document, :addEventListener, [
+        "keydown",
+        fn event ->
+          if JS.get(event, :key) == "Escape" and String.starts_with?(JS.get(:location, :pathname), "/p/"),
+            do: JS.call(:parent, :postMessage, [%{clawswap: "escape"}, "*"])
+        end
+      ])
+    end
+
+    component
   end
 
   def action(:state_changed, params, component) do

@@ -142,6 +142,15 @@ adds reload, open-in-a-tab and close buttons. Things to know:</p>
     project you're looking at. It can only while it's loaded, so load the frame with your page and hide it, rather
     than adding it when the menu first opens. An app with no frame at all can put this in its dev layout instead:
     <pre><code>&lt;script src="http://localhost:27390/clawswap-focus.js" data-project="myapp" defer&gt;&lt;/script&gt;</code></pre></li>
+  <li id="escape"><strong>Closing the menu.</strong> Close it on a press anywhere outside it and on Escape. Once you've
+    clicked in the frame, keys go to the framed page and never reach your app's listeners, so the page tells its parent
+    when Escape is pressed in it:
+    <pre><code>{ clawswap: "escape" }</code></pre>
+    <pre><code>addEventListener("message", (e) =&gt; {
+  if (e.origin === "http://localhost:27390" &amp;&amp; e.data?.clawswap === "escape") closeMenu();
+});</code></pre>
+    For a press outside, listen for <code>pointerdown</code> on <code>window</code> in the capture phase, so nothing in
+    your page can stop it, or put a see-through backdrop behind the menu while it's open.</li>
 </ul>
 
 <h3 id="reload">Reloading your app after a switch</h3>

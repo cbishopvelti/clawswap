@@ -1,6 +1,7 @@
 defmodule Clawswap.Integration.ReloadTest do
   # The watcher's page in another app's iframe tells that app when a switch is done (after its servers
-  # listen again), so the app can reload: docs/page.html#reload. The app here is a plain page on another
+  # listen again), so the app can reload (docs/page.html#reload), and when Escape is pressed in it, so the
+  # app can close its menu (docs/page.html#escape). The app here is a plain page on another
   # localhost port that frames the watcher's page and writes down what it hears, so the example app's own
   # reload (Vite's, when its server comes back) doesn't race the check.
   use ExUnit.Case, async: false
@@ -23,9 +24,11 @@ defmodule Clawswap.Integration.ReloadTest do
     <iframe src="http://localhost:27390/p/#{project.id}" title="clawswap"></iframe>
     <script>
       addEventListener("message", (e) => {
-        if (e.origin !== "http://localhost:27390" || e.data?.clawswap !== "switched") return;
+        if (e.origin !== "http://localhost:27390") return;
         const li = document.createElement("li");
-        li.textContent = "Switched to " + e.data.branch;
+        if (e.data?.clawswap === "switched") li.textContent = "Switched to " + e.data.branch;
+        else if (e.data?.clawswap === "escape") li.textContent = "Escape";
+        else return;
         document.getElementById("heard").append(li);
       });
     </script>
@@ -60,5 +63,18 @@ defmodule Clawswap.Integration.ReloadTest do
     see "Switched to claude/new-heading", timeout: 120_000
     assert {:ok, %{"switch" => %{"phase" => "done", "doneAt" => at}}} = Integration.state()
     assert is_integer(at)
+  end
+
+  test "the framed page tells the app about Escape, which never reaches the app's own listeners" do
+    say "Escape pressed in the frame"
+    visit "http://localhost:#{@host_port}/host.html"
+
+    in_frame "iframe[title=clawswap]", fn ->
+      see css("li", text: "new-heading")
+      click css("h1")
+      press(:escape)
+    end
+
+    see css("#heard li", text: "Escape")
   end
 end
