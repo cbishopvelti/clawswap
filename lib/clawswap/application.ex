@@ -37,10 +37,15 @@ defmodule Clawswap.Application do
     Application.put_env(:clawswap, ClawswapWeb.Endpoint, Keyword.merge(endpoint, http: http, server: true))
     :persistent_term.put({__MODULE__, :port}, port)
 
+    # How long a project `clawswap up` registered waits for its pane to follow it (the daemon's default
+    # when unset). The browser tests shorten it to see a slow catch-up keep its project.
+    first_attach_ms = env_ms("CLAWSWAP_FIRST_ATTACH_MS")
+
     projects =
       {Clawswap.Projects,
        on_change: &ClawswapWeb.View.projects_changed/0,
        idle_ms: Keyword.get(opts, :idle_ms),
+       first_attach_ms: first_attach_ms,
        on_idle: fn ->
          Clawswap.Watcher.log("No projects for a while; the daemon stops (clawswap up starts it again)")
          System.stop(0)
@@ -54,6 +59,13 @@ defmodule Clawswap.Application do
     {:ok, _} = Supervisor.start_child(Clawswap.Supervisor, ClawswapWeb.Endpoint)
     Clawswap.Watcher.log("clawswap daemon on http://127.0.0.1:#{port}")
     :ok
+  end
+
+  defp env_ms(name) do
+    case Integer.parse(System.get_env(name) || "") do
+      {ms, ""} when ms > 0 -> ms
+      _ -> nil
+    end
   end
 
   @doc "The daemon's port (nil outside it)."

@@ -152,6 +152,45 @@ defmodule Clawswap.WatcherTest do
     refute Map.has_key?(switch, :doneAt)
   end
 
+  # PR #40: a page or app that polls /state reloads when switch.doneAt changes to a new time. doneAt is
+  # gone while the next switch runs, so reloading on it going away loads the app while its server is down.
+  test "each finished switch gets a new doneAt, with none while the next one runs", %{start: start} do
+    me = self()
+    # Once set, the next step waits for the test's :go, so the test can look at a switch that's running.
+    hold = :atomics.new(1, [])
+
+    run_step = fn _step ->
+      if :atomics.exchange(hold, 1, 0) == 1 do
+        send(me, {:holding, self()})
+
+        receive do
+          :go -> :ok
+        after
+          5000 -> :ok
+        end
+      end
+
+      :ok
+    end
+
+    w = start.(run_step: run_step)
+
+    assert {:ok, _} = Watcher.switch_to(w, "claude/new-thing")
+    TestRepo.until(fn -> finished?(w) end)
+    assert %{phase: "done", doneAt: first} = Watcher.state(w).switch
+
+    :atomics.put(hold, 1, 1)
+    assert {:ok, _} = Watcher.switch_to(w, "claude-main")
+    assert_receive {:holding, step}, 5000
+    assert %{phase: "running"} = switch = Watcher.state(w).switch
+    refute Map.has_key?(switch, :doneAt)
+
+    send(step, :go)
+    TestRepo.until(fn -> finished?(w) end)
+    assert %{phase: "done", doneAt: second} = Watcher.state(w).switch
+    assert second > first
+  end
+
   test "restarts itself after a switch that changed the config", %{work: work, start: start} do
     TestRepo.write("#{work}/clawswap.exs", "[]\n")
     TestRepo.git(work, ["add", "."])
