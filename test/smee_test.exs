@@ -41,6 +41,34 @@ defmodule Clawswap.SmeeTest do
     send(server, :done)
   end
 
+  test "reconnects when the stream goes quiet with the socket still open" do
+    {:ok, listen} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
+    {:ok, port} = :inet.port(listen)
+
+    # Each connection gets a "ready" and then nothing, staying open.
+    server =
+      spawn_link(fn ->
+        sockets =
+          for _ <- 1..2 do
+            {:ok, socket} = :gen_tcp.accept(listen)
+            {:ok, _request} = :gen_tcp.recv(socket, 0)
+            :gen_tcp.send(socket, "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\nevent: ready\ndata: {}\n\n")
+            socket
+          end
+
+        receive do
+          :done -> Enum.each(sockets, &:gen_tcp.close/1)
+        end
+      end)
+
+    {:ok, pid} = Smee.start_link(url: "http://127.0.0.1:#{port}/chan", owner: self(), idle_ms: 200)
+    assert_receive {:smee, :open}, 3000
+    assert_receive {:smee, {:drop, "smee sent nothing for 0 s"}}, 3000
+    assert_receive {:smee, :open}, 5000
+    GenServer.stop(pid)
+    send(server, :done)
+  end
+
   test "finds the repo in a webhook sent as a form (GitHub's default content type)" do
     payload = JSON.encode!(%{"zen" => "Keep it simple.", "repository" => %{"full_name" => "me/app"}})
     data = JSON.encode!(%{"x-github-event" => "ping", "body" => %{"payload" => payload}})
