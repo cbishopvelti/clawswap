@@ -11,9 +11,15 @@ defmodule Clawswap.Smee do
   The listener sends its owner `{:smee, :open}` each time the stream (re)connects, `{:smee, {:drop,
   reason}}` when it's lost and `{:smee, {:delivery, github_event, repo}}` for each delivery (`repo`: the
   owner/name it's about, or nil). It reconnects after an error, waiting longer each time up to a minute.
+
+  A stream can die without the socket closing (smee stops sending to it, yet the connection stays up), and
+  then no delivery would ever come. smee pings every 30 seconds or so, so a stream that has sent nothing
+  for `idle_ms` (two minutes unless given) is taken as lost and reconnected.
   """
 
   use GenServer
+
+  @idle_ms 120_000
 
   @doc "Splits a chunk of an event stream into events, keeping an unfinished one for the next chunk."
   def parse_events(buffer) do
@@ -113,7 +119,9 @@ defmodule Clawswap.Smee do
       raw: "",
       chunked: false,
       buffer: "",
-      delay: 1000
+      delay: 1000,
+      idle_ms: opts[:idle_ms] || @idle_ms,
+      idle: nil
     }
 
     {:ok, state, {:continue, :connect}}
@@ -127,6 +135,7 @@ defmodule Clawswap.Smee do
 
   def handle_info({kind, socket, data}, %{socket: socket} = state) when kind in [:tcp, :ssl] do
     set_active(state)
+    state = watch_idle(state)
 
     case received(%{state | raw: state.raw <> data}) do
       {:ok, state} -> {:noreply, state}
@@ -137,6 +146,9 @@ defmodule Clawswap.Smee do
   def handle_info({kind, socket}, %{socket: socket} = state) when kind in [:tcp_closed, :ssl_closed], do: {:noreply, retry(state, "smee closed the stream")}
 
   def handle_info({kind, socket, reason}, %{socket: socket} = state) when kind in [:tcp_error, :ssl_error], do: {:noreply, retry(state, inspect(reason))}
+
+  def handle_info({:idle, ref}, %{idle: ref, socket: socket} = state) when socket != nil,
+    do: {:noreply, retry(state, "smee sent nothing for #{div(state.idle_ms, 1000)} s")}
 
   def handle_info(_, state), do: {:noreply, state}
 
@@ -162,11 +174,18 @@ defmodule Clawswap.Smee do
         path = (url.path || "/") <> if(url.query, do: "?" <> url.query, else: "")
         request = "GET #{path} HTTP/1.1\r\nHost: #{host}\r\nAccept: text/event-stream\r\nUser-Agent: clawswap\r\nCache-Control: no-cache\r\n\r\n"
         transport.send(socket, request)
-        %{state | socket: socket, transport: transport, phase: :headers, raw: "", chunked: false, buffer: ""}
+        watch_idle(%{state | socket: socket, transport: transport, phase: :headers, raw: "", chunked: false, buffer: ""})
 
       {:error, reason} ->
         retry(state, inspect(reason))
     end
+  end
+
+  # (Re)starts the wait for the stream's next bytes; an older wait's message no longer matches `idle`.
+  defp watch_idle(state) do
+    ref = make_ref()
+    Process.send_after(self(), {:idle, ref}, state.idle_ms)
+    %{state | idle: ref}
   end
 
   defp set_active(%{transport: :ssl, socket: socket}), do: :ssl.setopts(socket, active: :once)
@@ -243,6 +262,6 @@ defmodule Clawswap.Smee do
     send(state.owner, {:smee, {:drop, reason}})
     state.log.("smee: #{reason}; reconnecting in #{div(state.delay, 1000)} s")
     Process.send_after(self(), :connect, state.delay)
-    %{state | socket: nil, delay: min(state.delay * 2, 60_000)}
+    %{state | socket: nil, idle: nil, delay: min(state.delay * 2, 60_000)}
   end
 end
