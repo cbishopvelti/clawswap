@@ -11,23 +11,28 @@ export default function BranchMenu() {
   const ref = useRef(null);
 
   // When a switch is done (its servers listen again), the framed page says so, and the app reloads. Vite
-  // would reload anyway when its server comes back; an app without that (Phoenix, say) needs this.
+  // would reload anyway when its server comes back; an app without that (Phoenix, say) needs this. A key
+  // pressed in the frame never reaches this page, so the framed page says Escape too.
   useEffect(() => {
-    const onMessage = (e) =>
-      e.origin === new URL(CLAWSWAP_URL).origin && e.data?.clawswap === "switched" && location.reload();
+    const onMessage = (e) => {
+      if (e.origin !== new URL(CLAWSWAP_URL).origin) return;
+      if (e.data?.clawswap === "switched") location.reload();
+      if (e.data?.clawswap === "escape") setOpen(false);
+    };
     addEventListener("message", onMessage);
     return () => removeEventListener("message", onMessage);
   }, []);
 
   useEffect(() => {
     if (!open) return;
-    const onMouseDown = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    // On window, in the capture phase, so nothing in the page can stop them.
+    const onPointerDown = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
     const onKeyDown = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKeyDown);
+    addEventListener("pointerdown", onPointerDown, true);
+    addEventListener("keydown", onKeyDown, true);
     return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
+      removeEventListener("pointerdown", onPointerDown, true);
+      removeEventListener("keydown", onKeyDown, true);
     };
   }, [open]);
 
