@@ -60,8 +60,6 @@ defmodule ClawswapWeb.StreamDeck do
   @current "#3fb950"
   # The tab that has the deck says so this often (Clawswap.DeckOwner forgets a claim after a minute).
   @beat_ms 20_000
-  # How often the page looks at whether its link to the daemon is up (on the client: no requests).
-  @link_ms 500
 
   def init(props, component, server) do
     deck = View.deck()
@@ -467,21 +465,35 @@ defmodule ClawswapWeb.StreamDeck do
 
   # Broadcasts sent while the page's link to the daemon (Hologram's server-sent events) is down never reach
   # it, as when `clawswap up` starts the daemon again under an open page. Hologram reconnects by itself but
-  # says nothing, so the page looks at the link now and then, and when it's back up (the first time too)
-  # the deck catches up (:online).
+  # says nothing, so the page catches each time the link comes (back) up, the first time too, and the deck
+  # then catches up (:online).
+  #
+  # It's caught where Hologram records it (`Hologram["sseConnected?"]`) rather than looked at now and then:
+  # the new daemon is often listening before the old one has let go of the page, so Hologram's first retry
+  # (after a quarter of a second) gets through and the link is down for less than the time between two
+  # looks. A look then saw it up both times, and the deck waited for its next beat.
   defp watch_link do
     if JS.get(:window, :clawswapLinkWatch) != true do
       JS.set(:window, :clawswapLinkWatch, true)
-      JS.call(:window, :setInterval, [fn -> check_link() end, @link_ms])
-    end
-  end
 
-  defp check_link do
-    up = JS.get(:Hologram, :sseConnected?) == true
+      ~JS"""
+      const hologram = globalThis.Hologram;
+      const online = () => hologram.dispatchAction("online", "stream_deck", {});
+      let up = hologram["sseConnected?"] === true;
 
-    if up != (JS.get(:window, :clawswapLinkUp) == true) do
-      JS.set(:window, :clawswapLinkUp, up)
-      if up, do: dispatch("online", %{})
+      Object.defineProperty(hologram, "sseConnected?", {
+        configurable: true,
+        enumerable: true,
+        get: () => up,
+        set: (value) => {
+          const was = up;
+          up = value;
+          if (value === true && !was) online();
+        },
+      });
+
+      if (up) online();
+      """
     end
   end
 
