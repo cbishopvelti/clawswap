@@ -79,7 +79,7 @@ defmodule ClawswapWeb.BranchesPage do
             <button $click={action: :switch, params: %{branch: b.branch}}>
               <span class="mark {b.mark_class}" title={b.mark_title}>{b.mark}</span>
               {%if b.number}<span class="number">{b.number}</span>{/if}
-              <span class="title">{b.title}</span>
+              <span class="title" title={b.hover}>{b.title}</span>
               <span class="status">{%if b.class == "running"}<span class="spinner"></span>{/if}{b.status}</span>
             </button>
           </li>

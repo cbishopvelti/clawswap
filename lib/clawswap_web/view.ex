@@ -89,7 +89,7 @@ defmodule ClawswapWeb.View do
       project: state.project,
       id: Map.get(state, :id),
       current: current || "",
-      # The checkout's branch as its row names it, for the header.
+      # The checkout's branch as its row names it (its short name), for the header.
       on: on(state, current),
       dirty: state.dirty,
       webhook: webhook(state),
@@ -181,7 +181,6 @@ defmodule ClawswapWeb.View do
 
   defp on(state, current) do
     case Enum.find(state.branches, &(&1.branch == current)) do
-      %{pr: %{title: title}} -> title
       %{short: short} -> short
       _ -> current
     end
@@ -254,7 +253,10 @@ defmodule ClawswapWeb.View do
 
     %{
       branch: b.branch,
-      title: (pr && pr.title) || b.short,
+      # A row is named by its branch, as the app's own bar and `clawswap switch` name it. A PR's title
+      # is what the row says when you hover it.
+      title: b.short,
+      hover: if(pr, do: "#{b.branch}: #{pr.title}", else: b.branch),
       number: pr && "##{pr.number}",
       mark: mark,
       mark_class: mark_class,
