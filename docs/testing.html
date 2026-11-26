@@ -71,6 +71,10 @@ clawswap test --watch                      # with windows, to watch them</code><
 browsers in the temp folder (<code>clawswap-screenshots</code>) and prints their paths. <code>--seed</code> and
 <code>--max-cases</code> are ExUnit's. A <code>browser_tests/test_helper.exs</code>, if you add one, runs first:
 for helpers the tests share.</p>
+<p>A JavaScript error the page throws and doesn't catch fails the test at its next step, with the error's
+message: a page whose script dies as it loads can still show the server's HTML, so a test that only reads
+text wouldn't notice. Errors loading a resource (a 404 image, a refused request) and <code>console.error</code>
+don't count. <code>CLAWSWAP_JS_ERRORS=0</code> turns it off.</p>
 <p>Chrome runs headless unless you pass <code>--watch</code> or set <code>CLAWSWAP_HEADLESS=0</code>. Each session
 gets a window of its own and a fresh profile; tests never use the <a href="walkthroughs.html#dev-chrome">dev Chrome</a>.
 They need what walkthroughs need: <a href="walkthroughs.html#setup">Chrome and chromedriver</a> of the same major

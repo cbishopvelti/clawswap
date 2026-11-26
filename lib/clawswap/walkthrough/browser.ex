@@ -82,6 +82,10 @@ defmodule Clawswap.Walkthrough.Browser do
   def setup_tests(opts \\ []) do
     {width, height} = Keyword.get(opts, :size, {1280, 900})
     configure()
+    # A test fails on an error the page throws and doesn't catch (Wallaby raises it at the next command):
+    # a page whose script dies as it starts can still show the server's HTML, so asserting text alone
+    # wouldn't notice. CLAWSWAP_JS_ERRORS=0 turns it off.
+    Application.put_env(:wallaby, :js_errors, env_flag("CLAWSWAP_JS_ERRORS") != false)
     chromedriver = Application.get_env(:wallaby, :chromedriver)
     Application.put_env(:wallaby, :chromedriver, Keyword.put(chromedriver, :capabilities, capabilities(headless?(opts), width, height)))
     Application.put_env(:wallaby, :screenshot_on_failure, true)
