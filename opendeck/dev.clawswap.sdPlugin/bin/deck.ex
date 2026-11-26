@@ -60,11 +60,23 @@ defmodule Clawswap.Deck do
     end
   end
 
+  # The title's lines, and the font size and line spacing they're drawn at: 18 px when it fits that way,
+  # else 15 px with more to a line and one more line, so a long branch name shows whole.
+  defp fit(title, header) do
+    lines = if header, do: 3, else: 4
+    big = wrap(title, 11, lines)
+    squash = &String.replace(&1, ~r/\s/u, "")
+
+    if squash.(Enum.join(big)) == squash.(title),
+      do: {18, 21, big},
+      else: {15, 18, wrap(title, 14, lines + 1)}
+  end
+
   defp escape_xml(text), do: String.replace(text, ~r/[<>&"]/, &%{"<" => "&lt;", ">" => "&gt;", "&" => "&amp;", ~s(") => "&quot;"}[&1])
 
   @doc """
   One key: a coloured bar for its state, the PR number, the merge status mark (top right) and tint, the
-  title (or branch name), a status line, and a green outline on the checkout's branch.
+  title (the branch's short name, on a branch key), a status line, and a green outline on the checkout's branch.
   """
   def branch_image(look) do
     number = look[:number]
@@ -75,12 +87,13 @@ defmodule Clawswap.Deck do
     header = number || mark
     top = if header, do: 52, else: 34
 
+    {size, step, lines} = fit(look.title, header)
+
     text =
-      look.title
-      |> wrap(11, if(header, do: 3, else: 4))
+      lines
       |> Enum.with_index()
       |> Enum.map_join(fn {l, i} ->
-        ~s(<text x="10" y="#{top + i * 21}" font-family="sans-serif" font-size="18" font-weight="600" fill="#eef1f5">#{escape_xml(l)}</text>)
+        ~s(<text x="10" y="#{top + i * step}" font-family="sans-serif" font-size="#{size}" font-weight="600" fill="#eef1f5">#{escape_xml(l)}</text>)
       end)
 
     svg =
@@ -111,7 +124,8 @@ defmodule Clawswap.Deck do
   def key_look(state, entry) do
     look =
       Map.merge(
-        %{title: get_in(entry, ["pr", "title"]) || entry["short"] || entry["branch"], number: get_in(entry, ["pr", "number"])},
+        # A key is named by its branch, as the page's rows are; the PR's number goes above it.
+        %{title: entry["short"] || entry["branch"], number: get_in(entry, ["pr", "number"])},
         merge_mark(state, entry)
       )
 
