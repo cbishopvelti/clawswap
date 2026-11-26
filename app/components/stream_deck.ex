@@ -113,12 +113,12 @@ defmodule ClawswapWeb.StreamDeck do
   end
 
   # On load, and when a deck is plugged in: open one Chrome already let this page use, unless another
-  # tab has it.
+  # tab has it. Not in an iframe without allow="hid", where getDevices rejects (an uncaught error).
   def action(:reconnect, _params, component) do
     component = put_state(component, :tab, tab_id())
     watch_link()
 
-    if supported?() and component.state.model == nil and not elsewhere?(component) do
+    if supported?() and allowed?() and component.state.model == nil and not elsewhere?(component) do
       listen_for_plugging()
 
       case granted() do
