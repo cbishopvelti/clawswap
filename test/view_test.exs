@@ -74,7 +74,9 @@ defmodule ClawswapWeb.ViewTest do
     assert Enum.map(keys.branches, & &1.branch) == ["claude-main", "claude/a", "claude/b"]
     [main, a, _] = Enum.map(keys.branches, &URI.decode(&1.image))
     assert main =~ "New commits"
-    assert a =~ "#4" and a =~ "Add A"
+    # Named by its branch, as the rows are, not by its PR's title.
+    assert a =~ "#4" and a =~ ">a</text>"
+    refute a =~ "Add A"
     assert URI.decode(keys.pull) =~ "2 new commits"
   end
 

@@ -63,7 +63,8 @@ defmodule Clawswap.DeckTest do
   test "a key says what its branch is doing" do
     [main, undo, switcher] = @state["branches"]
     assert Deck.key_look(@state, main).status == "Current"
-    assert Deck.key_look(@state, undo) == %{title: "Undo for sliders", number: 41, mark: "●", mark_colour: "#3fb950", background: "#1d2e25"}
+    # A key is named by its branch, with a PR or without, as the page's rows are.
+    assert Deck.key_look(@state, undo) == %{title: "undo-sliders-abc123", number: 41, mark: "●", mark_colour: "#3fb950", background: "#1d2e25"}
     assert Deck.key_look(@state, switcher).title == "streamdeck-branch-switcher"
     assert Deck.key_look(@state, %{"branch" => "feature/x", "sha" => "9"}).title == "feature/x"
     switching = Map.put(@state, "switch", %{"target" => "claude/undo-sliders-abc123", "phase" => "running", "step" => "npm install"})
@@ -90,6 +91,21 @@ defmodule Clawswap.DeckTest do
     assert Deck.wrap("Undo for sliders and macros too", 11, 3) == ["Undo for", "sliders and", "macros too"]
     assert Deck.wrap("streamdeck-branch-switcher", 11, 3) == ["streamdeck-", "branch-", "switcher"]
     assert "a b c d e f g h i j k l m n o p q r s t u v w x y z" |> Deck.wrap(5, 2) |> Enum.at(1) |> String.ends_with?("…")
+  end
+
+  test "a long branch name shows whole, in smaller type" do
+    texts = fn look ->
+      svg = look |> Deck.branch_image() |> URI.decode()
+      {Regex.scan(~r{font-size="(\d+)" font-weight="600"[^>]*>([^<]*)<}, svg, capture: :all_but_first), svg}
+    end
+
+    {lines, _} = texts.(%{title: "feat/address-labels", number: 66})
+    assert lines == [["18", "feat/"], ["18", "address-"], ["18", "labels"]]
+    {lines, svg} = texts.(%{title: "fix/streamdeck-branch-names", number: 90})
+    assert lines == [["15", "fix/"], ["15", "streamdeck-"], ["15", "branch-names"]]
+    refute svg =~ "…"
+    {lines, _} = texts.(%{title: "fix/geocoder-key-per-account", number: 118})
+    assert Enum.map(lines, &List.last/1) == ["fix/geocoder-", "key-per-", "account"]
   end
 
   test "draws keys from the watcher and posts presses to it" do
